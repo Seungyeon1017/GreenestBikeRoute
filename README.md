@@ -20,7 +20,7 @@ For a clickable demo map, start the API, run `python -m http.server 5500 -d demo
 
 ### 1. Run the Backend Locally with `uv`
 
-Make sure you are in the project root directory:
+Make sure you are in the project root directory, for example:
 
 ```powershell
 cd D:\bike_project\GreenestBikeRoute
@@ -47,9 +47,7 @@ The `--reload` option automatically restarts the development server when Python 
 
 ### 2. Port Configuration
 
-This project uses **port `8001` on the host machine** because another local FastAPI project already uses port `8000`.
-
-When running locally, Uvicorn listens directly on port `8001`.
+The backend is served on port `8001` (not `8000`, in case another local FastAPI project uses), both locally and with Docker Compose. In `compose.yml`, `"8001:8000"` maps host port `8001` to Uvicorn's port `8000` inside the container.
 
 When running with Docker Compose, the port mapping in `compose.yml` is:
 
@@ -57,14 +55,6 @@ When running with Docker Compose, the port mapping in `compose.yml` is:
 ports:
   - "8001:8000"
 ```
-
-The mapping follows the format `HOST_PORT:CONTAINER_PORT`:
-
-- **Host port `8001`:** The port accessed from your computer.
-- **Container port `8000`:** The port on which Uvicorn listens inside the Docker container.
-
-Therefore, the backend is accessed at http://127.0.0.1:8001 in both cases, even though Docker runs Uvicorn on port `8000` inside the container.
-
 ### 3. Run the Backend with Docker Compose
 
 Build the Docker image and start the backend in the background:
