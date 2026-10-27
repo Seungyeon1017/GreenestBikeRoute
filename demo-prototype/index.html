@@ -1,7 +1,7 @@
 <!doctype html>
 <!-- PROTOTYPE - throwaway demo map for the routing API, kept out of frontend/ on purpose.
-     Start the API (uvicorn backend.app:app), then: python -m http.server 5500 -d demo-prototype
-     and open http://127.0.0.1:5500. API on another port: http://127.0.0.1:5500/?api=http://127.0.0.1:8001 -->
+     Start the API (uvicorn backend.app:app --port 8001, or docker compose up), then: python -m http.server 5500 -d demo-prototype
+     and open http://127.0.0.1:5500. API on another port: http://127.0.0.1:5500/?api=http://127.0.0.1:8002 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -74,7 +74,7 @@
 </div>
 
 <script>
-const API = new URLSearchParams(location.search).get("api") || "http://127.0.0.1:8000";
+const API = new URLSearchParams(location.search).get("api") || "http://127.0.0.1:8001";
 
 const map = L.map("map", { preferCanvas: true }).setView([49.142, 9.215], 13);
 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
