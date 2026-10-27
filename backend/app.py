@@ -45,7 +45,7 @@ def route_query(
     bump_penalty: float = Query(DEFAULT_BUMP_PENALTY, ge=0, le=100, description="How much do you hate bumps"),
     danger_penalty: float = Query(DEFAULT_DANGER_PENALTY, ge=0, le=1000,
                                   description="How much do you hate close overtaking (metres of detour per spot)"),
-    pm_penalty: float = Query(DEFAULT_PM_PENALTY, ge=0, le=100, description="How much do you hate traffic and bad air"),
+    pm_penalty: float = Query(DEFAULT_PM_PENALTY, ge=0, le=100, description="How much do you hate bad air (fine dust)"),
 ):
     """The query parameters shared by /route and /route/compare."""
     return (from_lat, from_lon), (to_lat, to_lon), (bump_penalty, danger_penalty, pm_penalty)

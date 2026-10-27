@@ -30,11 +30,13 @@ cost = length × (1 + bump_penalty × roughness / 100 + pm_penalty × pm_risk)
 - **Test devices:** `test`, `biketest` and `OpenSpace123` are included, as in `danger_zones`. Filter on `boxName` to drop them. The test box `66.11 Test` (tag `lauds_26`) is excluded.
 - **Download:** the raw table returns its pages in a different order on every request, so paging duplicates and skips rows. `download_data.py` fetches it in one request (about 1 GB) and keeps 2 MB. The API downloads it on first start if it is missing.
 
-### `danger_zones_PM_heilbronn`: traffic and air quality, **averaged** per street
+### `air_quality_heilbronn`: air quality, **averaged** per street
 
-- One point is a sample logged about every 20 m of every ride. Many points only mean many people ride there, so the mean says how bad the street is.
-- A street without data gets **0.33**, the median, for the same reason as roughness.
-- `pm_penalty` default 2. It's a weak lever, because street means only span 0.24–0.40.
+- Fine dust samples about every 20 m of every ride. A point's index is `0.4 × PM1 + 0.3 × PM2.5 + 0.2 × PM4 + 0.1 × PM10`, each divided by its maximum (the PM weights of `danger_zones_PM`, scaled to sum to 1).
+- Weather and sensor offsets outweigh location, so routing uses each point's **rank within its ride** (same device and day; 0.5 = typical). Unmeasured streets get 0.5.
+- `pm_penalty` default 0.5: streets agree only weakly between days (correlation ~0.17).
+- **Source:** built from `osem_bike_data` with the `danger_zones_PM` filters: devices tagged `heilbronn`, humidity ≤ 75%, per-device IQR outlier removal, then cut to `HEILBRONN_BBOX`. 166,429 rows.
+- **Why not `danger_zones_PM_heilbronn`?** Its `Risk Index` mixes in overtaking, which `danger_penalty` already counts. Our rows match its points inside Heilbronn exactly, plus 21,915 valid air readings from bikes without a distance sensor.
 
 ## Which overtaking readings count
 
@@ -56,7 +58,7 @@ Note: This is a judgement from the data; the hardware owners haven't confirmed i
 
 ## Snapping points to streets
 
-- Each overtaking and PM point is assigned to the nearest street within **25 m** (GPS noise). A point with no street that close is ignored. That is 13% of the overtaking points we use and 33% of the PM points, mostly rides outside Heilbronn.
+- Each overtaking and PM point is assigned to the nearest street within **25 m** (GPS noise). A point with no street that close is ignored. That is 13% of the overtaking points we use and 16% of the PM points.
 - A two-way street gets the same values in both directions.
 - The start and end you request are moved to the nearest street corner. If that corner is more than 500 m away (for example outside Heilbronn), the API returns an error (HTTP 400).
 

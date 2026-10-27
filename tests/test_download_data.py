@@ -1,6 +1,6 @@
 import json
 
-from download_data import HEILBRONN_BBOX, UNSTABLE_PAGING, _danger_zone_row, download_single_request, overtaking_risk
+from download_data import HEILBRONN_BBOX, UNSTABLE_PAGING, _danger_zone_row, _pm_row, clean_pm_rows, download_single_request, overtaking_risk
 
 
 def raw_row(distance=100, manoeuvre=1, lon=9.2, lat=49.14, tags='["bike", "atrai", "heilbronn"]'):
@@ -47,6 +47,62 @@ def test_danger_zone_row_gives_no_risk_without_a_distance():
     # 0 is how the raw table stores "no reading", so it must not become maximum risk
     assert _danger_zone_row(raw_row(distance=0))["properties"]["Risk Index Overtaking"] is None
     assert _danger_zone_row(raw_row(distance=None))["properties"]["Risk Index Overtaking"] is None
+
+
+def pm_raw_row(humidity=60.0, pm25=3.0, lon=9.2, lat=49.14, tags='["bike", "atrai", "heilbronn"]'):
+    row = raw_row(lon=lon, lat=lat, tags=tags)
+    row["properties"].update({"Rel. Humidity": humidity, "Finedust PM1": 2.0, "Finedust PM2.5": pm25,
+                              "Finedust PM4": 4.0, "Finedust PM10": 5.0})
+    return row
+
+
+def test_pm_row_keeps_device_and_pm_readings():
+    row = _pm_row(pm_raw_row())
+    assert row["geometry"] == {"type": "Point", "coordinates": [9.2, 49.14]}
+    assert row["properties"] == {
+        "index": 7, "boxId": "abc", "boxName": "bike 1", "createdAt": "2026-01-01T12:00:00",
+        "Finedust PM1": 2.0, "Finedust PM2.5": 3.0, "Finedust PM4": 4.0, "Finedust PM10": 5.0,
+    }
+
+
+def test_pm_row_skips_humid_incomplete_and_other_devices():
+    assert _pm_row(pm_raw_row(humidity=75)) is not None
+    assert _pm_row(pm_raw_row(humidity=75.5)) is None
+    assert _pm_row(pm_raw_row(humidity=None)) is None
+    assert _pm_row(pm_raw_row(pm25=None)) is None
+    assert _pm_row(pm_raw_row(tags='["bike", "lauds_26"]')) is None
+
+
+def test_pm_row_keeps_rides_outside_heilbronn():
+    # needed for the per-device outlier removal in routing; they don't snap to any Heilbronn street
+    assert _pm_row(pm_raw_row(lon=8.40, lat=49.01)) is not None
+
+
+def pm_point(box, pm1, pm10=None, lon=9.2, lat=49.14):
+    return {"geometry": {"type": "Point", "coordinates": [lon, lat]},
+            "properties": {"boxId": box, "Finedust PM1": pm1, "Finedust PM2.5": pm1, "Finedust PM4": pm1, "Finedust PM10": pm10 or pm1}}
+
+
+def test_clean_pm_rows_drops_spikes_against_each_devices_own_quartiles():
+    quiet = [pm_point("quiet", v) for v in (2, 3, 3, 4, 3, 2, 4, 3, 3, 40)]
+    dirty = [pm_point("dirty", v) for v in (38, 40, 42, 39, 41, 40, 38, 42, 40, 39)]  # high everywhere, but no spikes
+    kept = clean_pm_rows(quiet + dirty)
+    assert [f["properties"]["Finedust PM1"] for f in kept] == [2, 3, 3, 4, 3, 2, 4, 3, 3, 38, 40, 42, 39, 41, 40, 38, 42, 40, 39]
+
+
+def test_clean_pm_rows_drops_a_row_when_any_pm_value_is_a_spike():
+    assert len(clean_pm_rows([pm_point("a", 3) for _ in range(9)] + [pm_point("a", 3, pm10=90)])) == 9
+
+
+def test_clean_pm_rows_drops_devices_with_fewer_than_10_rows():
+    assert clean_pm_rows([pm_point("few", 3) for _ in range(9)]) == []
+
+
+def test_clean_pm_rows_uses_rides_outside_heilbronn_for_the_quartiles_but_drops_them():
+    # Inside the city this device reads 10, elsewhere mostly 3: 10 is a spike for this device.
+    rows = [pm_point("a", 3, lon=8.40, lat=49.01) for _ in range(12)] + [pm_point("a", 10)]
+    assert clean_pm_rows(rows) == []
+    assert len(clean_pm_rows([pm_point("a", 3, lon=8.40, lat=49.01) for _ in range(9)] + [pm_point("a", 3)])) == 1
 
 
 class FakeResponse:

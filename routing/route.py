@@ -95,7 +95,7 @@ def _route_feature(G, a, b, penalties):
         # Overtaking spots (danger_zones) on the route and their summed Risk Index Overtaking.
         "danger_points": danger_points,
         "danger_risk": round(danger, 2),
-        # Length-weighted over the part of the route with danger_zones_PM measurements.
+        # Length-weighted over the part of the route with air_quality measurements.
         "mean_pm_risk": round(pm_len / pm_measured_len, 3) if pm_measured_len else None,
         "pm_measured_share": round(pm_measured_len / length, 2),
     }
@@ -107,8 +107,8 @@ def find_route(G, origin, destination, bump_penalty=DEFAULT_BUMP_PENALTY,
     """Cheapest route from origin to destination, both (lat, lon), as a GeoJSON FeatureCollection.
 
     All penalties 0 give the shortest route; higher values take longer detours to avoid rough
-    streets (bump_penalty), spots where cars overtook closely (danger_penalty) and streets with heavy
-    traffic and bad air (pm_penalty).
+    streets (bump_penalty), spots where cars overtook closely (danger_penalty) and streets with bad
+    air (pm_penalty).
     """
     a, b = _snap(G, origin, destination)
     feature = _route_feature(G, a, b, (bump_penalty, danger_penalty, pm_penalty))

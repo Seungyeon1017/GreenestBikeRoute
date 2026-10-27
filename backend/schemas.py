@@ -27,8 +27,8 @@ class RouteProperties(BaseModel):
     danger_points: int = Field(description="Close-overtaking spots (danger_zones) on the route")
     danger_risk: float = Field(description="Summed Risk Index Overtaking of those spots")
     mean_pm_risk: Optional[float] = Field(
-        description="danger_zones_PM Risk Index 0-1, length-weighted over the measured part; null if none was measured")
-    pm_measured_share: float = Field(description="Share of the route length with danger_zones_PM measurements, 0-1")
+        description="Air rank 0-1 from air_quality (0.5 = typical for its ride), length-weighted over the measured part; null if none was measured")
+    pm_measured_share: float = Field(description="Share of the route length with air_quality measurements, 0-1")
 
 
 class RouteFeature(BaseModel):
@@ -48,9 +48,9 @@ class RouteCollection(BaseModel):
             "type": "Feature",
             "geometry": {"type": "LineString", "coordinates": [[9.22687, 49.14838], [9.2259, 49.1371], [9.22439, 49.1262]]},
             "properties": {
-                "bump_penalty": 10, "danger_penalty": 25, "pm_penalty": 2,
+                "bump_penalty": 10, "danger_penalty": 25, "pm_penalty": 0.5,
                 "length_m": 3331.9, "mean_roughness": 12.5, "measured_share": 0.96,
-                "danger_points": 15, "danger_risk": 13.42, "mean_pm_risk": 0.289, "pm_measured_share": 0.7,
+                "danger_points": 15, "danger_risk": 13.42, "mean_pm_risk": 0.492, "pm_measured_share": 0.7,
             },
         }],
     }}}

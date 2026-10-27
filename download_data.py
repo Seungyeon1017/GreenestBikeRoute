@@ -19,6 +19,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+import numpy as np
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -91,14 +92,80 @@ def _danger_zone_row(feature):
     }
 
 
+PM_FIELDS = ["Finedust PM1", "Finedust PM2.5", "Finedust PM4", "Finedust PM10"]
+
+# danger_zones_PM leaves out air readings above this relative humidity (%), where the sensors over-read.
+MAX_HUMIDITY = 75
+
+
+# Outlier removal as in danger_zones_PM: per device with at least MIN_DEVICE_ROWS rows, a row is
+# dropped when any PM value lies more than IQR_FACTOR interquartile ranges outside the quartiles.
+MIN_DEVICE_ROWS = 10
+IQR_FACTOR = 1.5
+
+
+def _pm_row(feature):
+    """A raw osem_bike_data row as an air quality point with its device and PM readings, or None.
+
+    Keeps rows from devices tagged "heilbronn" with all four PM values and a humidity of at most
+    MAX_HUMIDITY, the rows danger_zones_PM starts from. Rows outside HEILBRONN_BBOX are kept for
+    now: clean_pm_rows needs each device's full set of rides.
+    """
+    p = feature["properties"]
+    humidity = p.get("Rel. Humidity")
+    if any(p.get(k) is None for k in PM_FIELDS) or humidity is None or humidity > MAX_HUMIDITY:
+        return None
+    if not _has_city_tag(feature):
+        return None
+    return {
+        "type": "Feature",
+        "geometry": feature["geometry"],
+        "properties": {
+            "index": p["index"],
+            "boxId": p["boxId"],
+            "boxName": p["boxName"],
+            "createdAt": p["createdAt"],
+            **{k: p[k] for k in PM_FIELDS},
+        },
+    }
+
+
+def clean_pm_rows(features):
+    """The _pm_row rows without PM spikes, inside HEILBRONN_BBOX: the danger_zones_PM rows in Heilbronn.
+
+    Each device is checked against its own quartiles over all its rides, so a sensor that reads
+    high everywhere keeps its rows and only its spikes are dropped. Only then is the city cut out:
+    cutting first would change the quartiles and keep about 20,000 rows danger_zones_PM drops.
+    """
+    by_device = {}
+    for i, f in enumerate(features):
+        by_device.setdefault(f["properties"]["boxId"], []).append(i)
+    keep = []
+    for rows in by_device.values():
+        if len(rows) < MIN_DEVICE_ROWS:
+            continue
+        pm = np.array([[features[i]["properties"][k] for k in PM_FIELDS] for i in rows], dtype=float)
+        q1, q3 = np.percentile(pm, [25, 75], axis=0)
+        spread = IQR_FACTOR * (q3 - q1)
+        inside = ((pm >= q1 - spread) & (pm <= q3 + spread)).all(axis=1)
+        keep += [i for i, ok in zip(rows, inside) if ok]
+    west, south, east, north = HEILBRONN_BBOX
+    return [f for f in (features[i] for i in sorted(keep))
+            if west <= f["geometry"]["coordinates"][0] <= east and south <= f["geometry"]["coordinates"][1] <= north]
+
+
 # Collections that cover all cities: (collection, output name, row filter).
 # A row filter returns True to keep the feature, a replacement feature to keep that instead, or a falsy value to skip it.
 FILTERED = [
     ("tracks", f"tracks_{CITY}", _has_city_tag),
     ("statistics", f"statistics_{CITY}", lambda f: f["properties"]["tag"] == CITY),
-    # Streams all 1.4M raw rows (about 1 GB over the wire), but the file is only a few MB.
+    # Each streams all 1.4M raw rows (about 1 GB over the wire), but keeps only a few to tens of MB.
     ("osem_bike_data", f"danger_zones_raw_{CITY}", _danger_zone_row),
+    ("osem_bike_data", f"air_quality_{CITY}", _pm_row),
 ]
+
+# Steps that need all kept rows at once, run on the downloaded file: output name -> features -> features.
+FINISH = {f"air_quality_{CITY}": clean_pm_rows}
 
 # Raw sensor collections with over a million rows (GBs of JSON). Opt-in only.
 # The first two contain every city; osem_home_data_heilbronn is Heilbronn only.
@@ -227,6 +294,12 @@ def fetch(collection, name, keep=None, force=False, session=None, page=2000):
     print(f"{name}: downloading")
     t0 = time.time()
     written, seen = download(session or make_session(), collection, out, page, keep)
+    if name in FINISH:
+        features = FINISH[name](json.loads(out.read_text(encoding="utf-8"))["features"])
+        # compact, so the file stays under GitHub's 50 MB warning
+        out.write_text(json.dumps({"type": "FeatureCollection", "features": features}, ensure_ascii=False, separators=(",", ":")),
+                       encoding="utf-8")
+        written = len(features)
     update_manifest({
         "file": out.name,
         "collection": collection,

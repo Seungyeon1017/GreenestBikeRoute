@@ -7,7 +7,7 @@ import osmnx as ox
 from shapely import LineString, STRtree, points
 
 from download_data import load_features
-from routing.costs import SNAP_M, clean_overtaking, edge_roughness, point_risks, way_roughness
+from routing.costs import SNAP_M, air_ranks, clean_overtaking, edge_roughness, point_risks, way_roughness
 
 CACHE_DIR = Path(__file__).resolve().parent.parent / "cache"
 GRAPH_PATH = CACHE_DIR / "heilbronn_bike.graphml"
@@ -28,7 +28,7 @@ def load_graph(path=GRAPH_PATH):
         ox.save_graphml(G, path)
     attach_roughness(G, way_roughness(load_features("bumpy_roads_heilbronn")))
     attach_danger(G, point_risks(clean_overtaking(load_features("danger_zones_raw_heilbronn")), "Risk Index Overtaking"),
-                  point_risks(load_features("danger_zones_PM_heilbronn"), "Risk Index"))
+                  air_ranks(load_features("air_quality_heilbronn")))
     return G
 
 
@@ -71,7 +71,7 @@ def snap_to_streets(lines, lonlat, lat0, max_m=SNAP_M):
 def attach_danger(G, overtaking, pm):
     """Snap the overtaking and PM points to their nearest street and set edge attributes:
     `danger` (summed Risk Index Overtaking), `danger_points` (how many) and
-    `pm_risk` (mean Risk Index of the PM points, or None where none was measured).
+    `pm_risk` (mean air rank of the PM points, or None where none was measured).
 
     `overtaking` and `pm` are (lon/lat list, risk list) pairs from point_risks.
     """

@@ -1,6 +1,9 @@
 """Helpers for turning the ATRAI bumpy_roads and danger_zones data into routing costs on the OSM graph."""
 import ast
 
+import numpy as np
+import pandas as pd
+
 # Normalized Roughness (0-100) assumed for streets no bike has measured.
 # 10 is the median of the measured Heilbronn segments.
 DEFAULT_ROUGHNESS = 10.0
@@ -22,12 +25,19 @@ DEFAULT_DANGER_PENALTY = 25.0
 # 25 cm is also where the overtaking_distance dataset starts counting.
 MIN_OVERTAKING_CM = 25.0
 
-# danger_zones_PM: Risk Index 0-1 (traffic + air quality) sampled every ~20 m along rides,
-# so it is averaged per street like roughness. The default for unmeasured streets is the
-# median of the measured Heilbronn streets. Street means only span ~0.24-0.40, so the
-# penalty needs to be fairly high (5-20) before routes change much.
-DEFAULT_PM_RISK = 0.33
-DEFAULT_PM_PENALTY = 2.0
+# air_quality: air rank 0-1 within its ride (see air_ranks) sampled every ~20 m along
+# rides, so it is averaged per street like roughness. Unmeasured streets get 0.5, a typical reading.
+# Street means span ~0.13-0.87, but streets agree only weakly between days (correlation ~0.17),
+# so the default penalty is kept mild.
+DEFAULT_PM_RISK = 0.5
+DEFAULT_PM_PENALTY = 0.5
+
+# Rides (one device, one day) with fewer rows can't say what is typical for them; ~0.1% of rows.
+MIN_RIDE_POINTS = 20
+
+# The PM weights of danger_zones_PM's Risk Index (0.20, 0.15, 0.10, 0.05) without its overtaking
+# part, scaled to sum to 1. Overtaking is already counted through danger_zones_raw.
+PM_WEIGHTS = {"Finedust PM1": 0.4, "Finedust PM2.5": 0.3, "Finedust PM4": 0.2, "Finedust PM10": 0.1}
 
 
 def osm_way_ids(osmid):
@@ -64,6 +74,32 @@ def clean_overtaking(features):
     Readings of 25 cm or less and rows with no distance (0 or missing) are left out.
     """
     return [f for f in features if (f["properties"]["Overtaking Distance"] or 0) > MIN_OVERTAKING_CM]
+
+
+def air_risks(features):
+    """(lon, lat) and air Risk Index (0-1) of every air_quality row: each PM value divided
+    by its maximum over `features`, weighted by PM_WEIGHTS. The rows are free of spikes already
+    (see download_data.clean_pm_rows), so the maximum is a real reading.
+    """
+    if not features:
+        return [], []
+    pm = np.array([[f["properties"][k] for k in PM_WEIGHTS] for f in features], dtype=float)
+    risk = (pm / pm.max(axis=0)) @ np.array(list(PM_WEIGHTS.values()))
+    return [tuple(f["geometry"]["coordinates"]) for f in features], risk.tolist()
+
+
+def air_ranks(features):
+    """(lon, lat) and air rank (0-1) of every air_quality row in a ride of at least
+    MIN_RIDE_POINTS rows: where its air_risks value falls within its ride (same device, same day).
+    0.5 is a typical reading for that ride, so weather and sensor offsets drop out.
+    """
+    lonlat, risk = air_risks(features)
+    rides = pd.Series([f["properties"]["boxId"] + f["properties"]["createdAt"][:10] for f in features], dtype=object)
+    by_ride = pd.Series(risk, dtype=float).groupby(rides)
+    size = by_ride.transform("size")
+    rank = (by_ride.rank() - 0.5) / size
+    keep = (size >= MIN_RIDE_POINTS).to_numpy()
+    return [p for p, k in zip(lonlat, keep) if k], rank[keep].tolist()
 
 
 def point_risks(features, risk_key):
