@@ -5,6 +5,6 @@
 Downloads the Heilbronn datasets from the [ATRAI API](https://hackathon.greencity.hn/resources/bike-data) into `data/` (~85 MB):
 
 ```bash
-pip install requests
-python -X utf8 data_download/download_data.py
+pip install -r requirements.txt
+python -X utf8 download_data.py
 ```
