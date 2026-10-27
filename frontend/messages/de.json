@@ -249,7 +249,8 @@
         "points": "aus {{count}} Messpunkten",
         "length": "{{km}} km gemessene Straßen",
         "manoeuvres": "aus {{count}} gemessenen Überholvorgängen"
-      }
+      },
+      "eyebrow": "Heilbronn · Umwelt"
     },
     "planTrip": {
       "title": "Finde deine grünste Route",
@@ -282,7 +283,8 @@
         "airQuality": "Luftbelastung"
       },
       "emptyState": "Gib Start und Ziel ein, um Routen zu vergleichen. Werte erscheinen nur, wenn sie aus echten Daten stammen.",
-      "mapLabel": "Routenkarte"
+      "mapLabel": "Routenkarte",
+      "eyebrow": "Heilbronn · Routenplaner"
     },
     "highlights": {
       "title": "Entdecke die grüne Seite Heilbronns",
@@ -316,7 +318,8 @@
           "title": "Naturentdecker-Route",
           "text": "Hinaus an die grünen Ränder der Stadt."
         }
-      }
+      },
+      "eyebrow": "Heilbronn · Grüne Orte"
     }
   }
 }

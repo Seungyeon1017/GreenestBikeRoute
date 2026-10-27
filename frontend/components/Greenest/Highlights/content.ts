@@ -38,8 +38,8 @@ export const SAMPLE_PLACES: HighlightPlace[] = [
 
 /** Themed rides; titles and texts live in messages under `greenest.highlights.experiences`. */
 export const EXPERIENCES = [
-  { id: 'scenicGreen', emoji: '🌳' },
-  { id: 'quietEscape', emoji: '🤫' },
-  { id: 'riverside', emoji: '🌊' },
-  { id: 'nature', emoji: '🦋' },
+  'scenicGreen',
+  'quietEscape',
+  'riverside',
+  'nature',
 ] as const

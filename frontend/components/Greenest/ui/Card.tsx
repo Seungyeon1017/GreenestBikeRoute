@@ -9,7 +9,7 @@ export default function Card({
   return (
     <div
       className={cx(
-        'rounded-2xl border border-stone-200 bg-white p-4 shadow-sm',
+        'rounded-3xl border border-leaf-sand/80 bg-white p-5 shadow-soft',
         className,
       )}
       {...props}
@@ -27,7 +27,7 @@ export function CardTitle({
   return (
     <h2
       className={cx(
-        'font-lexend text-base font-bold text-stone-900',
+        'font-display text-lg font-semibold tracking-tight text-leaf-forest',
         className,
       )}
       {...props}

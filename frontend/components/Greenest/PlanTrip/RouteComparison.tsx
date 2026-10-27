@@ -34,7 +34,7 @@ export default function RouteComparison() {
       <div className="grid grid-cols-2 gap-3">
         {kinds.map(kind => (
           <div
-            className="flex flex-col gap-2 rounded-xl border border-stone-100 p-3"
+            className="flex flex-col gap-2 rounded-xl border border-leaf-sand/70 p-3"
             key={kind}
           >
             <div className="flex items-center gap-2">
@@ -43,11 +43,11 @@ export default function RouteComparison() {
                 className="h-1.5 w-6 rounded-full"
                 style={{ backgroundColor: ROUTE_COLORS[kind] }}
               />
-              <span className="text-sm font-semibold text-stone-900">
+              <span className="text-sm font-semibold text-leaf-ink">
                 {t(`greenest.planTrip.routes.${kind}`)}
               </span>
             </div>
-            <p className="text-xs text-stone-500">
+            <p className="text-xs text-leaf-muted">
               {t(`greenest.planTrip.routes.${kind}Hint`)}
             </p>
             <dl className="flex flex-col gap-1.5">
@@ -56,17 +56,19 @@ export default function RouteComparison() {
                   className="flex items-center justify-between gap-2 text-xs"
                   key={metric}
                 >
-                  <dt className="text-stone-500">
+                  <dt className="text-leaf-muted">
                     {t(`greenest.planTrip.metrics.${metric}`)}
                   </dt>
-                  <dd className="font-medium tabular-nums text-stone-400">–</dd>
+                  <dd className="font-medium tabular-nums text-leaf-muted/70">
+                    –
+                  </dd>
                 </div>
               ))}
             </dl>
           </div>
         ))}
       </div>
-      <div className="flex items-start gap-2 rounded-xl bg-stone-50 p-3 text-xs text-stone-600">
+      <div className="flex items-start gap-2 rounded-xl bg-leaf-cream p-3 text-xs text-leaf-muted">
         <AvailabilityBadge availability="unavailable" className="shrink-0" />
         <span>{t('greenest.planTrip.emptyState')}</span>
       </div>

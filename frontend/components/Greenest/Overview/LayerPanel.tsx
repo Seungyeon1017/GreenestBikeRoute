@@ -31,14 +31,16 @@ export default function LayerPanel({
             <li
               className={cx(
                 'rounded-xl border p-3',
-                on ? 'border-emerald-200 bg-emerald-50/40' : 'border-stone-100',
+                on
+                  ? 'border-leaf-sage/60 bg-leaf-mint/60'
+                  : 'border-leaf-sand/70',
               )}
               key={layer.id}
             >
               <div className="flex items-start gap-3">
                 <input
                   checked={on}
-                  className="mt-0.5 h-4 w-4 accent-emerald-600 disabled:opacity-40"
+                  className="mt-0.5 h-4 w-4 accent-leaf-forest disabled:opacity-40"
                   disabled={!available}
                   id={inputId}
                   onChange={() => onToggle(layer.id)}
@@ -50,8 +52,8 @@ export default function LayerPanel({
                       className={cx(
                         'block text-sm font-medium',
                         available
-                          ? 'cursor-pointer text-stone-900'
-                          : 'text-stone-400',
+                          ? 'cursor-pointer text-leaf-ink'
+                          : 'text-leaf-muted/70',
                       )}
                       htmlFor={inputId}
                     >
@@ -59,14 +61,14 @@ export default function LayerPanel({
                     </label>
                     <AvailabilityBadge availability={layer.availability} />
                   </div>
-                  <p className="text-xs text-stone-500">
+                  <p className="text-xs text-leaf-muted">
                     {t(`greenest.layers.${layer.id}.description`)}
                   </p>
                   {on && layer.legend.length > 0 && (
                     <ul className="flex flex-col gap-1 pt-1">
                       {layer.legend.map(({ color, label }) => (
                         <li
-                          className="flex items-center gap-2 text-[11px] text-stone-600"
+                          className="flex items-center gap-2 text-[11px] text-leaf-muted"
                           key={label}
                         >
                           <span
@@ -80,7 +82,7 @@ export default function LayerPanel({
                     </ul>
                   )}
                   {on && (
-                    <p className="text-[11px] text-stone-400">
+                    <p className="text-[11px] text-leaf-muted/70">
                       {layer.unit} · {layer.source}
                     </p>
                   )}

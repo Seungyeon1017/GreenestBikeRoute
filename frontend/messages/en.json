@@ -249,7 +249,8 @@
         "points": "based on {{count}} measurement points",
         "length": "{{km}} km of measured streets",
         "manoeuvres": "based on {{count}} measured overtaking manoeuvres"
-      }
+      },
+      "eyebrow": "Heilbronn · Environment"
     },
     "planTrip": {
       "title": "Find your greenest route",
@@ -282,7 +283,8 @@
         "airQuality": "Air quality exposure"
       },
       "emptyState": "Enter a start and destination to compare routes. Values only appear when they come from real data.",
-      "mapLabel": "Route map"
+      "mapLabel": "Route map",
+      "eyebrow": "Heilbronn · Route planner"
     },
     "highlights": {
       "title": "Discover the greener side of Heilbronn",
@@ -316,7 +318,8 @@
           "title": "Nature Discovery Route",
           "text": "Out to the green edges of the city."
         }
-      }
+      },
+      "eyebrow": "Heilbronn · Green places"
     }
   }
 }

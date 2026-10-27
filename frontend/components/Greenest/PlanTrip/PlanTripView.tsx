@@ -28,6 +28,7 @@ export default function PlanTripView() {
   return (
     <div className="mx-auto flex w-full max-w-[1920px] flex-1 flex-col gap-4 px-4 py-4 md:px-8">
       <PageIntro
+        eyebrow={t('greenest.planTrip.eyebrow')}
         subtitle={t('greenest.planTrip.subtitle')}
         title={t('greenest.planTrip.title')}
       />
@@ -52,13 +53,10 @@ export default function PlanTripView() {
           )}
           <RouteComparison />
         </div>
-        <section className="h-[60vh] min-h-[420px] overflow-hidden rounded-2xl border border-stone-200 shadow-sm lg:h-auto">
+        <section className="h-[60vh] min-h-[420px] overflow-hidden rounded-3xl border border-leaf-sand shadow-soft lg:h-auto">
           <BaseMap ariaLabel={t('greenest.planTrip.mapLabel')} />
         </section>
       </div>
-      <p className="text-center font-lora text-sm text-stone-500">
-        {t('greenest.vision')}
-      </p>
     </div>
   )
 }

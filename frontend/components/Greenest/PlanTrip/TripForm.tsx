@@ -25,7 +25,7 @@ const PREFERENCE_KEYS = [
 ] as const
 
 const inputClass =
-  'w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30'
+  'w-full rounded-xl border border-leaf-sand bg-white px-3 py-2 text-sm text-leaf-ink placeholder:text-leaf-muted/70 focus:border-leaf-moss focus:outline-none focus:ring-2 focus:ring-leaf-moss/20'
 
 export default function TripForm({
   values,
@@ -57,7 +57,10 @@ export default function TripForm({
         <CardTitle>{t('greenest.planTrip.formTitle')}</CardTitle>
 
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-stone-600" htmlFor="start">
+          <label
+            className="text-xs font-medium text-leaf-muted"
+            htmlFor="start"
+          >
             {t('greenest.planTrip.start')}
           </label>
           <input
@@ -71,7 +74,7 @@ export default function TripForm({
         </div>
         <div className="flex flex-col gap-1">
           <label
-            className="text-xs font-medium text-stone-600"
+            className="text-xs font-medium text-leaf-muted"
             htmlFor="destination"
           >
             {t('greenest.planTrip.destination')}
@@ -87,17 +90,17 @@ export default function TripForm({
         </div>
 
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-xs font-medium text-stone-600">
+          <legend className="mb-1 text-xs font-medium text-leaf-muted">
             {t('greenest.planTrip.preferences')}
           </legend>
           {PREFERENCE_KEYS.map(key => (
             <label
-              className="flex cursor-pointer items-center gap-2 text-sm text-stone-700"
+              className="flex cursor-pointer items-center gap-2 text-sm text-leaf-ink/80"
               key={key}
             >
               <input
                 checked={preferences[key]}
-                className="h-4 w-4 accent-emerald-600"
+                className="h-4 w-4 accent-leaf-forest"
                 onChange={e => setPreference(key, e.target.checked)}
                 type="checkbox"
               />
@@ -105,7 +108,7 @@ export default function TripForm({
             </label>
           ))}
           <label
-            className="mt-1 flex flex-col gap-1 text-sm text-stone-700"
+            className="mt-1 flex flex-col gap-1 text-sm text-leaf-ink/80"
             htmlFor="max-extra"
           >
             <span>
@@ -114,7 +117,7 @@ export default function TripForm({
               })}
             </span>
             <input
-              className="accent-emerald-600"
+              className="accent-leaf-forest"
               id="max-extra"
               max={30}
               min={0}
@@ -129,7 +132,7 @@ export default function TripForm({
         </fieldset>
 
         <button
-          className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-stone-300"
+          className="flex items-center justify-center gap-2 rounded-full bg-leaf-forest px-4 py-3 text-sm font-semibold text-leaf-cream shadow-sm transition-colors hover:bg-leaf-moss focus:outline-none focus-visible:ring-2 focus-visible:ring-leaf-moss focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-leaf-sand disabled:text-leaf-muted"
           disabled={!canSubmit}
           type="submit"
         >

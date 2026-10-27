@@ -50,6 +50,7 @@ export default function OverviewView() {
   return (
     <div className="mx-auto flex w-full max-w-[1920px] flex-1 flex-col gap-4 px-4 py-4 md:px-8">
       <PageIntro
+        eyebrow={t('greenest.overview.eyebrow')}
         subtitle={t('greenest.overview.subtitle')}
         title={t('greenest.overview.title')}
       />
@@ -61,7 +62,7 @@ export default function OverviewView() {
             onToggle={toggleLayer}
           />
         </aside>
-        <section className="relative order-1 h-[60vh] min-h-[420px] overflow-hidden rounded-2xl border border-stone-200 shadow-sm lg:order-2 lg:h-auto">
+        <section className="relative order-1 h-[60vh] min-h-[420px] overflow-hidden rounded-3xl border border-leaf-sand shadow-soft lg:order-2 lg:h-auto">
           <OverviewMap
             ariaLabel={t('greenest.overview.mapLabel')}
             data={data}
@@ -70,7 +71,7 @@ export default function OverviewView() {
             selectedCell={selectedCell}
           />
           {overview.status === 'loading' && (
-            <div className="absolute left-3 top-3 flex items-center gap-2 rounded-lg bg-white/90 px-3 py-1.5 text-xs text-stone-600 shadow-sm">
+            <div className="absolute left-3 top-3 flex items-center gap-2 rounded-lg bg-white/90 px-3 py-1.5 text-xs text-leaf-muted shadow-sm">
               <Spinner size="sm" />
               {t('greenest.overview.loadingData')}
             </div>

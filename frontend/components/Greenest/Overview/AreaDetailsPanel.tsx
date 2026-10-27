@@ -26,9 +26,9 @@ function Row({ indicator }: { indicator: Indicator }) {
   const { t } = useTranslation()
   const measured = indicator.value !== null
   return (
-    <div className="flex flex-col gap-1 rounded-xl border border-stone-100 p-3">
+    <div className="flex flex-col gap-1 rounded-xl border border-leaf-sand/70 p-3">
       <div className="flex items-start justify-between gap-2">
-        <span className="text-sm font-medium text-stone-800">
+        <span className="text-sm font-medium text-leaf-ink">
           {t(`greenest.overview.indicators.${indicator.key}`)}
         </span>
         <AvailabilityBadge
@@ -36,22 +36,22 @@ function Row({ indicator }: { indicator: Indicator }) {
         />
       </div>
       {measured ? (
-        <p className="font-lexend text-xl font-bold tabular-nums text-stone-900">
+        <p className="font-display text-xl font-semibold tabular-nums text-leaf-ink">
           {indicator.value}
-          <span className="ml-1 text-xs font-normal text-stone-500">
+          <span className="ml-1 text-xs font-normal text-leaf-muted">
             {indicator.unit}
           </span>
         </p>
       ) : (
-        <p className="text-sm text-stone-400">
+        <p className="text-sm text-leaf-muted/70">
           {t('greenest.overview.noMeasurement')}
         </p>
       )}
       {indicator.basis && (
-        <p className="text-[11px] text-stone-500">{indicator.basis}</p>
+        <p className="text-[11px] text-leaf-muted">{indicator.basis}</p>
       )}
       {indicator.source && (
-        <p className="text-[11px] text-stone-400">
+        <p className="text-[11px] text-leaf-muted/70">
           {t('greenest.overview.source')}: {indicator.source}
         </p>
       )}
@@ -114,7 +114,7 @@ export default function AreaDetailsPanel({
           <ChevronRight
             aria-hidden
             className={cx(
-              'h-4 w-4 text-stone-400 transition-transform',
+              'h-4 w-4 text-leaf-muted/70 transition-transform',
               open && 'rotate-90',
             )}
           />
@@ -123,7 +123,7 @@ export default function AreaDetailsPanel({
         {area && (
           <button
             aria-label={t('greenest.overview.clearSelection')}
-            className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+            className="rounded-lg p-1 text-leaf-muted/70 hover:bg-leaf-sand/50 hover:text-leaf-ink/80"
             onClick={onClear}
             type="button"
           >
@@ -134,20 +134,23 @@ export default function AreaDetailsPanel({
       {open &&
         (area ? (
           <div className="flex flex-col gap-2">
-            <p className="text-xs text-stone-500">
+            <p className="text-xs text-leaf-muted">
               {t('greenest.overview.areaNote')}
             </p>
             {indicators.map(indicator => (
               <Row indicator={indicator} key={indicator.key} />
             ))}
-            <p className="text-[11px] text-stone-400">
+            <p className="text-[11px] text-leaf-muted/70">
               {t('greenest.overview.indexNote')}
             </p>
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-2 rounded-xl bg-stone-50 px-4 py-8 text-center">
-            <MousePointerClick aria-hidden className="h-6 w-6 text-stone-400" />
-            <p className="text-sm text-stone-600">
+          <div className="flex flex-col items-center gap-2 rounded-xl bg-leaf-cream px-4 py-8 text-center">
+            <MousePointerClick
+              aria-hidden
+              className="h-6 w-6 text-leaf-muted/70"
+            />
+            <p className="text-sm text-leaf-muted">
               {t('greenest.overview.detailsEmpty')}
             </p>
           </div>

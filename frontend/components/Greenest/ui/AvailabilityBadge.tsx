@@ -5,10 +5,10 @@ import { useTranslation } from 'react-i18next'
 import type { DataAvailability } from '@/types/greenest'
 
 const STYLES: Record<DataAvailability, string> = {
-  measured: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  estimated: 'bg-amber-50 text-amber-700 ring-amber-200',
-  demo: 'bg-violet-50 text-violet-700 ring-violet-200',
-  unavailable: 'bg-stone-100 text-stone-500 ring-stone-200',
+  measured: 'bg-leaf-mint text-leaf-moss ring-leaf-sage/50',
+  estimated: 'bg-amber-50 text-amber-800 ring-amber-200',
+  demo: 'bg-[#f3ead6] text-[#7a5b1e] ring-[#e6d5ad]',
+  unavailable: 'bg-leaf-cream text-leaf-muted ring-leaf-sand',
 }
 
 /** Tells the user whether a value is measured, estimated, demo content or missing. */
