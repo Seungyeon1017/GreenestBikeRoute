@@ -9,6 +9,10 @@ data/custom/ built by us from raw sensor rows.
 Every file is a standard GeoJSON FeatureCollection (open in QGIS / geopandas /
 json.load(...)["features"]). Files that already exist are skipped, so teammates
 can re-run the script safely. See data/manifest.json for what was fetched.
+
+load_features downloads any missing file on first use.
+The backend can also start without data/
+(first start ~1-2 min, mostly streaming osem_bike_data)
 """
 import argparse
 import codecs

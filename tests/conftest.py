@@ -1,4 +1,4 @@
-import networkx as nx
+gitimport networkx as nx
 import pytest
 from shapely.geometry import LineString
 
