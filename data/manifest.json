@@ -1,5 +1,5 @@
 {
-  "bumpy_roads_heilbronn.geojson": {
+  "ready-made/bumpy_roads_heilbronn.geojson": {
     "collection": "bumpy_roads_heilbronn",
     "features": 9599,
     "rows_in_collection": 9599,
@@ -7,7 +7,7 @@
     "seconds": 2,
     "downloaded_at": "2026-10-27T12:30:47+00:00"
   },
-  "danger_zones_heilbronn.geojson": {
+  "ready-made/danger_zones_heilbronn.geojson": {
     "collection": "danger_zones_heilbronn",
     "features": 7095,
     "rows_in_collection": 7095,
@@ -15,7 +15,7 @@
     "seconds": 1,
     "downloaded_at": "2026-10-27T12:30:48+00:00"
   },
-  "danger_zones_PM_heilbronn.geojson": {
+  "ready-made/danger_zones_PM_heilbronn.geojson": {
     "collection": "danger_zones_PM_heilbronn",
     "features": 183030,
     "rows_in_collection": 183030,
@@ -23,7 +23,7 @@
     "seconds": 21,
     "downloaded_at": "2026-10-27T12:31:09+00:00"
   },
-  "overtaking_distance_heilbronn.geojson": {
+  "ready-made/overtaking_distance_heilbronn.geojson": {
     "collection": "overtaking_distance_heilbronn",
     "features": 1388,
     "rows_in_collection": 1388,
@@ -31,7 +31,7 @@
     "seconds": 0,
     "downloaded_at": "2026-10-27T12:31:09+00:00"
   },
-  "speed_map_heilbronn.geojson": {
+  "ready-made/speed_map_heilbronn.geojson": {
     "collection": "speed_map_heilbronn",
     "features": 7384,
     "rows_in_collection": 7384,
@@ -39,7 +39,7 @@
     "seconds": 1,
     "downloaded_at": "2026-10-27T12:31:10+00:00"
   },
-  "traffic_flow_heilbronn.geojson": {
+  "ready-made/traffic_flow_heilbronn.geojson": {
     "collection": "traffic_flow_heilbronn",
     "features": 7153,
     "rows_in_collection": 7153,
@@ -47,7 +47,7 @@
     "seconds": 1,
     "downloaded_at": "2026-10-27T12:31:11+00:00"
   },
-  "road_network_heilbronn.geojson": {
+  "ready-made/road_network_heilbronn.geojson": {
     "collection": "road_network_heilbronn",
     "features": 34243,
     "rows_in_collection": 34243,
@@ -55,7 +55,7 @@
     "seconds": 5,
     "downloaded_at": "2026-10-27T12:31:16+00:00"
   },
-  "bike_road_network_heilbronn.geojson": {
+  "ready-made/bike_road_network_heilbronn.geojson": {
     "collection": "bike_road_network_heilbronn",
     "features": 34243,
     "rows_in_collection": 34243,
@@ -63,7 +63,7 @@
     "seconds": 4,
     "downloaded_at": "2026-10-27T12:31:20+00:00"
   },
-  "tracks_heilbronn.geojson": {
+  "ready-made/tracks_heilbronn.geojson": {
     "collection": "tracks",
     "features": 2281,
     "rows_in_collection": 6638,
@@ -71,7 +71,7 @@
     "seconds": 9,
     "downloaded_at": "2026-10-27T12:31:28+00:00"
   },
-  "statistics_heilbronn.geojson": {
+  "ready-made/statistics_heilbronn.geojson": {
     "collection": "statistics",
     "features": 1,
     "rows_in_collection": 5,
@@ -79,7 +79,7 @@
     "seconds": 0,
     "downloaded_at": "2026-10-27T12:31:28+00:00"
   },
-  "danger_zones_raw_heilbronn.geojson": {
+  "custom/danger_zones_raw_heilbronn.geojson": {
     "collection": "osem_bike_data",
     "features": 6280,
     "rows_in_collection": 1474744,
@@ -87,7 +87,7 @@
     "seconds": 33,
     "downloaded_at": "2026-10-27T21:18:55+00:00"
   },
-  "air_quality_heilbronn.geojson": {
+  "custom/air_quality_heilbronn.geojson": {
     "collection": "osem_bike_data",
     "features": 166429,
     "rows_in_collection": 1474744,

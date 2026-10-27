@@ -1,4 +1,5 @@
-"""Download the ready-made ATRAI datasets for Heilbronn into ./data as GeoJSON.
+"""Download the ATRAI datasets for Heilbronn into ./data as GeoJSON: data/ready-made/ as ATRAI serves them,
+data/custom/ built by us from raw sensor rows.
 
     python -X utf8 download_data.py                  # all Heilbronn datasets (~87 MB)
     python -X utf8 download_data.py --only bumpy_roads road_network
@@ -167,6 +168,9 @@ FILTERED = [
 # Steps that need all kept rows at once, run on the downloaded file: output name -> features -> features.
 FINISH = {f"air_quality_{CITY}": clean_pm_rows}
 
+# Datasets we build from raw sensor rows; they go to data/custom/, everything else to data/ready-made/.
+CUSTOM = {f"danger_zones_raw_{CITY}", f"air_quality_{CITY}"}
+
 # Raw sensor collections with over a million rows (GBs of JSON). Opt-in only.
 # The first two contain every city; osem_home_data_heilbronn is Heilbronn only.
 LARGE = [
@@ -284,10 +288,14 @@ def update_manifest(entry):
     path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+def dataset_path(name):
+    return DATA_DIR / ("custom" if name in CUSTOM else "ready-made") / f"{name}.geojson"
+
+
 def fetch(collection, name, keep=None, force=False, session=None, page=2000):
-    """Download one dataset to data/<name>.geojson unless it is already there."""
-    DATA_DIR.mkdir(exist_ok=True)
-    out = DATA_DIR / f"{name}.geojson"
+    """Download one dataset to data/<folder>/<name>.geojson unless it is already there."""
+    out = dataset_path(name)
+    out.parent.mkdir(parents=True, exist_ok=True)
     if out.exists() and not force:
         print(f"{name}: cached ({out.stat().st_size / 1e6:.1f} MB)")
         return out
@@ -301,7 +309,7 @@ def fetch(collection, name, keep=None, force=False, session=None, page=2000):
                        encoding="utf-8")
         written = len(features)
     update_manifest({
-        "file": out.name,
+        "file": out.relative_to(DATA_DIR).as_posix(),
         "collection": collection,
         "features": written,
         "rows_in_collection": seen,
@@ -313,7 +321,7 @@ def fetch(collection, name, keep=None, force=False, session=None, page=2000):
 
 
 def load_features(name):
-    """Return the features of data/<name>.geojson, downloading it first if needed."""
+    """Return the features of dataset `name`, downloading it first if needed."""
     for collection, out_name, keep in all_datasets(include_large=True):
         if out_name == name:
             path = fetch(collection, out_name, keep)
