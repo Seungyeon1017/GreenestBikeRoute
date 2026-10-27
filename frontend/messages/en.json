@@ -1,0 +1,185 @@
+{
+  "common": {
+    "back": "Back",
+    "moreDetails": "More Details",
+    "lessDetails": "Less Details",
+    "noData": "No data",
+    "loading": "Loading..."
+  },
+  "navbar": {
+    "hideInfo": "Hide information",
+    "aboutButtonFallback": "About the Dashboard"
+  },
+  "sectionTitle": {
+    "default": "Heilbronn",
+    "climate": "Climate",
+    "mobility": "Mobility",
+    "building": "Buildings",
+    "energy": "Energy",
+    "impressum": "Imprint",
+    "datenschutz": "Privacy Policy",
+    "feedback": "With your data – for your municipality"
+  },
+  "footer": {
+    "projectOf": "A project by",
+    "impressum": "Imprint",
+    "datenschutz": "Privacy Policy",
+    "giveFeedback": "Give feedback"
+  },
+  "shareOverlay": {
+    "title": "Share this tile",
+    "description": "Would you like to share this tile with others? Use this link to link directly to this tile.",
+    "copyLink": "Copy link"
+  },
+  "embedOverlay": {
+    "title": "Embed this tile on your website",
+    "description": "Would you like to display this tile on your website too? Use the iframe code and embed it on your website easily.",
+    "copyCode": "Copy HTML code"
+  },
+  "cookies": {
+    "message": "Consent to cookies (Analytics, Tracking)",
+    "accept": "Accept",
+    "decline": "Decline"
+  },
+  "survey": {
+    "showAnswer": "Reveal answer",
+    "hideAnswer": "back to question"
+  },
+  "contactForm": {
+    "title": "Contact",
+    "description": "Interested in borrowing hardware to join one of the campaigns, or have questions about them? Leave us a message below. To register for upcoming events, check the <strong>'Dates'</strong> section.",
+    "name": "Name",
+    "namePlaceholder": "Your name",
+    "email": "Email address",
+    "emailPlaceholder": "your@email.com",
+    "institution": "Institution / Organisation",
+    "institutionPlaceholder": "e.g. school, club, company",
+    "reason": "Reason for enquiry",
+    "reasonPlaceholder": "Please select",
+    "reasonCampaign": "Interest in a campaign",
+    "reasonSenseboxBike": "Borrow senseBox:bike",
+    "reasonTemperatureLogger": "Borrow temperature logger",
+    "reasonSenseboxEdu": "Borrow senseBox:edu",
+    "period": "Time period (if known)",
+    "periodPlaceholder": "e.g. June 2025, school year 2025/26",
+    "message": "Additional information",
+    "messagePlaceholder": "Describe your request…",
+    "submit": "Send enquiry",
+    "submitting": "Sending…",
+    "successTitle": "Thank you!",
+    "successMessage": "Your enquiry has been submitted successfully. We will get back to you shortly.",
+    "errorTitle": "Sending failed",
+    "errorMessage": "The request could not be sent. Please try again later.",
+    "required": "Required field"
+  },
+  "birdiaryValidation": {
+    "title": "Validate Bird Videos",
+    "description": "Can you spot a bird in the video? Help us improve the AI detection!",
+    "noStations": "No stations available.",
+    "stations_one": "station",
+    "stations_other": "stations",
+    "newestVideo": "Newest video",
+    "openNewestVideo": "Open newest video",
+    "noVideo": "No video",
+    "date": "Date",
+    "weight": "Weight",
+    "aiDetection": "AI suggestion",
+    "birdInVideo": "Bird in video",
+    "noBird": "No bird",
+    "dontKnow": "I don't know",
+    "submitting": "Saving…",
+    "loadError": "Could not load video.",
+    "retry": "Try again",
+    "speciesSearch": "Search for a different species…",
+    "speciesSearchPlaceholder": "Enter name (e.g. Robin)",
+    "speciesNoResults": "No results"
+  },
+  "birdTile": {
+    "noData": "No bird data available.",
+    "birdsLast7Days": "Birds (last 7 days)",
+    "speciesDetected": "Species detected",
+    "mostFrequentSpecies": "Most frequent species",
+    "lastDetected": "Last detected",
+    "confidence": "Confidence",
+    "sightingsPerDay": "Sightings per day",
+    "today": "Today"
+  },
+  "weatherTile": {
+    "degreeWarmer": "degrees warmer",
+    "degreeColder": "degrees colder",
+    "isThe": "is",
+    "comparisonSuffix": "so far compared to the long-term average (1961-1990).",
+    "currentCondition": "In Heilbronn it is currently",
+    "now": "now",
+    "temperature": "Temperature",
+    "precipitation": "Precipitation",
+    "cloudcover": "Cloud\u00adcover",
+    "cloudcoverShort": "Cloud cov.",
+    "windspeed": "Wind\u00adspeed",
+    "windspeedShort": "Wind spd.",
+    "sunhours": "Sunshine hours",
+    "no2": "Nitrogen dioxide (NO<sub>2</sub>)",
+    "pm10": "Particulate matter (PM<sub>10</sub>)",
+    "o3": "Ozone (O<sub>3</sub>)",
+    "pm25": "Particulate matter (PM<sub>2.5</sub>)"
+  },
+  "qualityBar": {
+    "lowPollution": "Low Pollution",
+    "highPollution": "Heavy Pollution"
+  },
+  "openSenseMap": {
+    "noStations": "No measurement stations available.",
+    "stations_one": "measuring station",
+    "stations_other": "measuring stations",
+    "liveData": "Live data",
+    "historicData": "Historic data",
+    "updated": "updated",
+    "sensor": "sensor",
+    "sensors": "sensors"
+  },
+  "tiles": {
+    "dates": {
+      "upcoming": "Upcoming Events",
+      "previous": "Past Events"
+    },
+    "insights": {
+      "ourCampaigns": "Our Campaigns"
+    },
+    "climate": {
+      "climateIndices": {
+        "title": "Climate Key Days",
+        "subtitle": "Frequency of temperature key days"
+      },
+      "pm": { "title": "Particulate Matter" },
+      "openSenseMap": { "title": "Our Measuring Stations" },
+      "birdStations": { "title": "Our Bird Stations" },
+      "bird": { "title": "Bird Observation" },
+      "development": {
+        "title": "Climate",
+        "subtitle": "Temperature deviations from the long-term monthly averages before 1900"
+      },
+      "weather": { "title": "Current Weather" }
+    },
+    "mobility": {
+      "bicycle": {
+        "title": "Cyclists",
+        "subtitle": "in the city area"
+      },
+      "overtaking": {
+        "title": "Overtaking Distances and Accident Statistics",
+        "subtitle": "in focus"
+      },
+      "bicycleCampaign": {
+        "title": "senseBox:bike - Bicycle Campaign",
+        "subtitle": "This much bicycle data has been collected so far"
+      },
+      "trafficFlow": {
+        "title": "Where did we collect data?",
+        "subtitle": "Street segments in Heilbronn, colored by the number of measurement points on the segment."
+      },
+      "trafficStats": {
+        "title": "Bicycle Statistics"
+      }
+    }
+  }
+}
