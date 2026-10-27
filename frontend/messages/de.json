@@ -1,0 +1,185 @@
+{
+  "common": {
+    "back": "Zurück",
+    "moreDetails": "Mehr Details",
+    "lessDetails": "Weniger Details",
+    "noData": "Keine Daten",
+    "loading": "Laden..."
+  },
+  "navbar": {
+    "hideInfo": "Informationen ausblenden",
+    "aboutButtonFallback": "Über das Dashboard"
+  },
+  "sectionTitle": {
+    "default": "Heilbronn",
+    "climate": "Klima",
+    "mobility": "Mobilität",
+    "building": "Gebäude",
+    "energy": "Energie",
+    "impressum": "Impressum",
+    "datenschutz": "Datenschutz",
+    "feedback": "Mit Ihren Daten – für Ihre Kommune"
+  },
+  "footer": {
+    "projectOf": "Ein Projekt von",
+    "impressum": "Impressum",
+    "datenschutz": "Datenschutz",
+    "giveFeedback": "Feedback geben"
+  },
+  "shareOverlay": {
+    "title": "Diese Kachel teilen",
+    "description": "Sie möchten diese Kachel mit anderen teilen? Nutzen Sie diesen Link um direkt zu dieser Kachel zu verlinken.",
+    "copyLink": "Link kopieren"
+  },
+  "embedOverlay": {
+    "title": "Diese Kachel auf Ihre Website einbetten",
+    "description": "Sie möchten diese Kachel auch auf ihrer Website darstellen? Nutzen Sie den iframe Code und betten Sie diesen in ihrer Website ganz einfach ein.",
+    "copyCode": "HTML Code kopieren"
+  },
+  "cookies": {
+    "message": "Einwilligung zu Cookies (Analytics, Tracking)",
+    "accept": "Akzeptieren",
+    "decline": "Ablehnen"
+  },
+  "survey": {
+    "showAnswer": "Antwort aufdecken",
+    "hideAnswer": "zurück zur Frage"
+  },
+  "contactForm": {
+    "title": "Kontakt",
+    "description": "Hast du Interesse daran, Hardware für eine der Kampagnen auszuleihen, oder hast du Fragen zu einer der Kampagnen? Hinterlasse uns gerne eine Nachricht. Zur Anmeldung für kommende Veranstaltungen schau bitte unter <strong>'Termine'</strong> nach.",
+    "name": "Name",
+    "namePlaceholder": "Dein Name",
+    "email": "E-Mail-Adresse",
+    "emailPlaceholder": "deine@email.de",
+    "institution": "Institution / Organisation",
+    "institutionPlaceholder": "z. B. Schule, Verein, Unternehmen",
+    "reason": "Grund der Anfrage",
+    "reasonPlaceholder": "Bitte wählen",
+    "reasonCampaign": "Interesse an einer Kampagne",
+    "reasonSenseboxBike": "senseBox:bike ausleihen",
+    "reasonTemperatureLogger": "Temperatur Logger ausleihen",
+    "reasonSenseboxEdu": "senseBox:edu ausleihen",
+    "period": "Zeitraum (falls bekannt)",
+    "periodPlaceholder": "z. B. Juni 2025, Schuljahr 2025/26",
+    "message": "Weitere Informationen",
+    "messagePlaceholder": "Beschreibe dein Anliegen…",
+    "submit": "Anfrage senden",
+    "submitting": "Wird gesendet…",
+    "successTitle": "Vielen Dank!",
+    "successMessage": "Deine Anfrage wurde erfolgreich übermittelt. Wir melden uns in Kürze bei dir.",
+    "errorTitle": "Fehler beim Senden",
+    "errorMessage": "Die Anfrage konnte nicht gesendet werden. Bitte versuche es später erneut.",
+    "required": "Pflichtfeld"
+  },
+  "birdiaryValidation": {
+    "title": "Vogelvideos bestätigen",
+    "description": "Siehst du einen Vogel im Video? Hilf uns, die KI-Erkennung zu verbessern!",
+    "noStations": "Keine Stationen verfügbar.",
+    "stations_one": "Station",
+    "stations_other": "Stationen",
+    "newestVideo": "Neuestes Video",
+    "openNewestVideo": "Neuestes Video öffnen",
+    "noVideo": "Kein Video",
+    "date": "Datum",
+    "weight": "Gewicht",
+    "aiDetection": "KI-Vorschlag",
+    "birdInVideo": "Vogel im Video",
+    "noBird": "Kein Vogel",
+    "dontKnow": "Weiß nicht",
+    "submitting": "Wird gespeichert…",
+    "loadError": "Video konnte nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "speciesSearch": "Andere Art suchen…",
+    "speciesSearchPlaceholder": "Name eingeben (z. B. Amsel)",
+    "speciesNoResults": "Keine Ergebnisse"
+  },
+  "birdTile": {
+    "noData": "Keine Vogeldaten verfügbar.",
+    "birdsLast7Days": "Vögel (letzte 7 Tage)",
+    "speciesDetected": "Arten erkannt",
+    "mostFrequentSpecies": "Häufigste Arten",
+    "lastDetected": "Zuletzt erkannt",
+    "confidence": "Sicherheit",
+    "sightingsPerDay": "Sichtungen pro Tag",
+    "today": "Heute"
+  },
+  "weatherTile": {
+    "degreeWarmer": "Grad wärmer",
+    "degreeColder": "Grad kälter",
+    "isThe": "ist der",
+    "comparisonSuffix": "bisher im Vergleich zum langjährigen Mittel (1961-1990).",
+    "currentCondition": "In Heilbronn ist es gerade",
+    "now": "jetzt",
+    "temperature": "Temperatur",
+    "precipitation": "Niederschlag",
+    "cloudcover": "Wolken\u00adbedeckung",
+    "cloudcoverShort": "Wolkenbed.",
+    "windspeed": "Wind\u00adgeschwindigkeit",
+    "windspeedShort": "Windgeschw.",
+    "sunhours": "Sonnenstunden",
+    "no2": "Stickstoffdioxid (NO<sub>2</sub>)",
+    "pm10": "Feinstaub (PM<sub>10</sub>)",
+    "o3": "Ozon (O<sub>3</sub>)",
+    "pm25": "Feinstaub (PM<sub>2.5</sub>)"
+  },
+  "qualityBar": {
+    "lowPollution": "Geringe Belastung",
+    "highPollution": "Starke Belastung"
+  },
+  "openSenseMap": {
+    "noStations": "Keine Messstationen verfügbar.",
+    "stations_one": "Messstation",
+    "stations_other": "Messstationen",
+    "liveData": "Live-Daten",
+    "historicData": "Historische Daten",
+    "updated": "aktualisiert",
+    "sensor": "Sensor",
+    "sensors": "Sensoren"
+  },
+  "tiles": {
+    "dates": {
+      "upcoming": "Kommende Termine",
+      "previous": "Vergangene Termine"
+    },
+    "insights": {
+      "ourCampaigns": "Unsere Kampagnen"
+    },
+    "climate": {
+      "climateIndices": {
+        "title": "Klimakenntage",
+        "subtitle": "H\u00e4ufigkeit von Temperaturkenntagen"
+      },
+      "pm": { "title": "Feinstaub" },
+      "openSenseMap": { "title": "Unsere Messstationen" },
+      "birdStations": { "title": "Unsere Vogelstationen" },
+      "bird": { "title": "Vogelbeobachtung" },
+      "development": {
+        "title": "Klima",
+        "subtitle": "Temperaturabweichungen von den langj\u00e4hrigen Monatsmitteln vor 1900"
+      },
+      "weather": { "title": "Wetter aktuell" }
+    },
+    "mobility": {
+      "bicycle": {
+        "title": "Radelnde",
+        "subtitle": "im Stadtgebiet"
+      },
+      "overtaking": {
+        "title": "\u00dcberholabst\u00e4nde und Unfallstatistiken",
+        "subtitle": "im Blick"
+      },
+      "bicycleCampaign": {
+        "title": "senseBox:bike - Fahrradkampagne",
+        "subtitle": "So viele Fahrraddaten wurden bisher gesammelt"
+      },
+      "trafficFlow": {
+        "title": "Wo haben wir schon Daten gesammelt?",
+        "subtitle": "Stra\u00dfensegmente in Heilbronn, eingef\u00e4rbt nach Anzahl der Messpunkte auf der Strecke."
+      },
+      "trafficStats": {
+        "title": "Fahrradstatistiken"
+      }
+    }
+  }
+}

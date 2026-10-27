@@ -1,0 +1,9 @@
+.git
+.github
+.gitlab
+.husky
+.next
+.vercel
+.vscode
+deployment
+docs
