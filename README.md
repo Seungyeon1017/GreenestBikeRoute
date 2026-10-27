@@ -8,3 +8,12 @@ Downloads the Heilbronn datasets from the [ATRAI API](https://hackathon.greencit
 pip install -r requirements.txt
 python -X utf8 download_data.py
 ```
+
+## Routing API
+Serves bike routes that avoid bumpy streets as GeoJSON. The first start downloads the Heilbronn street graph from OpenStreetMap into `cache/` (about 2 minutes); later starts take a few seconds.
+
+```bash
+uvicorn backend.app:app
+```
+
+Try it at http://127.0.0.1:8000/docs, e.g. `/route?from_lat=49.14838&from_lon=9.22687&to_lat=49.1262&to_lon=9.22439&penalty=10`. `penalty` is how much you hate bumps: 0 gives the shortest route. Run the tests with `python -m pytest`.

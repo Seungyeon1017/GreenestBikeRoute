@@ -1,0 +1,41 @@
+"""HTTP API for the bike router. From the repo root: uvicorn backend.app:app"""
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from routing.costs import DEFAULT_PENALTY
+from routing.graph import load_graph
+from routing.route import RouteError, find_route
+
+
+def create_app(graph=None):
+    """`graph` lets tests pass a small graph; by default the Heilbronn graph is loaded at startup."""
+
+    @asynccontextmanager
+    async def lifespan(app):
+        app.state.graph = graph if graph is not None else load_graph()
+        yield
+
+    app = FastAPI(title="Greenest Bike Route", lifespan=lifespan)
+    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"])
+
+    @app.get("/route", summary="Bike route from A to B as GeoJSON")
+    def route(
+        from_lat: float = Query(..., ge=-90, le=90),
+        from_lon: float = Query(..., ge=-180, le=180),
+        to_lat: float = Query(..., ge=-90, le=90),
+        to_lon: float = Query(..., ge=-180, le=180),
+        penalty: float = Query(DEFAULT_PENALTY, ge=0, le=100, description="How much do you hate bumps"),
+    ):
+        try:
+            collection = find_route(app.state.graph, (from_lat, from_lon), (to_lat, to_lon), penalty)
+        except RouteError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return JSONResponse(collection, media_type="application/geo+json")
+
+    return app
+
+
+app = create_app()
