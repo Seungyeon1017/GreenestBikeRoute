@@ -1,0 +1,160 @@
+<!doctype html>
+<!-- PROTOTYPE - throwaway demo map for the routing API, kept out of frontend/ on purpose.
+     Start the API (uvicorn backend.app:app), then: python -m http.server 5500 -d demo-prototype
+     and open http://127.0.0.1:5500. API on another port: http://127.0.0.1:5500/?api=http://127.0.0.1:8001 -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Greenest Bike Route demo</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; font: 14px/1.4 system-ui, sans-serif; color: #1d2733; }
+  #map { position: absolute; inset: 0; }
+  #panel {
+    position: absolute; top: 12px; left: 12px; z-index: 1000; width: 300px;
+    max-height: calc(100% - 48px); overflow-y: auto; box-sizing: border-box;
+    background: #fff; border-radius: 10px; padding: 14px 16px; box-shadow: 0 2px 12px rgba(0,0,0,.2);
+  }
+  @media (max-width: 600px) {
+    #panel { top: auto; bottom: 24px; left: 8px; right: 8px; width: auto; max-height: 55%; padding: 10px 12px; font-size: 13px; }
+    .hint, .legend { display: none; }
+  }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  .hint { color: #5b6773; margin: 0 0 12px; }
+  label { display: block; font-weight: 600; margin-top: 10px; }
+  input[type=range] { width: 100%; }
+  .row { display: flex; justify-content: space-between; color: #5b6773; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 3px 0; }
+  th:first-child, td:first-child { text-align: left; }
+  .swatch { display: inline-block; width: 18px; height: 4px; vertical-align: middle; margin-right: 6px; border-radius: 2px; }
+  #summary { margin-top: 10px; font-weight: 600; min-height: 1.4em; }
+  #error { color: #b3261e; margin-top: 8px; }
+  button { margin-top: 10px; margin-right: 6px; padding: 5px 10px; border: 1px solid #c3ccd5; border-radius: 6px; background: #f5f7f9; cursor: pointer; }
+  .legend { margin-top: 10px; font-size: 12px; color: #5b6773; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="panel">
+  <h1>Greenest Bike Route</h1>
+  <p class="hint" id="hint">Click the map to set the start.</p>
+
+  <label for="penalty">How much do you hate bumps: <span id="penaltyValue">10</span></label>
+  <input id="penalty" type="range" min="0" max="50" step="1" value="10">
+  <div class="row"><span>0 = shortest</span><span>50 = avoid at all costs</span></div>
+
+  <table>
+    <tr><th></th><th>Length</th><th>Roughness</th><th>Measured</th></tr>
+    <tr><td><span class="swatch" style="background:#7a8794"></span>Shortest</td><td id="sLen">–</td><td id="sRough">–</td><td id="sMeas">–</td></tr>
+    <tr><td><span class="swatch" style="background:#1a7f37"></span>Your route</td><td id="rLen">–</td><td id="rRough">–</td><td id="rMeas">–</td></tr>
+  </table>
+  <div id="summary"></div>
+  <div id="error"></div>
+
+  <button id="example">Example trip</button><button id="reset">Reset</button>
+  <div class="legend">
+    <label style="font-weight:400;margin:0"><input type="checkbox" id="showBumps" checked> Show measured roughness</label>
+    <span class="swatch" style="background:#4caf50"></span>&lt;10
+    <span class="swatch" style="background:#f2c94c"></span>10–20
+    <span class="swatch" style="background:#f2994a"></span>20–30
+    <span class="swatch" style="background:#d63b3b"></span>30+
+  </div>
+</div>
+
+<script>
+const API = new URLSearchParams(location.search).get("api") || "http://127.0.0.1:8000";
+
+const map = L.map("map", { preferCanvas: true }).setView([49.142, 9.215], 13);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19, attribution: "&copy; OpenStreetMap contributors",
+}).addTo(map);
+
+// Measured roughness from bumpy_roads_heilbronn, drawn faintly under the routes.
+const roughColor = r => r < 10 ? "#4caf50" : r < 20 ? "#f2c94c" : r < 30 ? "#f2994a" : "#d63b3b";
+const bumps = L.layerGroup().addTo(map);
+fetch(API + "/roughness").then(r => r.json()).then(data => {
+  L.geoJSON(data, {
+    style: f => ({ color: roughColor(f.properties.roughness ?? 0), weight: 2, opacity: 0.55 }),
+    interactive: false,
+  }).addTo(bumps);
+});
+document.getElementById("showBumps").onchange = e => e.target.checked ? bumps.addTo(map) : bumps.remove();
+
+const shortestLayer = L.geoJSON(null, { style: { color: "#7a8794", weight: 5, opacity: 0.9, dashArray: "6 8" } }).addTo(map);
+const routeLayer = L.geoJSON(null, { style: { color: "#1a7f37", weight: 6, opacity: 0.9 } }).addTo(map);
+
+let start = null, end = null;
+const pin = (latlng, label) => L.marker(latlng, { draggable: true, title: label })
+  .bindTooltip(label, { permanent: true, direction: "top", offset: [-15, -12] })
+  .on("dragend", update).addTo(map);
+
+map.on("click", e => {
+  if (!start) start = pin(e.latlng, "Start");
+  else if (!end) end = pin(e.latlng, "End");
+  else end.setLatLng(e.latlng);
+  update();
+});
+
+const slider = document.getElementById("penalty");
+slider.oninput = () => document.getElementById("penaltyValue").textContent = slider.value;
+slider.onchange = update;
+
+document.getElementById("reset").onclick = () => {
+  [start, end].forEach(m => m && m.remove());
+  start = end = null;
+  shortestLayer.clearLayers(); routeLayer.clearLayers();
+  show("s", null); show("r", null);
+  setText("summary", ""); setText("error", "");
+  update();
+};
+
+document.getElementById("example").onclick = () => {
+  document.getElementById("reset").onclick();
+  start = pin([49.14838, 9.22687], "Start");
+  end = pin([49.1262, 9.22439], "End");
+  map.fitBounds([[49.1262, 9.22439], [49.14838, 9.22687]], { padding: [80, 80] });
+  update();
+};
+
+const setText = (id, t) => document.getElementById(id).textContent = t;
+function show(prefix, p) {
+  setText(prefix + "Len", p ? (p.length_m / 1000).toFixed(2) + " km" : "–");
+  setText(prefix + "Rough", p && p.mean_roughness != null ? p.mean_roughness.toFixed(1) : "–");
+  setText(prefix + "Meas", p ? Math.round(p.measured_share * 100) + "%" : "–");
+}
+
+async function getRoute(penalty) {
+  const a = start.getLatLng(), b = end.getLatLng();
+  const q = new URLSearchParams({ from_lat: a.lat, from_lon: a.lng, to_lat: b.lat, to_lon: b.lng, penalty });
+  const res = await fetch(API + "/route?" + q);
+  const body = await res.json();
+  if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail));
+  return body;
+}
+
+async function update() {
+  setText("hint", !start ? "Click the map to set the start." : !end ? "Click the map to set the end."
+    : "Drag the pins or click to move the end.");
+  if (!start || !end) return;
+  setText("error", "");
+  try {
+    const [shortest, route] = await Promise.all([getRoute(0), getRoute(slider.value)]);
+    shortestLayer.clearLayers().addData(shortest);
+    routeLayer.clearLayers().addData(route);
+    const s = shortest.features[0].properties, r = route.features[0].properties;
+    show("s", s); show("r", r);
+    const detour = (r.length_m / s.length_m - 1) * 100;
+    setText("summary", detour < 0.05 ? "Same as the shortest route."
+      : `+${detour.toFixed(1)}% distance, roughness ${s.mean_roughness?.toFixed(1)} → ${r.mean_roughness?.toFixed(1)}`);
+  } catch (e) {
+    shortestLayer.clearLayers(); routeLayer.clearLayers();
+    show("s", null); show("r", null); setText("summary", "");
+    setText("error", e.message);
+  }
+}
+</script>
+</body>
+</html>

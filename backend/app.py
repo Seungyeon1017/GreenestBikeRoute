@@ -1,13 +1,25 @@
 """HTTP API for the bike router. From the repo root: uvicorn backend.app:app"""
 from contextlib import asynccontextmanager
+from functools import cache
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from download_data import load_features
 from routing.costs import DEFAULT_PENALTY
 from routing.graph import load_graph
 from routing.route import RouteError, find_route
+
+
+@cache
+def roughness_collection():
+    """The measured streets from bumpy_roads_heilbronn, trimmed to geometry + roughness (0-100)."""
+    features = [
+        {"type": "Feature", "geometry": f["geometry"], "properties": {"roughness": f["properties"]["Normalized Roughness"]}}
+        for f in load_features("bumpy_roads_heilbronn")
+    ]
+    return {"type": "FeatureCollection", "features": features}
 
 
 def create_app(graph=None):
@@ -34,6 +46,10 @@ def create_app(graph=None):
         except RouteError as e:
             raise HTTPException(status_code=400, detail=str(e))
         return JSONResponse(collection, media_type="application/geo+json")
+
+    @app.get("/roughness", summary="Measured street roughness as GeoJSON, e.g. for a map overlay")
+    def roughness():
+        return JSONResponse(roughness_collection(), media_type="application/geo+json")
 
     return app
 

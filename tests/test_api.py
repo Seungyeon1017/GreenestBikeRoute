@@ -47,3 +47,12 @@ def test_penalty_is_documented(client):
     spec = client.get("/openapi.json").json()
     penalty = next(p for p in spec["paths"]["/route"]["get"]["parameters"] if p["name"] == "penalty")
     assert penalty["description"] == "How much do you hate bumps"
+
+
+def test_roughness_overlay(client):
+    r = client.get("/roughness")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/geo+json"
+    features = r.json()["features"]
+    assert len(features) > 9000
+    assert set(features[0]["properties"]) == {"roughness"}
