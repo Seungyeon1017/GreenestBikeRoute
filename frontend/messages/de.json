@@ -181,5 +181,142 @@
         "title": "Fahrradstatistiken"
       }
     }
+  },
+  "greenest": {
+    "vision": "Die schnellste Route bringt dich früher ans Ziel. Die grünste Route macht den Weg schöner.",
+    "nav": {
+      "label": "Hauptnavigation",
+      "overview": "Überblick",
+      "planTrip": "Route planen",
+      "highlights": "Highlights"
+    },
+    "footer": {
+      "basedOn": "Basierend auf",
+      "mapData": "Kartendaten"
+    },
+    "availability": {
+      "measured": "Gemessen",
+      "estimated": "Geschätzt",
+      "demo": "Beispiel",
+      "unavailable": "Noch nicht angebunden"
+    },
+    "layers": {
+      "air-quality": {
+        "label": "Luftqualität",
+        "description": "Verkehrs- und Feinstaub-Risikoindex aus Radfahrten, gemittelt pro 500-m-Gebiet."
+      },
+      "cycling-infrastructure": {
+        "label": "Radinfrastruktur",
+        "description": "Gemessene Oberflächenrauheit und in OpenStreetMap erfasste Radspuren."
+      },
+      "noise": {
+        "label": "Lärmbelastung",
+        "description": "Noch kein Lärmdatensatz angebunden."
+      },
+      "green-spaces": {
+        "label": "Grünflächen & Bäume",
+        "description": "Noch kein Grünflächendatensatz angebunden."
+      },
+      "environmental-score": {
+        "label": "Umweltwert",
+        "description": "Kombinierter Wert pro Gebiet, sobald Lärm- und Grünflächendaten vorliegen."
+      }
+    },
+    "overview": {
+      "title": "Entdecke die Umwelt deiner Stadt",
+      "subtitle": "Luftqualität, Lärm, Grün und Radinfrastruktur in Heilbronn. Ebenen ein- und ausblenden und ein Gebiet für Details anklicken.",
+      "layersTitle": "Umweltebenen",
+      "detailsTitle": "Gebietsdetails",
+      "detailsEmpty": "Klicke ein Gebiet auf der Karte an, um gemessene Indikatoren, Datenquelle und Einheit zu sehen.",
+      "mapLabel": "Umweltkarte von Heilbronn",
+      "loadingData": "Kartendaten werden geladen…",
+      "clearSelection": "Auswahl aufheben",
+      "areaNote": "Gebiet = Rasterzelle von 500 m × 500 m. Werte sind Mittelwerte der Messungen darin.",
+      "noMeasurement": "Keine Messung in diesem Gebiet",
+      "source": "Quelle",
+      "indexNote": "Die Risikoindizes berechnet ATRAI aus senseBox:bike-Sensorfahrten (0 = gering, 1 = hoch). Es sind keine Konzentrationen in µg/m³.",
+      "indicators": {
+        "pmRisk": "Verkehrs- & Feinstaubrisiko",
+        "roughness": "Oberflächenrauheit",
+        "overtakingRisk": "Überholrisiko",
+        "noise": "Lärm",
+        "greenery": "Grün"
+      },
+      "units": {
+        "index": "Index 0–1"
+      },
+      "basis": {
+        "points": "aus {{count}} Messpunkten",
+        "length": "{{km}} km gemessene Straßen",
+        "manoeuvres": "aus {{count}} gemessenen Überholvorgängen"
+      }
+    },
+    "planTrip": {
+      "title": "Finde deine grünste Route",
+      "subtitle": "Vergleiche die schnellste Route mit einer Route, die Grün, ruhige Straßen und gute Radinfrastruktur bevorzugt.",
+      "formTitle": "Deine Fahrt",
+      "start": "Start",
+      "startPlaceholder": "z. B. Heilbronn Hbf",
+      "destination": "Ziel",
+      "destinationPlaceholder": "z. B. Pfühlpark",
+      "preferences": "Vorlieben (optional)",
+      "preferGreener": "Grünere Straßen bevorzugen",
+      "preferQuieter": "Ruhigere Straßen bevorzugen",
+      "preferCycleLanes": "Eigene Radwege bevorzugen",
+      "maxExtraMinutes": "Bis zu {{minutes}} Minuten Umweg akzeptieren",
+      "findRoute": "Route finden",
+      "notConnected": "Die Routensuche ist noch nicht angebunden. Adresssuche und Routing-Dienst folgen im nächsten Schritt.",
+      "comparisonTitle": "Routenvergleich",
+      "routes": {
+        "fastest": "Schnellste Route",
+        "fastestHint": "Optimiert auf Fahrzeit.",
+        "greenest": "Grünste Route",
+        "greenestHint": "Optimiert auf Umweltkomfort."
+      },
+      "metrics": {
+        "duration": "Fahrzeit",
+        "distance": "Distanz",
+        "greenScore": "Green Route Score",
+        "greenery": "Grünanteil",
+        "noise": "Lärmbelastung",
+        "airQuality": "Luftbelastung"
+      },
+      "emptyState": "Gib Start und Ziel ein, um Routen zu vergleichen. Werte erscheinen nur, wenn sie aus echten Daten stammen.",
+      "mapLabel": "Routenkarte"
+    },
+    "highlights": {
+      "title": "Entdecke die grüne Seite Heilbronns",
+      "subtitle": "Erkunde die Stadt, entdecke grüne Routen und genieße den Weg.",
+      "exploreOnMap": "Auf der Karte entdecken",
+      "planTrip": "Route planen",
+      "viewOnMap": "Auf Karte zeigen",
+      "noLocation": "Standort noch nicht geprüft",
+      "mapLabel": "Karte der Highlights",
+      "placesTitle": "Grüne Orte entdecken",
+      "placesText": "Parks, Uferwege und Grünflächen, die eine Fahrt wert sind.",
+      "roadsTitle": "Grünste Straßen",
+      "roadsText": "Straßenabschnitte und Radwege mit den besten Umweltbedingungen.",
+      "roadsEmpty": "Die Rangliste erscheint, sobald Umweltwerte aus echten Daten berechnet sind.",
+      "experiencesTitle": "Vorgeschlagene Radtouren",
+      "experiencesText": "Thementouren für jede Stimmung.",
+      "experiences": {
+        "scenicGreen": {
+          "title": "Grüne Panoramatour",
+          "text": "Durch Parks und Alleen."
+        },
+        "quietEscape": {
+          "title": "Ruhige Stadtflucht",
+          "text": "Weg von Hauptstraßen und Verkehrslärm."
+        },
+        "riverside": {
+          "title": "Am Fluss entlang",
+          "text": "Entlang des Neckars und seiner Ufer."
+        },
+        "nature": {
+          "title": "Naturentdecker-Route",
+          "text": "Hinaus an die grünen Ränder der Stadt."
+        }
+      }
+    }
   }
 }

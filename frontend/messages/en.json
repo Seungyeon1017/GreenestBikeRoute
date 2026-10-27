@@ -181,5 +181,142 @@
         "title": "Bicycle Statistics"
       }
     }
+  },
+  "greenest": {
+    "vision": "The fastest route gets you there sooner. The greenest route makes the journey better.",
+    "nav": {
+      "label": "Main navigation",
+      "overview": "Overview",
+      "planTrip": "Plan a Trip",
+      "highlights": "Highlights"
+    },
+    "footer": {
+      "basedOn": "Based on",
+      "mapData": "Map data"
+    },
+    "availability": {
+      "measured": "Measured",
+      "estimated": "Estimated",
+      "demo": "Sample",
+      "unavailable": "Not connected yet"
+    },
+    "layers": {
+      "air-quality": {
+        "label": "Air quality",
+        "description": "Traffic and fine-dust risk index measured on bike rides, averaged per 500 m area."
+      },
+      "cycling-infrastructure": {
+        "label": "Cycling infrastructure",
+        "description": "Measured road surface roughness and cycle lanes tagged in OpenStreetMap."
+      },
+      "noise": {
+        "label": "Noise pollution",
+        "description": "No noise dataset connected yet."
+      },
+      "green-spaces": {
+        "label": "Green spaces & trees",
+        "description": "No green-space dataset connected yet."
+      },
+      "environmental-score": {
+        "label": "Environmental score",
+        "description": "Combined score per area, once noise and greenery data exist."
+      }
+    },
+    "overview": {
+      "title": "Explore your city's environment",
+      "subtitle": "See air quality, noise, greenery and cycling infrastructure across Heilbronn. Turn layers on and off and click an area for details.",
+      "layersTitle": "Environmental layers",
+      "detailsTitle": "Area details",
+      "detailsEmpty": "Click an area on the map to see its measured indicators, data source and unit.",
+      "mapLabel": "Environmental map of Heilbronn",
+      "loadingData": "Loading map data…",
+      "clearSelection": "Clear selection",
+      "areaNote": "Area = 500 m × 500 m grid cell. Values are averages of the measurements inside it.",
+      "noMeasurement": "No measurement in this area",
+      "source": "Source",
+      "indexNote": "Risk indices are calculated by ATRAI from senseBox:bike sensor rides (0 = low, 1 = high). They are not concentrations in µg/m³.",
+      "indicators": {
+        "pmRisk": "Traffic & fine-dust risk",
+        "roughness": "Road surface roughness",
+        "overtakingRisk": "Overtaking risk",
+        "noise": "Noise",
+        "greenery": "Greenery"
+      },
+      "units": {
+        "index": "index 0–1"
+      },
+      "basis": {
+        "points": "based on {{count}} measurement points",
+        "length": "{{km}} km of measured streets",
+        "manoeuvres": "based on {{count}} measured overtaking manoeuvres"
+      }
+    },
+    "planTrip": {
+      "title": "Find your greenest route",
+      "subtitle": "Compare the fastest route with a route that favours greenery, quiet streets and good cycling infrastructure.",
+      "formTitle": "Your trip",
+      "start": "Start",
+      "startPlaceholder": "e.g. Heilbronn Hbf",
+      "destination": "Destination",
+      "destinationPlaceholder": "e.g. Pfühlpark",
+      "preferences": "Preferences (optional)",
+      "preferGreener": "Prefer greener streets",
+      "preferQuieter": "Prefer quieter streets",
+      "preferCycleLanes": "Prefer dedicated cycling lanes",
+      "maxExtraMinutes": "Accept up to {{minutes}} extra minutes",
+      "findRoute": "Find My Route",
+      "notConnected": "Route search is not connected yet. Address search and the routing service follow in the next step.",
+      "comparisonTitle": "Route comparison",
+      "routes": {
+        "fastest": "Fastest route",
+        "fastestHint": "Optimised for travel time.",
+        "greenest": "Greenest route",
+        "greenestHint": "Optimised for environmental comfort."
+      },
+      "metrics": {
+        "duration": "Travel time",
+        "distance": "Distance",
+        "greenScore": "Green Route Score",
+        "greenery": "Greenery exposure",
+        "noise": "Noise exposure",
+        "airQuality": "Air quality exposure"
+      },
+      "emptyState": "Enter a start and destination to compare routes. Values only appear when they come from real data.",
+      "mapLabel": "Route map"
+    },
+    "highlights": {
+      "title": "Discover the greener side of Heilbronn",
+      "subtitle": "Explore the city, discover green routes, and enjoy the journey.",
+      "exploreOnMap": "Explore on Map",
+      "planTrip": "Plan a Trip",
+      "viewOnMap": "View on Map",
+      "noLocation": "Location not verified yet",
+      "mapLabel": "Map of highlighted places",
+      "placesTitle": "Explore green places",
+      "placesText": "Parks, riverside paths and green spaces worth a ride.",
+      "roadsTitle": "Greenest roads",
+      "roadsText": "Street segments and cycle paths with the best environmental conditions.",
+      "roadsEmpty": "Road rankings appear once environmental scores are calculated from real data.",
+      "experiencesTitle": "Suggested cycling experiences",
+      "experiencesText": "Themed rides for different moods.",
+      "experiences": {
+        "scenicGreen": {
+          "title": "Scenic Green Ride",
+          "text": "Through parks and tree-lined streets."
+        },
+        "quietEscape": {
+          "title": "Quiet City Escape",
+          "text": "Away from busy roads and traffic noise."
+        },
+        "riverside": {
+          "title": "Riverside Cycling",
+          "text": "Along the Neckar and its banks."
+        },
+        "nature": {
+          "title": "Nature Discovery Route",
+          "text": "Out to the green edges of the city."
+        }
+      }
+    }
   }
 }

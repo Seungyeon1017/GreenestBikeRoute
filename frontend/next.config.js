@@ -17,6 +17,11 @@ const nextConfig = {
     return config
   },
   output: 'standalone',
+  // GreenestBikeRoute: the three-tab app starts at /overview. The original
+  // dashboard code in app/(main) is kept but no longer the start page.
+  async redirects() {
+    return [{ source: '/', destination: '/overview', permanent: false }]
+  },
   images: {
     remotePatterns: [
       {

@@ -1,0 +1,95 @@
+'use client'
+
+import { cx } from 'class-variance-authority'
+import { useTranslation } from 'react-i18next'
+import AvailabilityBadge from '@/components/Greenest/ui/AvailabilityBadge'
+import Card, { CardTitle } from '@/components/Greenest/ui/Card'
+import type { EnvironmentLayer, EnvironmentLayerId } from '@/types/greenest'
+
+type LayerPanelProps = {
+  layers: EnvironmentLayer[]
+  enabled: Set<EnvironmentLayerId>
+  onToggle: (_id: EnvironmentLayerId) => void
+}
+
+export default function LayerPanel({
+  layers,
+  enabled,
+  onToggle,
+}: LayerPanelProps) {
+  const { t } = useTranslation()
+
+  return (
+    <Card className="flex flex-col gap-3">
+      <CardTitle>{t('greenest.overview.layersTitle')}</CardTitle>
+      <ul className="flex flex-col gap-2">
+        {layers.map(layer => {
+          const inputId = `layer-${layer.id}`
+          const available = layer.availability !== 'unavailable'
+          const on = available && enabled.has(layer.id)
+          return (
+            <li
+              className={cx(
+                'rounded-xl border p-3',
+                on ? 'border-emerald-200 bg-emerald-50/40' : 'border-stone-100',
+              )}
+              key={layer.id}
+            >
+              <div className="flex items-start gap-3">
+                <input
+                  checked={on}
+                  className="mt-0.5 h-4 w-4 accent-emerald-600 disabled:opacity-40"
+                  disabled={!available}
+                  id={inputId}
+                  onChange={() => onToggle(layer.id)}
+                  type="checkbox"
+                />
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <label
+                      className={cx(
+                        'block text-sm font-medium',
+                        available
+                          ? 'cursor-pointer text-stone-900'
+                          : 'text-stone-400',
+                      )}
+                      htmlFor={inputId}
+                    >
+                      {t(`greenest.layers.${layer.id}.label`)}
+                    </label>
+                    <AvailabilityBadge availability={layer.availability} />
+                  </div>
+                  <p className="text-xs text-stone-500">
+                    {t(`greenest.layers.${layer.id}.description`)}
+                  </p>
+                  {on && layer.legend.length > 0 && (
+                    <ul className="flex flex-col gap-1 pt-1">
+                      {layer.legend.map(({ color, label }) => (
+                        <li
+                          className="flex items-center gap-2 text-[11px] text-stone-600"
+                          key={label}
+                        >
+                          <span
+                            aria-hidden
+                            className="h-2 w-4 rounded-sm"
+                            style={{ backgroundColor: color }}
+                          />
+                          {label}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {on && (
+                    <p className="text-[11px] text-stone-400">
+                      {layer.unit} · {layer.source}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+    </Card>
+  )
+}

@@ -1,0 +1,12 @@
+{
+  "generatedAt": "2026-10-27T14:20:33.188Z",
+  "source": "ATRAI senseBox:bike, Heilbronn campaign (api.atrai.bike); OpenStreetMap",
+  "cellSizeM": 500,
+  "minPointsPerCell": 5,
+  "bbox": [
+    9.04796,
+    49.09375,
+    9.30149,
+    49.20964
+  ]
+}
