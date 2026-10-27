@@ -19,3 +19,111 @@ uvicorn backend.app:app
 Try it at http://127.0.0.1:8000/docs, e.g. `/route?from_lat=49.14838&from_lon=9.22687&to_lat=49.1262&to_lon=9.22439&penalty=10`. `penalty` is how much you hate bumps: 0 gives the shortest route. Run the tests with `python -m pytest`.
 
 For a clickable demo map, start the API, run `python -m http.server 5500 -d demo-prototype` and open http://127.0.0.1:5500. It is a throwaway prototype kept outside `frontend/`.
+
+## Backend Setup and Usage
+
+### 1. Run the Backend Locally with `uv`
+
+Make sure you are in the project root directory:
+
+```powershell
+cd D:\bike_project\GreenestBikeRoute
+```
+
+Install the project dependencies using the lockfile:
+
+```powershell
+uv sync
+```
+
+Start the FastAPI backend:
+
+```powershell
+uv run uvicorn backend.app:app --reload --port 8001
+```
+
+The backend will be available at:
+
+- **API base URL:** http://127.0.0.1:8001
+- **Interactive API documentation (Swagger UI):** http://127.0.0.1:8001/docs
+
+The `--reload` option automatically restarts the development server when Python source files change.
+
+### 2. Port Configuration
+
+This project uses **port `8001` on the host machine** because another local FastAPI project already uses port `8000`.
+
+When running locally, Uvicorn listens directly on port `8001`.
+
+When running with Docker Compose, the port mapping in `compose.yml` is:
+
+```yaml
+ports:
+  - "8001:8000"
+```
+
+The mapping follows the format `HOST_PORT:CONTAINER_PORT`:
+
+- **Host port `8001`:** The port accessed from your computer.
+- **Container port `8000`:** The port on which Uvicorn listens inside the Docker container.
+
+Therefore, the backend is accessed at http://127.0.0.1:8001 in both cases, even though Docker runs Uvicorn on port `8000` inside the container.
+
+### 3. Run the Backend with Docker Compose
+
+Build the Docker image and start the backend in the background:
+
+```powershell
+docker compose up --build -d
+```
+
+View the running containers:
+
+```powershell
+docker compose ps
+```
+
+Follow the backend logs:
+
+```powershell
+docker compose logs -f backend
+```
+
+Stop following the logs with `Ctrl+C`. This does not stop the container.
+
+Stop the backend:
+
+```powershell
+docker compose down
+```
+
+Rebuild and restart after changing the Dockerfile, dependencies, or application code:
+
+```powershell
+docker compose up --build -d
+```
+
+Open the API documentation:
+
+http://127.0.0.1:8001/docs
+
+### 4. Data and Cache Volumes
+
+The backend service in `compose.yml` uses these volume mappings:
+
+```yaml
+volumes:
+  - ./data:/app/data
+  - ./cache:/app/cache
+```
+
+These mappings make the project's local `data` and `cache` directories available inside the container. If the application uses these paths, downloaded datasets and cached graph data can persist between container recreations.
+
+### 5. Run Tests
+
+Run the test suite from the project root:
+
+```powershell
+uv run pytest
+```
+
