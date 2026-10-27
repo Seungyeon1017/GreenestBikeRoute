@@ -86,5 +86,17 @@ class DangerCollection(BaseModel):
     features: list[DangerFeature]
 
 
+class AirFeature(BaseModel):
+    type: Literal["Feature"]
+    geometry: Point
+    properties: dict[Literal["air"], float] = Field(
+        description="How much worse than usual the air is, 0-1: compared with the rest of the same bike trip, where 0.5 is typical and higher is worse. Not an absolute PM value")
+
+
+class AirCollection(BaseModel):
+    type: Literal["FeatureCollection"]
+    features: list[AirFeature]
+
+
 class Error(BaseModel):
     detail: str

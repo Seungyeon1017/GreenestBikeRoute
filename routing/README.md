@@ -36,6 +36,7 @@ cost = length × (1 + bump_penalty × roughness / 100 + pm_penalty × pm_risk)
 - Weather and sensor offsets outweigh location, so routing uses each point's **rank within its ride** (same device and day; 0.5 = typical). Unmeasured streets get 0.5.
 - `pm_penalty` default 0.5: streets agree only weakly between days (correlation ~0.17).
 - **Source:** built from `osem_bike_data` with the `danger_zones_PM` filters: devices tagged `heilbronn`, humidity ≤ 75%, per-device IQR outlier removal, then cut to `HEILBRONN_BBOX`. 166,429 rows.
+- **Map overlay:** `/air` serves these points scored 0-1 against the rest of the same bike trip (0.5 = usual; not an absolute PM value).
 - **Why not `danger_zones_PM_heilbronn`?** Its `Risk Index` mixes in overtaking, which `danger_penalty` already counts. Our rows match its points inside Heilbronn exactly, plus 21,915 valid air readings from bikes without a distance sensor.
 
 ## Which overtaking readings count
@@ -69,7 +70,7 @@ From 49.14838, 9.22687 to 49.1262, 9.22439:
 | Penalties (bump / danger / PM) | Length  | Roughness | Overtaking spots |
 |--------------------------------|---------|-----------|------------------|
 | 0 / 0 / 0 (shortest)           | 3.15 km | 24        | 10               |
-| 10 / 25 / 2 (defaults)         | 3.25 km | 11.8      | 26               |
-| 10 / 100 / 2                   | 3.33 km | 12.5      | 7                |
+| 10 / 25 / 0.5 (defaults)       | 3.25 km | 11.8      | 26               |
+| 10 / 100 / 0.5                 | 3.33 km | 12.5      | 7                |
 
 On this trip the defaults pick the smooth street, which has more overtaking spots than the shortest route, and 25 is too weak to change that. At 100 the route avoids both.

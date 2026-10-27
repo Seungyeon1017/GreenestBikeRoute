@@ -38,6 +38,13 @@ def test_hating_close_overtaking_passes_fewer_danger_spots(client):
     assert safe["length_m"] < shortest["length_m"] * 1.05
 
 
+def test_air_overlay_gives_ranked_points(client):
+    r = client.get("/air")
+    features = r.json()["features"]
+    assert r.status_code == 200 and len(features) > 100
+    assert all(f["geometry"]["type"] == "Point" and 0 <= f["properties"]["air"] <= 1 for f in features)
+
+
 def test_route_starts_and_ends_near_the_requested_points(client):
     coords = client.get("/route", params=TRIP).json()["features"][0]["geometry"]["coordinates"]
     assert len(coords) > 10

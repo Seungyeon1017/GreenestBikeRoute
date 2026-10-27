@@ -44,15 +44,15 @@
 
   <label for="bumpPenalty">How much do you hate bumps: <span id="bumpPenaltyValue">10</span></label>
   <input id="bumpPenalty" type="range" min="0" max="50" step="1" value="10">
-  <div class="row"><span>0 = ignore</span><span>50 = avoid at all costs</span></div>
+  <div class="row"><span>0 = ignore</span><span>50 = strongly avoid</span></div>
 
   <label for="dangerPenalty">How much do you hate close overtaking: <span id="dangerPenaltyValue">25</span></label>
   <input id="dangerPenalty" type="range" min="0" max="100" step="5" value="25">
-  <div class="row"><span>0 = ignore</span><span>metres of detour per spot</span></div>
+  <div class="row"><span>0 = ignore</span><span>100 m detour per spot</span></div>
 
   <label for="pmPenalty">How much do you hate bad air: <span id="pmPenaltyValue">0.5</span></label>
   <input id="pmPenalty" type="range" min="0" max="5" step="0.25" value="0.5">
-  <div class="row"><span>0 = ignore</span><span>20 = avoid at all costs</span></div>
+  <div class="row"><span>0 = ignore</span><span>5 = strongly avoid</span></div>
 
   <table>
     <tr><th></th><th>Length</th><th>Rough</th><th title="close-overtaking spots passed">Overtakes</th><th title="mean air rank, 0.5 = typical">PM</th></tr>
@@ -70,6 +70,7 @@
     <span class="swatch" style="background:#f2994a"></span>20–30
     <span class="swatch" style="background:#d63b3b"></span>30+
     <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showDanger"> Show close-overtaking spots</label>
+    <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showAir"> Show air quality (darker = worse than usual)</label>
   </div>
 </div>
 
@@ -104,7 +105,19 @@ fetch(API + "/danger").then(r => r.json()).then(data => {
 });
 document.getElementById("showDanger").onchange = e => e.target.checked ? dangers.addTo(map) : dangers.remove();
 
-const shortestLayer = L.geoJSON(null, { style: { color: "#7a8794", weight: 5, opacity: 0.9, dashArray: "6 8" } }).addTo(map);
+// Air quality from air_quality_heilbronn, ranked within each ride, darker = worse.
+const air = L.layerGroup();
+fetch(API + "/air").then(r => r.json()).then(data => {
+  L.geoJSON(data, {
+    pointToLayer: (f, latlng) => L.circleMarker(latlng, {
+      radius: 3, stroke: false, fillColor: "#1565c0", fillOpacity: 0.05 + 0.7 * f.properties.air,
+    }),
+    interactive: false,
+  }).addTo(air);
+});
+document.getElementById("showAir").onchange = e => e.target.checked ? air.addTo(map) : air.remove();
+
+const shortestLayer =L.geoJSON(null, { style: { color: "#7a8794", weight: 5, opacity: 0.9, dashArray: "6 8" } }).addTo(map);
 const routeLayer = L.geoJSON(null, { style: { color: "#1a7f37", weight: 6, opacity: 0.9 } }).addTo(map);
 
 let start = null, end = null;

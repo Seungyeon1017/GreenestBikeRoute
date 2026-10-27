@@ -12,6 +12,8 @@ Example request: `/route?from_lat=49.14838&from_lon=9.22687&to_lat=49.1262&to_lo
 
 `/route/compare` takes the same parameters and returns the route next to the shortest route, to draw both and show what the penalties changed. See `/docs` for the response.
 
+Map overlays: `/roughness` (streets), `/danger` (overtaking spots) and `/air` (air-quality points, 0-1 worse than usual for the same bike trip) return GeoJSON.
+
 Danger points come from `danger_zones_raw_heilbronn` (one row per overtake, with device id and exact distance) and are snapped to the nearest street within 25 m. [routing/README.md](routing/README.md) explains how route planning works and why readings of 25 cm or less are ignored.
 
 For a clickable demo map, start the API, run `python -m http.server 5500 -d demo-prototype` and open http://127.0.0.1:5500. It is a throwaway prototype kept outside `frontend/`.
