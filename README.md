@@ -24,6 +24,6 @@ Try it at http://127.0.0.1:8001/docs, e.g. `/route?from_lat=49.14838&from_lon=9.
 - `danger_penalty` (default 25): metres of detour you'd ride to pass one fewer close-overtaking spot (`danger_zones`, summed Risk Index Overtaking).
 - `pm_penalty` (default 2): how much you hate traffic and bad air (`danger_zones_PM`, mean Risk Index per street).
 
-Danger points are snapped to the nearest street within 25 m. Run the tests with `python -m pytest`.
+Danger points are snapped to the nearest street within 25 m. [routing/README.md](routing/README.md) explains how route planning works and why. Run the tests with `python -m pytest`.
 
 For a clickable demo map, start the API, run `python -m http.server 5500 -d demo-prototype` and open http://127.0.0.1:5500. It is a throwaway prototype kept outside `frontend/`.
