@@ -7,3 +7,6 @@
 .vscode
 deployment
 docs
+
+
+node_modules

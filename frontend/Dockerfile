@@ -55,8 +55,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/.next/server ./.next/server
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 
+#COPY --from=builder /app/entrypoint.sh ./entrypoint.sh
+#RUN ["chmod", "+x", "./entrypoint.sh"]
+
 COPY --from=builder /app/entrypoint.sh ./entrypoint.sh
-RUN ["chmod", "+x", "./entrypoint.sh"]
+RUN sed -i 's/\r$//' ./entrypoint.sh && chmod +x ./entrypoint.sh
 
 USER nextjs
 
