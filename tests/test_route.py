@@ -5,8 +5,8 @@ from routing.route import RouteError, find_route
 from tests.conftest import COORDS, A, B, C
 
 
-def route(G, penalty):
-    return find_route(G, COORDS[A], COORDS[B], penalty)["features"][0]
+def route(G, bump_penalty):
+    return find_route(G, COORDS[A], COORDS[B], bump_penalty)["features"][0]
 
 
 def test_penalty_zero_is_shortest_route(toy_graph):
@@ -35,7 +35,7 @@ def test_result_is_geojson_feature_collection(toy_graph):
     assert fc["type"] == "FeatureCollection"
     (f,) = fc["features"]
     assert f["type"] == "Feature" and f["geometry"]["type"] == "LineString"
-    assert f["properties"]["penalty"] == 5
+    assert f["properties"]["bump_penalty"] == 5
 
 
 def test_point_far_from_streets_is_rejected(toy_graph):

@@ -5,9 +5,9 @@ import ast
 # 10 is the median of the measured Heilbronn segments.
 DEFAULT_ROUGHNESS = 10.0
 
-# "How much do you hate bumps". Roughness clusters around 10, so a penalty of 2
+# "How much do you hate bumps". Roughness clusters around 10, so a bump_penalty of 2
 # barely changes routes; around 10 trades a ~1-2% detour for smoother streets.
-DEFAULT_PENALTY = 10.0
+DEFAULT_BUMP_PENALTY = 10.0
 
 # A danger point counts for its nearest street when within this distance (GPS noise).
 # Catches ~90% of the points inside the city; the rest are mostly rides outside Heilbronn.
@@ -60,7 +60,7 @@ def point_risks(features, risk_key):
     return [tuple(f["geometry"]["coordinates"]) for f in keep], [f["properties"][risk_key] for f in keep]
 
 
-def edge_cost(length_m, normalized_roughness=DEFAULT_ROUGHNESS, penalty=DEFAULT_PENALTY,
+def edge_cost(length_m, normalized_roughness=DEFAULT_ROUGHNESS, bump_penalty=DEFAULT_BUMP_PENALTY,
               danger=0.0, danger_penalty=DEFAULT_DANGER_PENALTY,
               pm_risk=DEFAULT_PM_RISK, pm_penalty=DEFAULT_PM_PENALTY):
     """Routing cost: plain length, inflated on rough and polluted streets, plus a fixed
@@ -68,4 +68,4 @@ def edge_cost(length_m, normalized_roughness=DEFAULT_ROUGHNESS, penalty=DEFAULT_
 
     Normalized Roughness is 0-100 in the live data (not 0-1 as the docs table says).
     """
-    return length_m * (1 + penalty * normalized_roughness / 100 + pm_penalty * pm_risk) + danger_penalty * danger
+    return length_m * (1 + bump_penalty * normalized_roughness / 100 + pm_penalty * pm_risk) + danger_penalty * danger

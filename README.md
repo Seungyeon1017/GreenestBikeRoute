@@ -18,9 +18,9 @@ uvicorn backend.app:app --port 8001
 
 Or with Docker: `docker compose up -d --build`, also on port 8001. Rebuild after every code change, since the code is baked into the image.
 
-Try it at http://127.0.0.1:8001/docs, e.g. `/route?from_lat=49.14838&from_lon=9.22687&to_lat=49.1262&to_lon=9.22439&penalty=10`. Three penalties steer the route, and setting all of them to 0 gives the shortest route:
+Try it at http://127.0.0.1:8001/docs, e.g. `/route?from_lat=49.14838&from_lon=9.22687&to_lat=49.1262&to_lon=9.22439&bump_penalty=10`. Three penalties steer the route, and setting all of them to 0 gives the shortest route:
 
-- `penalty` (default 10): how much you hate bumps (`bumpy_roads`).
+- `bump_penalty` (default 10): how much you hate bumps (`bumpy_roads`).
 - `danger_penalty` (default 25): metres of detour you'd ride to pass one fewer close-overtaking spot (`danger_zones`, summed Risk Index Overtaking).
 - `pm_penalty` (default 2): how much you hate traffic and bad air (`danger_zones_PM`, mean Risk Index per street).
 

@@ -3,7 +3,7 @@ import networkx as nx
 import numpy as np
 import osmnx as ox
 
-from routing.costs import DEFAULT_DANGER_PENALTY, DEFAULT_PENALTY, DEFAULT_PM_PENALTY, DEFAULT_PM_RISK,     DEFAULT_ROUGHNESS, edge_cost
+from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_PM_PENALTY, DEFAULT_PM_RISK,     DEFAULT_ROUGHNESS, edge_cost
 
 # Start/end points further than this from any street are treated as outside Heilbronn.
 MAX_SNAP_M = 500
@@ -32,20 +32,20 @@ def _pm_risk(d):
 
 
 def _cost(d, penalties):
-    penalty, danger_penalty, pm_penalty = penalties
-    return edge_cost(d["length"], _roughness(d), penalty,
+    bump_penalty, danger_penalty, pm_penalty = penalties
+    return edge_cost(d["length"], _roughness(d), bump_penalty,
                      d.get("danger", 0.0), danger_penalty, _pm_risk(d), pm_penalty)
 
 
-def find_route(G, origin, destination, penalty=DEFAULT_PENALTY,
+def find_route(G, origin, destination, bump_penalty=DEFAULT_BUMP_PENALTY,
                danger_penalty=DEFAULT_DANGER_PENALTY, pm_penalty=DEFAULT_PM_PENALTY):
     """Cheapest route from origin to destination, both (lat, lon), as a GeoJSON FeatureCollection.
 
     All penalties 0 give the shortest route; higher values take longer detours to avoid rough
-    streets (penalty), spots where cars overtook closely (danger_penalty) and streets with heavy
+    streets (bump_penalty), spots where cars overtook closely (danger_penalty) and streets with heavy
     traffic and bad air (pm_penalty).
     """
-    penalties = (penalty, danger_penalty, pm_penalty)
+    penalties = (bump_penalty, danger_penalty, pm_penalty)
     ends = []
     for label, (lat, lon) in (("start", origin), ("end", destination)):
         node, dist = nearest_node(G, lat, lon)
@@ -86,7 +86,7 @@ def find_route(G, origin, destination, penalty=DEFAULT_PENALTY,
             pm_len += d["pm_risk"] * edge_len
 
     properties = {
-        "penalty": penalty,
+        "bump_penalty": bump_penalty,
         "danger_penalty": danger_penalty,
         "pm_penalty": pm_penalty,
         "length_m": round(length, 1),

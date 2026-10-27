@@ -23,9 +23,9 @@ def test_edge_roughness_handles_int_list_and_unmeasured():
 
 
 def test_edge_cost():
-    assert edge_cost(100, 50, penalty=0, pm_penalty=0) == 100
-    assert edge_cost(100, 50, penalty=2, pm_penalty=0) == 200
-    assert edge_cost(100, penalty=10, pm_penalty=0) == 100 * (1 + 10 * DEFAULT_ROUGHNESS / 100)
+    assert edge_cost(100, 50, bump_penalty=0, pm_penalty=0) == 100
+    assert edge_cost(100, 50, bump_penalty=2, pm_penalty=0) == 200
+    assert edge_cost(100, bump_penalty=10, pm_penalty=0) == 100 * (1 + 10 * DEFAULT_ROUGHNESS / 100)
 
 
 def test_edge_cost_danger_adds_metres_per_risk():

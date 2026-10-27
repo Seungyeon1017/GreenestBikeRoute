@@ -42,8 +42,8 @@
   <h1>Greenest Bike Route</h1>
   <p class="hint" id="hint">Click the map to set the start.</p>
 
-  <label for="penalty">How much do you hate bumps: <span id="penaltyValue">10</span></label>
-  <input id="penalty" type="range" min="0" max="50" step="1" value="10">
+  <label for="bumpPenalty">How much do you hate bumps: <span id="bumpPenaltyValue">10</span></label>
+  <input id="bumpPenalty" type="range" min="0" max="50" step="1" value="10">
   <div class="row"><span>0 = ignore</span><span>50 = avoid at all costs</span></div>
 
   <label for="dangerPenalty">How much do you hate close overtaking: <span id="dangerPenaltyValue">25</span></label>
@@ -119,7 +119,7 @@ map.on("click", e => {
   update();
 });
 
-const sliders = ["penalty", "dangerPenalty", "pmPenalty"].map(id => {
+const sliders = ["bumpPenalty", "dangerPenalty", "pmPenalty"].map(id => {
   const el = document.getElementById(id);
   el.oninput = () => document.getElementById(id + "Value").textContent = el.value;
   el.onchange = update;
@@ -151,9 +151,9 @@ function show(prefix, p) {
   setText(prefix + "Pm", p && p.mean_pm_risk != null ? p.mean_pm_risk.toFixed(2) : "–");
 }
 
-async function getRoute([penalty, danger_penalty, pm_penalty]) {
+async function getRoute([bump_penalty, danger_penalty, pm_penalty]) {
   const a = start.getLatLng(), b = end.getLatLng();
-  const q = new URLSearchParams({ from_lat: a.lat, from_lon: a.lng, to_lat: b.lat, to_lon: b.lng, penalty, danger_penalty, pm_penalty });
+  const q = new URLSearchParams({ from_lat: a.lat, from_lon: a.lng, to_lat: b.lat, to_lon: b.lng, bump_penalty, danger_penalty, pm_penalty });
   const res = await fetch(API + "/route?" + q);
   const body = await res.json();
   if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail));
