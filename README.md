@@ -1,7 +1,7 @@
 # GreenestBikeRoute
 *Greenest Bike Route* is a smart cycling navigation platform that recommends routes based on environmental quality and cycling comfort, rather than distance alone.
 
-## Routing API
+## Route Planning API
 Serves bike routes that avoid bumpy streets, close-overtaking spots and streets with heavy traffic and bad air as GeoJSON. The first start downloads the Heilbronn street graph from OpenStreetMap into `cache/` (about 2 minutes); later starts take a few seconds. See [Backend Setup and Usage](#backend-setup-and-usage) for how to start it.
 
 Example request: `/route?from_lat=49.14838&from_lon=9.22687&to_lat=49.1262&to_lon=9.22439&bump_penalty=10`. Three penalties steer the route, and setting all of them to 0 gives the shortest route:
