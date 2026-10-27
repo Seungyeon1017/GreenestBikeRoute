@@ -26,9 +26,9 @@
   label { display: block; font-weight: 600; margin-top: 10px; }
   input[type=range] { width: 100%; }
   .row { display: flex; justify-content: space-between; color: #5b6773; font-size: 12px; }
-  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-variant-numeric: tabular-nums; }
-  th, td { text-align: right; padding: 3px 0; }
-  th:first-child, td:first-child { text-align: left; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 3px 0 3px 6px; white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; padding-left: 0; }
   .swatch { display: inline-block; width: 18px; height: 4px; vertical-align: middle; margin-right: 6px; border-radius: 2px; }
   #summary { margin-top: 10px; font-weight: 600; min-height: 1.4em; }
   #error { color: #b3261e; margin-top: 8px; }
@@ -44,12 +44,20 @@
 
   <label for="penalty">How much do you hate bumps: <span id="penaltyValue">10</span></label>
   <input id="penalty" type="range" min="0" max="50" step="1" value="10">
-  <div class="row"><span>0 = shortest</span><span>50 = avoid at all costs</span></div>
+  <div class="row"><span>0 = ignore</span><span>50 = avoid at all costs</span></div>
+
+  <label for="dangerPenalty">How much do you hate close overtaking: <span id="dangerPenaltyValue">25</span></label>
+  <input id="dangerPenalty" type="range" min="0" max="100" step="5" value="25">
+  <div class="row"><span>0 = ignore</span><span>metres of detour per spot</span></div>
+
+  <label for="pmPenalty">How much do you hate traffic &amp; bad air: <span id="pmPenaltyValue">2</span></label>
+  <input id="pmPenalty" type="range" min="0" max="20" step="1" value="2">
+  <div class="row"><span>0 = ignore</span><span>20 = avoid at all costs</span></div>
 
   <table>
-    <tr><th></th><th>Length</th><th>Roughness</th><th>Measured</th></tr>
-    <tr><td><span class="swatch" style="background:#7a8794"></span>Shortest</td><td id="sLen">–</td><td id="sRough">–</td><td id="sMeas">–</td></tr>
-    <tr><td><span class="swatch" style="background:#1a7f37"></span>Your route</td><td id="rLen">–</td><td id="rRough">–</td><td id="rMeas">–</td></tr>
+    <tr><th></th><th>Length</th><th>Rough</th><th title="close-overtaking spots passed">Overtakes</th><th title="mean danger_zones_PM Risk Index">PM</th></tr>
+    <tr><td><span class="swatch" style="background:#7a8794"></span>Shortest</td><td id="sLen">–</td><td id="sRough">–</td><td id="sDanger">–</td><td id="sPm">–</td></tr>
+    <tr><td><span class="swatch" style="background:#1a7f37"></span>Your route</td><td id="rLen">–</td><td id="rRough">–</td><td id="rDanger">–</td><td id="rPm">–</td></tr>
   </table>
   <div id="summary"></div>
   <div id="error"></div>
@@ -61,6 +69,7 @@
     <span class="swatch" style="background:#f2c94c"></span>10–20
     <span class="swatch" style="background:#f2994a"></span>20–30
     <span class="swatch" style="background:#d63b3b"></span>30+
+    <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showDanger"> Show close-overtaking spots</label>
   </div>
 </div>
 
@@ -83,6 +92,18 @@ fetch(API + "/roughness").then(r => r.json()).then(data => {
 });
 document.getElementById("showBumps").onchange = e => e.target.checked ? bumps.addTo(map) : bumps.remove();
 
+// Overtaking spots from danger_zones_heilbronn, darker = riskier.
+const dangers = L.layerGroup();
+fetch(API + "/danger").then(r => r.json()).then(data => {
+  L.geoJSON(data, {
+    pointToLayer: (f, latlng) => L.circleMarker(latlng, {
+      radius: 3, stroke: false, fillColor: "#7b1fa2", fillOpacity: 0.2 + 0.6 * f.properties.risk,
+    }),
+    interactive: false,
+  }).addTo(dangers);
+});
+document.getElementById("showDanger").onchange = e => e.target.checked ? dangers.addTo(map) : dangers.remove();
+
 const shortestLayer = L.geoJSON(null, { style: { color: "#7a8794", weight: 5, opacity: 0.9, dashArray: "6 8" } }).addTo(map);
 const routeLayer = L.geoJSON(null, { style: { color: "#1a7f37", weight: 6, opacity: 0.9 } }).addTo(map);
 
@@ -98,9 +119,12 @@ map.on("click", e => {
   update();
 });
 
-const slider = document.getElementById("penalty");
-slider.oninput = () => document.getElementById("penaltyValue").textContent = slider.value;
-slider.onchange = update;
+const sliders = ["penalty", "dangerPenalty", "pmPenalty"].map(id => {
+  const el = document.getElementById(id);
+  el.oninput = () => document.getElementById(id + "Value").textContent = el.value;
+  el.onchange = update;
+  return el;
+});
 
 document.getElementById("reset").onclick = () => {
   [start, end].forEach(m => m && m.remove());
@@ -123,12 +147,13 @@ const setText = (id, t) => document.getElementById(id).textContent = t;
 function show(prefix, p) {
   setText(prefix + "Len", p ? (p.length_m / 1000).toFixed(2) + " km" : "–");
   setText(prefix + "Rough", p && p.mean_roughness != null ? p.mean_roughness.toFixed(1) : "–");
-  setText(prefix + "Meas", p ? Math.round(p.measured_share * 100) + "%" : "–");
+  setText(prefix + "Danger", p ? p.danger_points : "–");
+  setText(prefix + "Pm", p && p.mean_pm_risk != null ? p.mean_pm_risk.toFixed(2) : "–");
 }
 
-async function getRoute(penalty) {
+async function getRoute([penalty, danger_penalty, pm_penalty]) {
   const a = start.getLatLng(), b = end.getLatLng();
-  const q = new URLSearchParams({ from_lat: a.lat, from_lon: a.lng, to_lat: b.lat, to_lon: b.lng, penalty });
+  const q = new URLSearchParams({ from_lat: a.lat, from_lon: a.lng, to_lat: b.lat, to_lon: b.lng, penalty, danger_penalty, pm_penalty });
   const res = await fetch(API + "/route?" + q);
   const body = await res.json();
   if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail));
@@ -141,14 +166,15 @@ async function update() {
   if (!start || !end) return;
   setText("error", "");
   try {
-    const [shortest, route] = await Promise.all([getRoute(0), getRoute(slider.value)]);
+    const [shortest, route] = await Promise.all([getRoute([0, 0, 0]), getRoute(sliders.map(s => s.value))]);
     shortestLayer.clearLayers().addData(shortest);
     routeLayer.clearLayers().addData(route);
     const s = shortest.features[0].properties, r = route.features[0].properties;
     show("s", s); show("r", r);
     const detour = (r.length_m / s.length_m - 1) * 100;
     setText("summary", detour < 0.05 ? "Same as the shortest route."
-      : `+${detour.toFixed(1)}% distance, roughness ${s.mean_roughness?.toFixed(1)} → ${r.mean_roughness?.toFixed(1)}`);
+      : `+${detour.toFixed(1)}% distance, roughness ${s.mean_roughness?.toFixed(1)} → ${r.mean_roughness?.toFixed(1)}, `
+        + `overtaking spots ${s.danger_points} → ${r.danger_points}`);
   } catch (e) {
     shortestLayer.clearLayers(); routeLayer.clearLayers();
     show("s", null); show("r", null); setText("summary", "");

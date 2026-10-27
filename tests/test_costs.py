@@ -1,4 +1,4 @@
-from routing.costs import DEFAULT_ROUGHNESS, edge_cost, edge_roughness, osm_way_ids, way_roughness
+from routing.costs import DEFAULT_PM_RISK, DEFAULT_ROUGHNESS, edge_cost, edge_roughness, osm_way_ids, point_risks,     way_roughness
 
 
 def test_osm_way_ids_single_and_merged():
@@ -23,6 +23,24 @@ def test_edge_roughness_handles_int_list_and_unmeasured():
 
 
 def test_edge_cost():
-    assert edge_cost(100, 50, penalty=0) == 100
-    assert edge_cost(100, 50, penalty=2) == 200
-    assert edge_cost(100, penalty=10) == 100 * (1 + 10 * DEFAULT_ROUGHNESS / 100)
+    assert edge_cost(100, 50, penalty=0, pm_penalty=0) == 100
+    assert edge_cost(100, 50, penalty=2, pm_penalty=0) == 200
+    assert edge_cost(100, penalty=10, pm_penalty=0) == 100 * (1 + 10 * DEFAULT_ROUGHNESS / 100)
+
+
+def test_edge_cost_danger_adds_metres_per_risk():
+    assert edge_cost(100, 0, danger=1.5, danger_penalty=40, pm_penalty=0) == 160
+    assert edge_cost(10, 0, danger=1.5, danger_penalty=40, pm_penalty=0) == 70  # regardless of edge length
+
+
+def test_edge_cost_pm_scales_length():
+    assert edge_cost(100, 0, danger_penalty=0, pm_risk=0.5, pm_penalty=2) == 200
+    assert edge_cost(100, 0, danger_penalty=0, pm_penalty=1) == 100 * (1 + DEFAULT_PM_RISK)
+
+
+def test_point_risks_skips_missing_values():
+    features = [
+        {"geometry": {"coordinates": [9.2, 49.1]}, "properties": {"Risk Index": 0.4}},
+        {"geometry": {"coordinates": [9.3, 49.2]}, "properties": {"Risk Index": None}},
+    ]
+    assert point_risks(features, "Risk Index") == ([(9.2, 49.1)], [0.4])

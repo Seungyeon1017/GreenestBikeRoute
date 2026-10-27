@@ -49,6 +49,21 @@ def test_penalty_is_documented(client):
     assert penalty["description"] == "How much do you hate bumps"
 
 
+def test_danger_penalties_are_passed_through(client):
+    p = client.get("/route", params={**params(), "danger_penalty": 70, "pm_penalty": 3}).json()["features"][0]["properties"]
+    assert (p["danger_penalty"], p["pm_penalty"]) == (70, 3)
+
+
+def test_danger_overlay(client):
+    r = client.get("/danger")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/geo+json"
+    features = r.json()["features"]
+    assert len(features) > 7000
+    assert features[0]["geometry"]["type"] == "Point"
+    assert set(features[0]["properties"]) == {"risk"}
+
+
 def test_roughness_overlay(client):
     r = client.get("/roughness")
     assert r.status_code == 200

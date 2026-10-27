@@ -1,8 +1,8 @@
 import pytest
 
-from routing.graph import attach_roughness
+from routing.graph import attach_danger, attach_roughness
 from routing.route import RouteError, find_route
-from tests.conftest import COORDS, A, B
+from tests.conftest import COORDS, A, B, C
 
 
 def route(G, penalty):
@@ -56,3 +56,45 @@ def test_no_path_is_rejected(toy_graph):
 def test_attach_roughness(toy_graph):
     attach_roughness(toy_graph, {11: 50, 14: 20})
     assert [d["roughness"] for *_, d in toy_graph.edges(data=True)] == [50, None, 20]
+
+
+ON_AB = (9.2101, 49.14045)  # the bend of A->B, (lon, lat)
+NEAR_CB = (9.21041, 49.14065)  # ~3 m off the middle of C->B
+FAR = (9.25, 49.2)
+
+
+def test_attach_danger_snaps_points_to_the_nearest_street(toy_graph):
+    attach_danger(toy_graph, ([ON_AB, ON_AB, FAR], [0.5, 0.75, 1.0]), ([NEAR_CB, NEAR_CB], [0.2, 0.4]))
+    ab, ac, cb = (toy_graph.edges[e] for e in ((A, B, 0), (A, C, 0), (C, B, 0)))
+    assert (ab["danger"], ab["danger_points"], ab["pm_risk"]) == (1.25, 2, None)
+    assert (ac["danger"], ac["danger_points"], ac["pm_risk"]) == (0, 0, None)
+    assert cb["danger_points"] == 0 and cb["pm_risk"] == pytest.approx(0.3)
+
+
+def test_attach_danger_covers_both_directions_of_a_street(toy_graph):
+    toy_graph.add_edge(B, A, osmid=11, length=100.0, roughness=80.0,
+                       geometry=toy_graph.edges[A, B, 0]["geometry"].reverse())
+    attach_danger(toy_graph, ([ON_AB], [1.0]), ([], []))
+    assert toy_graph.edges[A, B, 0]["danger"] == toy_graph.edges[B, A, 0]["danger"] == 1.0
+
+
+def test_danger_penalty_detours_around_overtaking_spots(toy_graph):
+    for d in toy_graph.edges.values():
+        d["roughness"] = 0.0
+    attach_danger(toy_graph, ([ON_AB], [1.0]), ([], []))
+    shortest = find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 0)["features"][0]["properties"]
+    assert (shortest["length_m"], shortest["danger_points"], shortest["danger_risk"]) == (100, 1, 1.0)
+    # 1 risk x 50 m outweighs the 40 m detour
+    safe = find_route(toy_graph, COORDS[A], COORDS[B], 0, 50, 0)["features"][0]["properties"]
+    assert (safe["length_m"], safe["danger_points"], safe["danger_penalty"]) == (140, 0, 50)
+
+
+def test_pm_penalty_detours_around_polluted_streets(toy_graph):
+    for d in toy_graph.edges.values():
+        d["roughness"] = 0.0
+    attach_danger(toy_graph, ([], []), ([ON_AB, NEAR_CB], [0.9, 0.1]))
+    assert find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 0)["features"][0]["properties"]["length_m"] == 100
+    f = find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 10)["features"][0]
+    assert f["properties"]["length_m"] == 140
+    assert f["properties"]["mean_pm_risk"] == 0.1  # A->C is unmeasured
+    assert f["properties"]["pm_measured_share"] == 0.5

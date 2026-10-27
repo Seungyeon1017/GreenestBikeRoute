@@ -20,11 +20,22 @@ def client():
         yield c
 
 
+ONLY_BUMPS = {"danger_penalty": 0, "pm_penalty": 0}
+
+
 def test_hating_bumps_gives_a_smoother_longer_route(client):
-    shortest = client.get("/route", params={**TRIP, "penalty": 0}).json()["features"][0]
-    smooth = client.get("/route", params={**TRIP, "penalty": 10}).json()["features"][0]
+    shortest = client.get("/route", params={**TRIP, **ONLY_BUMPS, "penalty": 0}).json()["features"][0]
+    smooth = client.get("/route", params={**TRIP, **ONLY_BUMPS, "penalty": 10}).json()["features"][0]
     assert smooth["properties"]["length_m"] > shortest["properties"]["length_m"]
     assert smooth["properties"]["mean_roughness"] < shortest["properties"]["mean_roughness"]
+
+
+def test_hating_close_overtaking_passes_fewer_danger_spots(client):
+    zero = {"penalty": 0, "danger_penalty": 0, "pm_penalty": 0}
+    shortest = client.get("/route", params={**TRIP, **zero}).json()["features"][0]["properties"]
+    safe = client.get("/route", params={**TRIP, **zero, "danger_penalty": 25}).json()["features"][0]["properties"]
+    assert safe["danger_points"] < shortest["danger_points"] / 2
+    assert safe["length_m"] < shortest["length_m"] * 1.05
 
 
 def test_route_starts_and_ends_near_the_requested_points(client):
