@@ -6,10 +6,15 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from backend.schemas import DangerCollection, Error, RouteCollection, RoughnessCollection
 from download_data import load_features
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_PM_PENALTY
 from routing.graph import load_graph
 from routing.route import RouteError, find_route
+
+
+class GeoJSONResponse(JSONResponse):
+    media_type = "application/geo+json"
 
 
 @cache
@@ -43,7 +48,11 @@ def create_app(graph=None):
     app = FastAPI(title="Greenest Bike Route", lifespan=lifespan)
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"])
 
-    @app.get("/route", summary="Bike route from A to B as GeoJSON")
+    @app.get("/route", summary="Bike route from A to B as GeoJSON", response_class=GeoJSONResponse,
+             response_model=RouteCollection, response_description="One LineString feature: the route",
+             responses={400: {"description": "Start or end is outside Heilbronn, or no route exists",
+                              "content": {"application/json": {"schema": Error.model_json_schema(), "example": {
+                                  "detail": "start point is 812 m from the nearest Heilbronn street"}}}}})
     def route(
         from_lat: float = Query(..., ge=-90, le=90),
         from_lon: float = Query(..., ge=-180, le=180),
@@ -60,15 +69,17 @@ def create_app(graph=None):
                                     bump_penalty, danger_penalty, pm_penalty)
         except RouteError as e:
             raise HTTPException(status_code=400, detail=str(e))
-        return JSONResponse(collection, media_type="application/geo+json")
+        return GeoJSONResponse(collection)
 
-    @app.get("/roughness", summary="Measured street roughness as GeoJSON, e.g. for a map overlay")
+    @app.get("/roughness", summary="Measured street roughness as GeoJSON, e.g. for a map overlay",
+             response_class=GeoJSONResponse, response_model=RoughnessCollection)
     def roughness():
-        return JSONResponse(roughness_collection(), media_type="application/geo+json")
+        return GeoJSONResponse(roughness_collection())
 
-    @app.get("/danger", summary="Spots where cars overtook bikes closely, as GeoJSON points for a map overlay")
+    @app.get("/danger", summary="Spots where cars overtook bikes closely, as GeoJSON points for a map overlay",
+             response_class=GeoJSONResponse, response_model=DangerCollection)
     def danger():
-        return JSONResponse(danger_collection(), media_type="application/geo+json")
+        return GeoJSONResponse(danger_collection())
 
     return app
 

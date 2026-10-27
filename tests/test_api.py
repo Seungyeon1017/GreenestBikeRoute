@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
+from backend.schemas import DangerCollection, RouteCollection, RoughnessCollection
 from tests.conftest import COORDS, A, B
 
 
@@ -23,6 +24,17 @@ def test_route_returns_geojson(client):
     assert r.status_code == 200
     assert r.headers["content-type"] == "application/geo+json"
     assert r.json()["features"][0]["properties"]["length_m"] == 100
+
+
+def test_route_matches_the_documented_schema(client):
+    RouteCollection.model_validate(client.get("/route", params=params()).json())
+
+
+def test_docs_show_a_geojson_linestring(client):
+    spec = client.get("/openapi.json").json()
+    ok = spec["paths"]["/route"]["get"]["responses"]["200"]["content"]
+    assert ok["application/geo+json"]["schema"] == {"$ref": "#/components/schemas/RouteCollection"}
+    assert spec["components"]["schemas"]["LineString"]["properties"]["type"]["const"] == "LineString"
 
 
 def test_penalty_changes_the_route(client):
@@ -62,6 +74,7 @@ def test_danger_overlay(client):
     assert len(features) > 7000
     assert features[0]["geometry"]["type"] == "Point"
     assert set(features[0]["properties"]) == {"risk"}
+    DangerCollection.model_validate(r.json())
 
 
 def test_roughness_overlay(client):
@@ -71,3 +84,4 @@ def test_roughness_overlay(client):
     features = r.json()["features"]
     assert len(features) > 9000
     assert set(features[0]["properties"]) == {"roughness"}
+    RoughnessCollection.model_validate(r.json())
