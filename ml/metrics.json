@@ -1,0 +1,13 @@
+{
+  "metrics": {
+    "5_fold_cv_r2": 0.3345,
+    "5_fold_cv_mae": 5.04,
+    "5_fold_cv_rmse": 7.6
+  },
+  "coverage": {
+    "total_ways": 11011,
+    "measured_ways": 3873,
+    "ml_imputed_ways": 7138,
+    "ml_coverage_ratio": 0.648
+  }
+}

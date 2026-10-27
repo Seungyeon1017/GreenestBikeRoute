@@ -3,6 +3,12 @@ osmnx>=2.0
 networkx>=3.0
 fastapi>=0.110
 uvicorn>=0.29
+# machine learning (optional for retraining, precomputed data included)
+scikit-learn>=1.4
+pandas>=2.0
+matplotlib>=3.8
+joblib>=1.3
 # tests
 pytest>=8.0
 httpx>=0.27
+

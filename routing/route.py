@@ -55,7 +55,7 @@ def find_route(G, origin, destination, penalty=DEFAULT_PENALTY):
     except nx.NetworkXNoPath:
         raise RouteError("no bike route between these points") from None
 
-    coords, length, rough_len, measured_len = [], 0.0, 0.0, 0.0
+    coords, length, rough_len, measured_len, ml_len = [], 0.0, 0.0, 0.0, 0.0
     for u, v in zip(path[:-1], path[1:]):
         d = min(G[u][v].values(), key=lambda d: _cost(d, penalty))
         if "geometry" in d:  # OSMnx edge geometries run from u to v
@@ -65,9 +65,13 @@ def find_route(G, origin, destination, penalty=DEFAULT_PENALTY):
         coords.extend(pts if not coords else pts[1:])
         edge_len = float(d["length"])  # numpy float when loaded from GraphML
         length += edge_len
+        source = d.get("roughness_source")
         if d["roughness"] is not None:
-            measured_len += edge_len
-            rough_len += d["roughness"] * edge_len
+            if source == "ml_predicted":
+                ml_len += edge_len
+            else:
+                measured_len += edge_len
+                rough_len += d["roughness"] * edge_len
 
     properties = {
         "penalty": penalty,
@@ -75,6 +79,7 @@ def find_route(G, origin, destination, penalty=DEFAULT_PENALTY):
         # Length-weighted over the measured part of the route only.
         "mean_roughness": round(rough_len / measured_len, 1) if measured_len else None,
         "measured_share": round(measured_len / length, 2),
+        "ml_share": round(ml_len / length, 2),
     }
     feature = {"type": "Feature", "geometry": {"type": "LineString", "coordinates": coords}, "properties": properties}
     return {"type": "FeatureCollection", "features": [feature]}

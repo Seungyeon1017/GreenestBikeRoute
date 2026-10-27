@@ -221,5 +221,9 @@ __marimo__/
 
 /.idea
 
+# Models
+*.joblib
+*.pkl
+
 # OSM geocoding/Overpass response cache
 /cache/
