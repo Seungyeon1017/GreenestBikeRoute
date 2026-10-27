@@ -218,3 +218,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Downloaded ATRAI datasets (re-create with: python -X utf8 download_data.py)
+data/
