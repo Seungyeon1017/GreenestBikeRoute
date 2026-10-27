@@ -13,10 +13,14 @@ DEFAULT_BUMP_PENALTY = 10.0
 # Catches ~90% of the points inside the city; the rest are mostly rides outside Heilbronn.
 SNAP_M = 25.0
 
-# danger_zones: points where a car overtook a bike, Risk Index Overtaking 0-1. They add up,
+# danger_zones_raw: points where a car overtook a bike, Risk Index Overtaking 0-1. They add up,
 # so this is the detour in metres you'd ride to pass one fewer full-risk overtaking spot.
 # Spots cluster on a few main roads: 25 already avoids most of them for a few % detour.
 DEFAULT_DANGER_PENALTY = 25.0
+
+# Readings of 25 cm or less are ignored (see "Which overtaking readings count" in routing/README.md).
+# 25 cm is also where the overtaking_distance dataset starts counting.
+MIN_OVERTAKING_CM = 25.0
 
 # danger_zones_PM: Risk Index 0-1 (traffic + air quality) sampled every ~20 m along rides,
 # so it is averaged per street like roughness. The default for unmeasured streets is the
@@ -52,6 +56,14 @@ def edge_roughness(osmid, way_rough):
     ids = osmid if isinstance(osmid, list) else [osmid]
     measured = [way_rough[i] for i in ids if i in way_rough]
     return sum(measured) / len(measured) if measured else None
+
+
+def clean_overtaking(features):
+    """The danger_zones_raw rows routing counts: a measured distance over MIN_OVERTAKING_CM.
+
+    Readings of 25 cm or less and rows with no distance (0 or missing) are left out.
+    """
+    return [f for f in features if (f["properties"]["Overtaking Distance"] or 0) > MIN_OVERTAKING_CM]
 
 
 def point_risks(features, risk_key):

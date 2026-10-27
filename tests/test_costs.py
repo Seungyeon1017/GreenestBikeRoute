@@ -1,4 +1,5 @@
-from routing.costs import DEFAULT_PM_RISK, DEFAULT_ROUGHNESS, edge_cost, edge_roughness, osm_way_ids, point_risks,     way_roughness
+from download_data import overtaking_risk
+from routing.costs import DEFAULT_PM_RISK, DEFAULT_ROUGHNESS, clean_overtaking, edge_cost, edge_roughness, osm_way_ids, point_risks,     way_roughness
 
 
 def test_osm_way_ids_single_and_merged():
@@ -44,3 +45,13 @@ def test_point_risks_skips_missing_values():
         {"geometry": {"coordinates": [9.3, 49.2]}, "properties": {"Risk Index": None}},
     ]
     assert point_risks(features, "Risk Index") == ([(9.2, 49.1)], [0.4])
+
+
+def raw_overtake(cm):
+    return {"geometry": {"coordinates": [9.2, 49.14]},
+            "properties": {"Overtaking Distance": cm, "Risk Index Overtaking": overtaking_risk(1, cm) if cm else None}}
+
+
+def test_clean_overtaking_drops_readings_of_25_cm_or_less_and_missing_distances():
+    kept = clean_overtaking([raw_overtake(cm) for cm in (None, 0, 10, 25, 26, 100)])
+    assert [f["properties"]["Overtaking Distance"] for f in kept] == [26, 100]

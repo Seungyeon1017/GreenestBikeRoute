@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 
 from backend.schemas import DangerCollection, Error, RouteCollection, RoughnessCollection
 from download_data import load_features
-from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_PM_PENALTY
+from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_PM_PENALTY, clean_overtaking
 from routing.graph import load_graph
 from routing.route import RouteError, find_route
 
@@ -29,10 +29,10 @@ def roughness_collection():
 
 @cache
 def danger_collection():
-    """The overtaking spots from danger_zones_heilbronn, trimmed to geometry + risk (0-1)."""
+    """The overtaking spots routing uses (over 25 cm), trimmed to geometry + risk (0-1)."""
     features = [
         {"type": "Feature", "geometry": f["geometry"], "properties": {"risk": f["properties"]["Risk Index Overtaking"]}}
-        for f in load_features("danger_zones_heilbronn")
+        for f in clean_overtaking(load_features("danger_zones_raw_heilbronn"))
     ]
     return {"type": "FeatureCollection", "features": features}
 

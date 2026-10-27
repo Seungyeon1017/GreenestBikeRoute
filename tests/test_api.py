@@ -3,6 +3,8 @@ from fastapi.testclient import TestClient
 
 from backend.app import create_app
 from backend.schemas import DangerCollection, RouteCollection, RoughnessCollection
+from download_data import HEILBRONN_BBOX, overtaking_risk
+from routing.costs import MIN_OVERTAKING_CM
 from tests.conftest import COORDS, A, B
 
 
@@ -71,7 +73,11 @@ def test_danger_overlay(client):
     assert r.status_code == 200
     assert r.headers["content-type"] == "application/geo+json"
     features = r.json()["features"]
-    assert len(features) > 7000
+    assert len(features) > 3000
+    west, south, east, north = HEILBRONN_BBOX
+    assert all(west <= f["geometry"]["coordinates"][0] <= east and south <= f["geometry"]["coordinates"][1] <= north
+               for f in features)  # no rides from Karlsruhe, Munich, ...
+    assert all(f["properties"]["risk"] < overtaking_risk(1, MIN_OVERTAKING_CM) for f in features)  # all over 25 cm
     assert features[0]["geometry"]["type"] == "Point"
     assert set(features[0]["properties"]) == {"risk"}
     DangerCollection.model_validate(r.json())

@@ -78,5 +78,13 @@
     "megabytes": 0.0,
     "seconds": 0,
     "downloaded_at": "2026-10-27T12:31:28+00:00"
+  },
+  "danger_zones_raw_heilbronn.geojson": {
+    "collection": "osem_bike_data",
+    "features": 6280,
+    "rows_in_collection": 1474744,
+    "megabytes": 2.1,
+    "seconds": 33,
+    "downloaded_at": "2026-10-27T21:18:55+00:00"
   }
 }

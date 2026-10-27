@@ -1,6 +1,6 @@
 """Download the ready-made ATRAI datasets for Heilbronn into ./data as GeoJSON.
 
-    python -X utf8 download_data.py                  # all Heilbronn datasets (~85 MB)
+    python -X utf8 download_data.py                  # all Heilbronn datasets (~87 MB)
     python -X utf8 download_data.py --only bumpy_roads road_network
     python -X utf8 download_data.py --large          # also the raw 1M+ row collections
     python -X utf8 download_data.py --force          # re-download even if cached
@@ -10,8 +10,10 @@ json.load(...)["features"]). Files that already exist are skipped, so teammates
 can re-run the script safely. See data/manifest.json for what was fetched.
 """
 import argparse
+import codecs
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime, timezone
@@ -24,6 +26,15 @@ from urllib3.util.retry import Retry
 BASE = "https://api.atrai.bike"
 CITY = "heilbronn"
 DATA_DIR = Path(__file__).resolve().parent / "data"
+
+# Raw tables whose pages come back in a different order on every request: paging them
+# duplicates and skips rows, so they are fetched in a single request instead.
+UNSTABLE_PAGING = {"osem_bike_data"}
+ALL_ROWS = 5_000_000  # a `limit` above any collection's size
+
+# Heilbronn road network extent plus ~1 km: (min lon, min lat, max lon, max lat).
+# The *_heilbronn danger_zones points also include rides in Karlsruhe, Heidelberg, Munich, ...
+HEILBRONN_BBOX = (9.038, 49.083, 9.312, 49.220)
 
 # One collection per city: "<prefix>_<city>".
 CITY_PREFIXES = [
@@ -43,10 +54,50 @@ def _has_city_tag(feature):
     return CITY in json.loads(feature["properties"]["groupTags"])
 
 
+def overtaking_risk(manoeuvre, distance_cm):
+    """Risk Index Overtaking as the ATRAI docs define it (manoeuvre 0-1, distance in cm)."""
+    return 0.3 * manoeuvre + 0.7 * (1 - min(max(distance_cm / 400, 0), 1))
+
+
+def _danger_zone_row(feature):
+    """A raw osem_bike_data row as a danger_zones point with its device and exact distance, or None.
+
+    Keeps rows flagged as an overtaking (manoeuvre > 0.05) that were recorded inside HEILBRONN_BBOX
+    by a device tagged "heilbronn". Without the tag, a test box of another project (`66.11 Test`,
+    tagged lauds_26) that rode through the city would slip in; danger_zones leaves it out too.
+    A distance of 0 is the table's "no reading" value, so such rows get no risk.
+    """
+    p = feature["properties"]
+    manoeuvre, distance = p.get("Overtaking Manoeuvre"), p.get("Overtaking Distance")
+    lon, lat = p["longitude"], p["latitude"]
+    west, south, east, north = HEILBRONN_BBOX
+    if manoeuvre is None or manoeuvre <= 0.05 or not (west <= lon <= east and south <= lat <= north):
+        return None
+    if not _has_city_tag(feature):
+        return None
+    return {
+        "type": "Feature",
+        "geometry": feature["geometry"],
+        "properties": {
+            "index": p["index"],
+            "boxId": p["boxId"],
+            "boxName": p["boxName"],
+            "createdAt": p["createdAt"],
+            "Overtaking Manoeuvre": manoeuvre,
+            "Overtaking Distance": distance,
+            "Risk Index Overtaking": overtaking_risk(manoeuvre, distance) if distance else None,
+            "Speed": p.get("Speed"),
+        },
+    }
+
+
 # Collections that cover all cities: (collection, output name, row filter).
+# A row filter returns True to keep the feature, a replacement feature to keep that instead, or a falsy value to skip it.
 FILTERED = [
     ("tracks", f"tracks_{CITY}", _has_city_tag),
     ("statistics", f"statistics_{CITY}", lambda f: f["properties"]["tag"] == CITY),
+    # Streams all 1.4M raw rows (about 1 GB over the wire), but the file is only a few MB.
+    ("osem_bike_data", f"danger_zones_raw_{CITY}", _danger_zone_row),
 ]
 
 # Raw sensor collections with over a million rows (GBs of JSON). Opt-in only.
@@ -70,12 +121,67 @@ def make_session():
     return s
 
 
+def download_single_request(session, collection, out_path, keep=None):
+    """Fetch the whole collection in ONE request and stream it into out_path.
+
+    osem_bike_data comes back in a different order on every request, so offset paging
+    returns some rows twice and skips others (we measured ~40% duplicates). One request is
+    one consistent scan. Returns (features_written, features_seen).
+    """
+    tmp = out_path.with_suffix(".part")
+    url = f"{BASE}/collections/{collection}/items"
+    decoder, text = json.JSONDecoder(), codecs.getincrementaldecoder("utf-8")()
+    written = seen = 0
+    matched = None
+    buf, done = "", False
+    with session.get(url, params={"limit": ALL_ROWS}, stream=True, timeout=(30, 900)) as r, \
+            tmp.open("w", encoding="utf-8") as fh:
+        r.raise_for_status()
+        fh.write('{"type":"FeatureCollection","features":[')
+        for chunk in r.iter_content(1 << 20):
+            if done:
+                continue
+            buf += text.decode(chunk)
+            if matched is None:
+                opening = re.search(r'"features"\s*:\s*\[', buf)
+                if opening is None:
+                    continue
+                matched = int(re.search(r'"numberMatched"\s*:\s*(\d+)', buf[:opening.start()]).group(1))
+                buf = buf[opening.end():]
+            pos = 0
+            while True:
+                while pos < len(buf) and buf[pos] in ", \n\r\t":
+                    pos += 1
+                if pos < len(buf) and buf[pos] == "]":
+                    done = True
+                    break
+                try:
+                    f, pos = decoder.raw_decode(buf, pos)
+                except json.JSONDecodeError:
+                    break  # the feature is cut off by the end of this chunk
+                seen += 1
+                out = keep(f) if keep else f
+                if out:
+                    fh.write(("," if written else "") + json.dumps(f if out is True else out, ensure_ascii=False))
+                    written += 1
+            buf = buf[pos:]
+            print(f"\r  {collection}: {seen}/{matched}", end="", flush=True)
+        fh.write("]}")
+    print()
+    if not done or seen != matched:
+        print(f"  WARNING: expected {matched} rows, got {seen}", file=sys.stderr)
+    os.replace(tmp, out_path)
+    return written, seen
+
+
 def download(session, collection, out_path, page=2000, keep=None):
     """Page through /collections/{collection}/items and stream it into out_path.
 
     Features are written as they arrive, so memory use stays flat even for the
     million-row collections. Returns (features_written, features_seen).
     """
+    if collection in UNSTABLE_PAGING:
+        return download_single_request(session, collection, out_path, keep)
     tmp = out_path.with_suffix(".part")
     url = f"{BASE}/collections/{collection}/items"
     offset = written = matched = 0
@@ -88,8 +194,9 @@ def download(session, collection, out_path, page=2000, keep=None):
             matched = body["numberMatched"]
             feats = body["features"]
             for f in feats:
-                if keep is None or keep(f):
-                    fh.write(("," if written else "") + json.dumps(f, ensure_ascii=False))
+                out = f if keep is None else keep(f)
+                if out:
+                    fh.write(("," if written else "") + json.dumps(f if out is True else out, ensure_ascii=False))
                     written += 1
             offset += len(feats)
             print(f"\r  {collection}: {offset}/{matched}", end="", flush=True)

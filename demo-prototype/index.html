@@ -92,7 +92,7 @@ fetch(API + "/roughness").then(r => r.json()).then(data => {
 });
 document.getElementById("showBumps").onchange = e => e.target.checked ? bumps.addTo(map) : bumps.remove();
 
-// Overtaking spots from danger_zones_heilbronn, darker = riskier.
+// Overtaking spots from danger_zones_raw_heilbronn (over 25 cm), darker = riskier.
 const dangers = L.layerGroup();
 fetch(API + "/danger").then(r => r.json()).then(data => {
   L.geoJSON(data, {
