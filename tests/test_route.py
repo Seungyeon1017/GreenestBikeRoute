@@ -1,7 +1,7 @@
 import pytest
 
 from routing.graph import attach_danger, attach_roughness
-from routing.route import RouteError, find_route
+from routing.route import RouteError, compare_routes, find_route
 from tests.conftest import COORDS, A, B, C
 
 
@@ -36,6 +36,18 @@ def test_result_is_geojson_feature_collection(toy_graph):
     (f,) = fc["features"]
     assert f["type"] == "Feature" and f["geometry"]["type"] == "LineString"
     assert f["properties"]["bump_penalty"] == 5
+
+
+def test_compare_routes_puts_the_route_next_to_the_shortest(toy_graph):
+    c = compare_routes(toy_graph, COORDS[A], COORDS[B], 10)
+    assert (c["route"]["properties"]["length_m"], c["shortest"]["properties"]["length_m"]) == (140, 100)
+    assert c["shortest"]["properties"]["bump_penalty"] == 0
+    assert (c["detour_pct"], c["same_path"]) == (40.0, False)
+
+
+def test_compare_routes_says_when_the_route_is_the_shortest(toy_graph):
+    c = compare_routes(toy_graph, COORDS[A], COORDS[B], 0, 0, 0)
+    assert (c["detour_pct"], c["same_path"]) == (0.0, True)
 
 
 def test_point_far_from_streets_is_rejected(toy_graph):

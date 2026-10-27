@@ -56,6 +56,14 @@ class RouteCollection(BaseModel):
     }}}
 
 
+class RouteComparison(BaseModel):
+    """The route next to the shortest route between the same points, e.g. to draw both and show what the penalties changed."""
+    route: RouteFeature = Field(description="The route for the given penalties, as from /route")
+    shortest: RouteFeature = Field(description="The shortest route: all penalties 0")
+    detour_pct: float = Field(description="How much longer the route is than the shortest route, in %")
+    same_path: bool = Field(description="True if the route follows the same streets as the shortest route")
+
+
 class RoughnessFeature(BaseModel):
     type: Literal["Feature"]
     geometry: LineString

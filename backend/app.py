@@ -2,15 +2,15 @@
 from contextlib import asynccontextmanager
 from functools import cache
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.schemas import DangerCollection, Error, RouteCollection, RoughnessCollection
+from backend.schemas import DangerCollection, Error, RouteCollection, RouteComparison, RoughnessCollection
 from download_data import load_features
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_PM_PENALTY, clean_overtaking
 from routing.graph import load_graph
-from routing.route import RouteError, find_route
+from routing.route import RouteError, compare_routes, find_route
 
 
 class GeoJSONResponse(JSONResponse):
@@ -37,6 +37,25 @@ def danger_collection():
     return {"type": "FeatureCollection", "features": features}
 
 
+def route_query(
+    from_lat: float = Query(..., ge=-90, le=90),
+    from_lon: float = Query(..., ge=-180, le=180),
+    to_lat: float = Query(..., ge=-90, le=90),
+    to_lon: float = Query(..., ge=-180, le=180),
+    bump_penalty: float = Query(DEFAULT_BUMP_PENALTY, ge=0, le=100, description="How much do you hate bumps"),
+    danger_penalty: float = Query(DEFAULT_DANGER_PENALTY, ge=0, le=1000,
+                                  description="How much do you hate close overtaking (metres of detour per spot)"),
+    pm_penalty: float = Query(DEFAULT_PM_PENALTY, ge=0, le=100, description="How much do you hate traffic and bad air"),
+):
+    """The query parameters shared by /route and /route/compare."""
+    return (from_lat, from_lon), (to_lat, to_lon), (bump_penalty, danger_penalty, pm_penalty)
+
+
+ROUTE_ERRORS = {400: {"description": "Start or end is outside Heilbronn, or no route exists",
+                      "content": {"application/json": {"schema": Error.model_json_schema(), "example": {
+                          "detail": "start point is 812 m from the nearest Heilbronn street"}}}}}
+
+
 def create_app(graph=None):
     """`graph` lets tests pass a small graph; by default the Heilbronn graph is loaded at startup."""
 
@@ -48,28 +67,23 @@ def create_app(graph=None):
     app = FastAPI(title="Greenest Bike Route", lifespan=lifespan)
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"])
 
-    @app.get("/route", summary="Bike route from A to B as GeoJSON", response_class=GeoJSONResponse,
-             response_model=RouteCollection, response_description="One LineString feature: the route",
-             responses={400: {"description": "Start or end is outside Heilbronn, or no route exists",
-                              "content": {"application/json": {"schema": Error.model_json_schema(), "example": {
-                                  "detail": "start point is 812 m from the nearest Heilbronn street"}}}}})
-    def route(
-        from_lat: float = Query(..., ge=-90, le=90),
-        from_lon: float = Query(..., ge=-180, le=180),
-        to_lat: float = Query(..., ge=-90, le=90),
-        to_lon: float = Query(..., ge=-180, le=180),
-        bump_penalty: float = Query(DEFAULT_BUMP_PENALTY, ge=0, le=100, description="How much do you hate bumps"),
-        danger_penalty: float = Query(DEFAULT_DANGER_PENALTY, ge=0, le=1000,
-                                      description="How much do you hate close overtaking (metres of detour per spot)"),
-        pm_penalty: float = Query(DEFAULT_PM_PENALTY, ge=0, le=100,
-                                  description="How much do you hate traffic and bad air"),
-    ):
+    def routed(route_fn, query):
+        origin, destination, penalties = query
         try:
-            collection = find_route(app.state.graph, (from_lat, from_lon), (to_lat, to_lon),
-                                    bump_penalty, danger_penalty, pm_penalty)
+            return route_fn(app.state.graph, origin, destination, *penalties)
         except RouteError as e:
             raise HTTPException(status_code=400, detail=str(e))
-        return GeoJSONResponse(collection)
+
+    @app.get("/route", summary="Bike route from A to B as GeoJSON", response_class=GeoJSONResponse,
+             response_model=RouteCollection, response_description="One LineString feature: the route",
+             responses=ROUTE_ERRORS)
+    def route(query=Depends(route_query)):
+        return GeoJSONResponse(routed(find_route, query))
+
+    @app.get("/route/compare", summary="Bike route from A to B next to the shortest route",
+             response_model=RouteComparison, responses=ROUTE_ERRORS)
+    def route_compare(query=Depends(route_query)):
+        return JSONResponse(routed(compare_routes, query))
 
     @app.get("/roughness", summary="Measured street roughness as GeoJSON, e.g. for a map overlay",
              response_class=GeoJSONResponse, response_model=RoughnessCollection)

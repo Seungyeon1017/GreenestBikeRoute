@@ -151,10 +151,10 @@ function show(prefix, p) {
   setText(prefix + "Pm", p && p.mean_pm_risk != null ? p.mean_pm_risk.toFixed(2) : "–");
 }
 
-async function getRoute([bump_penalty, danger_penalty, pm_penalty]) {
+async function compareRoutes([bump_penalty, danger_penalty, pm_penalty]) {
   const a = start.getLatLng(), b = end.getLatLng();
   const q = new URLSearchParams({ from_lat: a.lat, from_lon: a.lng, to_lat: b.lat, to_lon: b.lng, bump_penalty, danger_penalty, pm_penalty });
-  const res = await fetch(API + "/route?" + q);
+  const res = await fetch(API + "/route/compare?" + q);
   const body = await res.json();
   if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail));
   return body;
@@ -166,14 +166,13 @@ async function update() {
   if (!start || !end) return;
   setText("error", "");
   try {
-    const [shortest, route] = await Promise.all([getRoute([0, 0, 0]), getRoute(sliders.map(s => s.value))]);
+    const { route, shortest, detour_pct, same_path } = await compareRoutes(sliders.map(s => s.value));
     shortestLayer.clearLayers().addData(shortest);
     routeLayer.clearLayers().addData(route);
-    const s = shortest.features[0].properties, r = route.features[0].properties;
+    const s = shortest.properties, r = route.properties;
     show("s", s); show("r", r);
-    const detour = (r.length_m / s.length_m - 1) * 100;
-    setText("summary", detour < 0.05 ? "Same as the shortest route."
-      : `+${detour.toFixed(1)}% distance, roughness ${s.mean_roughness?.toFixed(1)} → ${r.mean_roughness?.toFixed(1)}, `
+    setText("summary", same_path ? "Same as the shortest route."
+      : `+${detour_pct.toFixed(1)}% distance, roughness ${s.mean_roughness?.toFixed(1)} → ${r.mean_roughness?.toFixed(1)}, `
         + `overtaking spots ${s.danger_points} → ${r.danger_points}`);
   } catch (e) {
     shortestLayer.clearLayers(); routeLayer.clearLayers();

@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
-from backend.schemas import DangerCollection, RouteCollection, RoughnessCollection
+from backend.schemas import DangerCollection, RouteCollection, RouteComparison, RoughnessCollection
 from download_data import HEILBRONN_BBOX, overtaking_risk
 from routing.costs import MIN_OVERTAKING_CM
 from tests.conftest import COORDS, A, B
@@ -30,6 +30,20 @@ def test_route_returns_geojson(client):
 
 def test_route_matches_the_documented_schema(client):
     RouteCollection.model_validate(client.get("/route", params=params()).json())
+
+
+def test_compare_returns_route_and_shortest(client):
+    r = client.get("/route/compare", params=params(bump_penalty=10))
+    assert r.status_code == 200
+    body = RouteComparison.model_validate(r.json())
+    assert (body.route.properties.length_m, body.shortest.properties.length_m, body.detour_pct) == (140, 100, 40.0)
+
+
+def test_compare_takes_the_same_parameters_and_errors_as_route(client):
+    spec = client.get("/openapi.json").json()["paths"]
+    names = lambda path: [p["name"] for p in spec[path]["get"]["parameters"]]
+    assert names("/route/compare") == names("/route")
+    assert client.get("/route/compare", params=params(start=(48.7758, 9.1829))).status_code == 400
 
 
 def test_docs_show_a_geojson_linestring(client):

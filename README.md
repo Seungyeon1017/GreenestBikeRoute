@@ -10,6 +10,8 @@ Example request: `/route?from_lat=49.14838&from_lon=9.22687&to_lat=49.1262&to_lo
 - `danger_penalty` (default 25): metres of detour you'd ride to pass one fewer close-overtaking spot (`danger_zones_raw`, summed Risk Index Overtaking; readings of 25 cm or less ignored).
 - `pm_penalty` (default 2): how much you hate traffic and bad air (`danger_zones_PM`, mean Risk Index per street).
 
+`/route/compare` takes the same parameters and returns the route next to the shortest route, to draw both and show what the penalties changed. See `/docs` for the response.
+
 Danger points come from `danger_zones_raw_heilbronn` (one row per overtake, with device id and exact distance) and are snapped to the nearest street within 25 m. [routing/README.md](routing/README.md) explains how route planning works and why readings of 25 cm or less are ignored.
 
 For a clickable demo map, start the API, run `python -m http.server 5500 -d demo-prototype` and open http://127.0.0.1:5500. It is a throwaway prototype kept outside `frontend/`.

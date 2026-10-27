@@ -37,15 +37,8 @@ def _cost(d, penalties):
                      d.get("danger", 0.0), danger_penalty, _pm_risk(d), pm_penalty)
 
 
-def find_route(G, origin, destination, bump_penalty=DEFAULT_BUMP_PENALTY,
-               danger_penalty=DEFAULT_DANGER_PENALTY, pm_penalty=DEFAULT_PM_PENALTY):
-    """Cheapest route from origin to destination, both (lat, lon), as a GeoJSON FeatureCollection.
-
-    All penalties 0 give the shortest route; higher values take longer detours to avoid rough
-    streets (bump_penalty), spots where cars overtook closely (danger_penalty) and streets with heavy
-    traffic and bad air (pm_penalty).
-    """
-    penalties = (bump_penalty, danger_penalty, pm_penalty)
+def _snap(G, origin, destination):
+    """The graph nodes for origin and destination, both (lat, lon)."""
     ends = []
     for label, (lat, lon) in (("start", origin), ("end", destination)):
         node, dist = nearest_node(G, lat, lon)
@@ -55,6 +48,12 @@ def find_route(G, origin, destination, bump_penalty=DEFAULT_BUMP_PENALTY,
     a, b = ends
     if a == b:
         raise RouteError("start and end snap to the same street corner")
+    return a, b
+
+
+def _route_feature(G, a, b, penalties):
+    """The cheapest route between graph nodes a and b for `penalties`, as one GeoJSON Feature."""
+    bump_penalty, danger_penalty, pm_penalty = penalties
 
     # MultiDiGraph: between two nodes there can be parallel edges; use the cheapest.
     def weight(u, v, parallel):
@@ -100,5 +99,31 @@ def find_route(G, origin, destination, bump_penalty=DEFAULT_BUMP_PENALTY,
         "mean_pm_risk": round(pm_len / pm_measured_len, 3) if pm_measured_len else None,
         "pm_measured_share": round(pm_measured_len / length, 2),
     }
-    feature = {"type": "Feature", "geometry": {"type": "LineString", "coordinates": coords}, "properties": properties}
+    return {"type": "Feature", "geometry": {"type": "LineString", "coordinates": coords}, "properties": properties}
+
+
+def find_route(G, origin, destination, bump_penalty=DEFAULT_BUMP_PENALTY,
+               danger_penalty=DEFAULT_DANGER_PENALTY, pm_penalty=DEFAULT_PM_PENALTY):
+    """Cheapest route from origin to destination, both (lat, lon), as a GeoJSON FeatureCollection.
+
+    All penalties 0 give the shortest route; higher values take longer detours to avoid rough
+    streets (bump_penalty), spots where cars overtook closely (danger_penalty) and streets with heavy
+    traffic and bad air (pm_penalty).
+    """
+    a, b = _snap(G, origin, destination)
+    feature = _route_feature(G, a, b, (bump_penalty, danger_penalty, pm_penalty))
     return {"type": "FeatureCollection", "features": [feature]}
+
+
+def compare_routes(G, origin, destination, bump_penalty=DEFAULT_BUMP_PENALTY,
+                   danger_penalty=DEFAULT_DANGER_PENALTY, pm_penalty=DEFAULT_PM_PENALTY):
+    """The route from find_route next to the shortest route, with how much they differ."""
+    a, b = _snap(G, origin, destination)
+    route = _route_feature(G, a, b, (bump_penalty, danger_penalty, pm_penalty))
+    shortest = _route_feature(G, a, b, (0, 0, 0))
+    return {
+        "route": route,
+        "shortest": shortest,
+        "detour_pct": round((route["properties"]["length_m"] / shortest["properties"]["length_m"] - 1) * 100, 1),
+        "same_path": route["geometry"] == shortest["geometry"],
+    }
