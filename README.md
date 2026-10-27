@@ -10,27 +10,15 @@ python -X utf8 download_data.py
 ```
 
 ## Routing API
-Serves bike routes that avoid bumpy streets, close-overtaking spots and streets with heavy traffic and bad air as GeoJSON. The first start downloads the Heilbronn street graph from OpenStreetMap into `cache/` (about 2 minutes); later starts take a few seconds.
+Serves bike routes that avoid bumpy streets, close-overtaking spots and streets with heavy traffic and bad air as GeoJSON. The first start downloads the Heilbronn street graph from OpenStreetMap into `cache/` (about 2 minutes); later starts take a few seconds. See [Backend Setup and Usage](#backend-setup-and-usage) for how to start it.
 
-```bash
-uvicorn backend.app:app --port 8001
-```
-
-Or with Docker Compose, also on port 8001. 
-
-```bash
-docker compose up --build -d    # build and start the backend in the background
-docker compose ps               # check that it is running
-docker compose logs -f backend  # follow the backend logs (Ctrl+C to stop following)
-```
-
-Try it at http://127.0.0.1:8001/docs, e.g. `/route?from_lat=49.14838&from_lon=9.22687&to_lat=49.1262&to_lon=9.22439&bump_penalty=10`. Three penalties steer the route, and setting all of them to 0 gives the shortest route:
+Example request: `/route?from_lat=49.14838&from_lon=9.22687&to_lat=49.1262&to_lon=9.22439&bump_penalty=10`. Three penalties steer the route, and setting all of them to 0 gives the shortest route:
 
 - `bump_penalty` (default 10): how much you hate bumps (`bumpy_roads`).
 - `danger_penalty` (default 25): metres of detour you'd ride to pass one fewer close-overtaking spot (`danger_zones`, summed Risk Index Overtaking).
 - `pm_penalty` (default 2): how much you hate traffic and bad air (`danger_zones_PM`, mean Risk Index per street).
 
-Danger points are snapped to the nearest street within 25 m. [routing/README.md](routing/README.md) explains how route planning works and why. Run the tests with `python -m pytest`.
+Danger points are snapped to the nearest street within 25 m. [routing/README.md](routing/README.md) explains how route planning works and why.
 
 For a clickable demo map, start the API, run `python -m http.server 5500 -d demo-prototype` and open http://127.0.0.1:5500. It is a throwaway prototype kept outside `frontend/`.
 
