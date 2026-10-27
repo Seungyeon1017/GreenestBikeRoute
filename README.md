@@ -16,7 +16,13 @@ Serves bike routes that avoid bumpy streets, close-overtaking spots and streets 
 uvicorn backend.app:app --port 8001
 ```
 
-Or with Docker: `docker compose up -d --build`, also on port 8001. Rebuild after every code change, since the code is baked into the image.
+Or with Docker Compose, also on port 8001. 
+
+```bash
+docker compose up --build -d    # build and start the backend in the background
+docker compose ps               # check that it is running
+docker compose logs -f backend  # follow the backend logs (Ctrl+C to stop following)
+```
 
 Try it at http://127.0.0.1:8001/docs, e.g. `/route?from_lat=49.14838&from_lon=9.22687&to_lat=49.1262&to_lon=9.22439&bump_penalty=10`. Three penalties steer the route, and setting all of them to 0 gives the shortest route:
 
