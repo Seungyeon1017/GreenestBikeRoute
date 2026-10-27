@@ -1,9 +1,9 @@
 """Download the ready-made ATRAI datasets for Heilbronn into ./data as GeoJSON.
 
-    python -X utf8 download_data.py                  # all Heilbronn datasets (~85 MB)
-    python -X utf8 download_data.py --only bumpy_roads road_network
-    python -X utf8 download_data.py --large          # also the raw 1M+ row collections
-    python -X utf8 download_data.py --force          # re-download even if cached
+    python -X utf8 data_download/download_data.py                  # all Heilbronn datasets (~85 MB)
+    python -X utf8 data_download/download_data.py --only bumpy_roads road_network
+    python -X utf8 data_download/download_data.py --large          # also the raw 1M+ row collections
+    python -X utf8 data_download/download_data.py --force          # re-download even if cached
 
 Every file is a standard GeoJSON FeatureCollection (open in QGIS / geopandas /
 json.load(...)["features"]). Files that already exist are skipped, so teammates
@@ -23,7 +23,7 @@ from urllib3.util.retry import Retry
 
 BASE = "https://api.atrai.bike"
 CITY = "heilbronn"
-DATA_DIR = Path(__file__).parent / "data"
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"  # repo-root data/
 
 # One collection per city: "<prefix>_<city>".
 CITY_PREFIXES = [
