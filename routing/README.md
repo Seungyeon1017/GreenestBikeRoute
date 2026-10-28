@@ -109,3 +109,26 @@ From 49.14838, 9.22687 to 49.1262, 9.22439:
 | 10 / 25 / 0.5 / 0.5, `prefer_time`    | 4.15 km | 11.3      | 3                | 0.60        |
 
 On this trip the defaults pick the smooth street, which has more overtaking spots than the shortest route, and 25 is too weak to change that. At 100 the route avoids both. The default `stop_penalty` doesn't change any of these routes, and even 5 only swaps a few short pieces. `prefer_time` takes faster streets: 822 s instead of 940 s for the shortest route (−13%), 21% further. With the default penalties it rides 918 s over 4.15 km: the time-scaled penalties now find a detour around nearly all overtaking spots that pays off.
+
+## Grade (display only, not in the route cost)
+
+`/route/grade` takes the same parameters as `/route` and returns **the same path**, split into pieces coloured by how steep they are, so a map can show where the climbs are. Grade never enters `edge_cost`: the route is chosen exactly as before (`tests/test_heilbronn.py` checks that the pieces join up to the `/route` line).
+
+Why not route on it: Heilbronn is mostly flat in the valley, and the hills (Wartberg, east and south) have no flat way around. An uphill penalty of 10 m per metre climbed cut the total climb by only 9%, and valley trips climb about 13 m anyway. So grade is shown, not avoided.
+
+- **Grade of an edge** = height gain in the travel direction / edge length, from the heights of its two end nodes. A two-way street is two edges, so it is uphill one way and downhill the other. Where the start or end splits a street (see [Snapping](#snapping-points-to-streets)), that point gets the height on the straight line between the street's two ends. Consecutive edges with the same class and direction (up/down) are merged into one piece; a piece's `grade_pct` is its total rise / length.
+- **Classes** on the absolute grade: flat < 2%, gentle 2–4%, noticeable 4–6%, steep 6–10%, very_steep ≥ 10% (a bound belongs to the steeper class). Each piece carries a suggested `color`.
+- **Totals** in `summary`: `climb_m`, `descent_m`, start and end height, the steepest uphill (`max_grade_pct`) and downhill piece, and metres per class.
+- **Whole network** (by length, both directions): 57% flat, 20% gentle, 11% noticeable, 9% steep, 3% very steep. Heights range from 150 to 372 m. Example trip: 3.25 km, climbs 24 m (162.7 → 180.8 m), steepest 2.9%.
+
+### Heights: `data/custom/elevation_heilbronn.json`
+
+- One height per graph node (13,704), in metres above sea level (NHN, DHHN2016), from the **LGL DGM1** terrain model: 1 m × 1 m cells, ±15 cm. Each node gets the height of the cell it lies in.
+- Built by `python -X utf8 -m routing.elevation --download`: downloads the 43 DGM1 tiles (2 km × 2 km, ~520 MB) the graph touches into `cache/dgm1/` (git-ignored, ~3.5 min), then reads only the 1 km files with nodes (~10 s). The API reads only the 270 kB JSON. Without it, `/route/grade` answers 503.
+- **Bridges and tunnels:** the DGM is bare ground, so a node on a bridge gets the river or railway below it and a node in a tunnel the hill above it. 37 nodes touch only bridge/tunnel edges (364 such edges); each is interpolated along its structure between the two nearest ends, weighted by distance (a straight line between the abutments of a simple bridge). They moved by up to 10.8 m. Example: on the Karlsruher Straße bridge over the Neckar, the junction node in the middle sat on the river (151.1 m, deck ~159 m) and made a fake −6.5% / +16.6% dip; now both halves are +0.3%.
+
+Limits:
+- Only nodes have heights. A long edge over a hump shows its average grade; half of the edges are under 47 m, but 10% are over 186 m.
+- Where a street is on a ramp or wall that OSM doesn't tag as a bridge, its nodes get the ground beside or below it. Known case: the west ramp of the Neckargartacher Brücke, where OSM's bridge starts ~57 m after the terrain has dropped 6 m, shows a −44% piece of 7 m. 8 of 156 bridges/tunnels have an approach edge over 15% within 50 m of their ends.
+- A node a few metres off the real street, next to an embankment or retaining wall, can make a short piece look steep. Treat very short red pieces with suspicion.
+- **Data:** LGL Baden-Württemberg, Digitales Geländemodell DGM1, https://opengeodata.lgl-bw.de. Licence Datenlizenz Deutschland – Namensnennung – 2.0: the portal states it for every dataset not marked otherwise (DGM1 isn't), and every DGM1 zip ships `GOVDATA-Datenlizenz_Deutschland.pdf`. Required credit: "Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0".

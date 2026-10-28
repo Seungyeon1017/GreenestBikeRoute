@@ -32,6 +32,29 @@ SHORTEST_EXAMPLE = {
     },
 }
 
+# /route/grade for the example trip, shortened to its first 2 of 8 pieces; tests/test_heilbronn.py checks them and the summary.
+GRADE_EXAMPLE = {
+    "type": "FeatureCollection",
+    "features": [
+        {"type": "Feature", "geometry": {"type": "LineString", "coordinates": [
+            [9.2268683, 49.148385], [9.2267631, 49.1482275], [9.2267132, 49.1481547], [9.2266937, 49.1481132],
+            [9.2266865, 49.1480816], [9.2266622, 49.1480821], [9.2263651, 49.1480986], [9.2261904, 49.1481081],
+            [9.2256731, 49.1481397]]},
+         "properties": {"grade_pct": -0.5, "severity": "flat", "color": "#4caf50", "length_m": 110.4, "rise_m": -0.5,
+                        "start_m": 0.0}},
+        {"type": "Feature", "geometry": {"type": "LineString", "coordinates": [
+            [9.2256731, 49.1481397], [9.2256235, 49.1478228], [9.225569, 49.147444], [9.2255341, 49.147208],
+            [9.2255212, 49.1471208]]},
+         "properties": {"grade_pct": 2.6, "severity": "gentle", "color": "#c0ca33", "length_m": 113.8, "rise_m": 3.0,
+                        "start_m": 110.4}},
+    ],
+    "summary": {
+        "length_m": 3249.2, "climb_m": 24.1, "descent_m": 6.0, "start_elevation_m": 162.7, "end_elevation_m": 180.8,
+        "max_grade_pct": 2.9, "max_descent_grade_pct": -2.8,
+        "length_by_severity_m": {"flat": 2908.8, "gentle": 340.4, "noticeable": 0.0, "steep": 0.0, "very_steep": 0.0},
+    },
+}
+
 
 def collection_example(feature):
     return {"json_schema_extra": {"example": {"type": "FeatureCollection", "features": [feature]}}}
@@ -100,6 +123,45 @@ class RouteComparison(BaseModel):
 
     model_config = {"json_schema_extra": {"example": {
         "route": ROUTE_EXAMPLE, "shortest": SHORTEST_EXAMPLE, "detour_pct": 0.9, "extra_time_pct": 0.0, "same_path": False}}}
+
+
+Severity = Literal["flat", "gentle", "noticeable", "steep", "very_steep"]
+
+
+class GradeProperties(BaseModel):
+    grade_pct: float = Field(description="Rise / length of this piece in %, in the travel direction: positive uphill, negative downhill")
+    severity: Severity = Field(description="On the absolute grade: flat < 2 %, gentle 2-4 %, noticeable 4-6 %, steep 6-10 %, very_steep 10 % and more")
+    color: str = Field(description="Suggested line colour for the severity (#rrggbb)")
+    length_m: float = Field(description="Length of this piece in metres")
+    rise_m: float = Field(description="Height gained over this piece in metres (negative = lost)")
+    start_m: float = Field(description="Distance from the start of the route to the start of this piece, in metres")
+
+
+class GradeFeature(BaseModel):
+    type: Literal["Feature"]
+    geometry: LineString
+    properties: GradeProperties
+
+
+class GradeSummary(BaseModel):
+    length_m: float = Field(description="Route length in metres (same as /route)")
+    climb_m: float = Field(description="Total height gained in metres")
+    descent_m: float = Field(description="Total height lost in metres")
+    start_elevation_m: float = Field(description="Height of the start above sea level (NHN) in metres")
+    end_elevation_m: float = Field(description="Height of the end above sea level (NHN) in metres")
+    max_grade_pct: float = Field(description="Steepest uphill street piece in % (0 if the route never climbs)")
+    max_descent_grade_pct: float = Field(description="Steepest downhill street piece in %, negative (0 if it never descends)")
+    length_by_severity_m: dict[Severity, float] = Field(description="Metres of the route in each severity")
+
+
+class GradeCollection(BaseModel):
+    """The route from /route, in pieces of the same grade class. Only for display: grade is not part of the route cost,
+    so this is exactly the path /route returns for the same parameters. Heights: LGL DGM1 (Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0)."""
+    type: Literal["FeatureCollection"]
+    features: list[GradeFeature] = Field(min_length=1, description="Consecutive pieces from start to end; joined, they give the /route line")
+    summary: GradeSummary
+
+    model_config = {"json_schema_extra": {"example": GRADE_EXAMPLE}}
 
 
 class RoughnessFeature(BaseModel):
