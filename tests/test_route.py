@@ -1,6 +1,6 @@
 import pytest
 
-from routing.graph import attach_danger, attach_roughness, attach_stop_go
+from routing.graph import attach_danger, attach_roughness, attach_speed, attach_stop_go
 from routing.route import RouteError, compare_routes, find_route
 from tests.conftest import COORDS, A, B, C
 
@@ -60,6 +60,14 @@ def test_same_start_and_end_is_rejected(toy_graph):
         find_route(toy_graph, COORDS[A], COORDS[A])
 
 
+def test_start_on_a_merged_two_way_street_can_leave_both_ways(toy_graph):
+    # OSMnx lists merged way ids in riding order, so the way back lists them reversed.
+    toy_graph.add_edge(B, C, osmid=[14, 13], length=70.0, roughness=0.0)
+    mid_cb = (49.14065, 9.2104)
+    for end in (B, C):
+        assert find_route(toy_graph, mid_cb, COORDS[end], 0, 0, 0, 0)["features"][0]["properties"]["length_m"] == 35
+
+
 def test_no_path_is_rejected(toy_graph):
     with pytest.raises(RouteError, match="no bike route"):
         find_route(toy_graph, COORDS[B], COORDS[A])  # all edges are one-way towards B
@@ -83,6 +91,30 @@ def test_stop_penalty_detours_around_stop_and_go_streets(toy_graph):
     f = find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 0, 2)["features"][0]  # 100 x 2.8 > 140 x 1.2
     assert (f["properties"]["length_m"], f["properties"]["mean_stop_go"]) == (140, 0.1)
     assert (f["properties"]["stop_penalty"], f["properties"]["stop_measured_share"]) == (2, 1.0)
+
+
+
+def test_attach_speed(toy_graph):
+    attach_speed(toy_graph, {11: 12.0, 13: 10.0, 14: 20.0})
+    assert [d["speed_kmh"] for *_, d in toy_graph.edges(data=True)] == [12.0, None, 15.0]
+
+
+def test_prefer_time_takes_the_faster_detour(toy_graph):
+    for d in toy_graph.edges.values():
+        d["roughness"] = 0.0
+    attach_speed(toy_graph, {11: 5.0, 12: 20.0, 13: 20.0, 14: 20.0})
+    p = find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 0, 0)["features"][0]["properties"]
+    assert (p["length_m"], p["prefer_time"], p["duration_s"]) == (100, False, 72)  # 100 m at 5 km/h
+    # 100 m at 5 km/h takes longer than 140 m at 20 km/h
+    p = find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 0, 0, prefer_time=True)["features"][0]["properties"]
+    assert (p["length_m"], p["prefer_time"], p["duration_s"], p["speed_measured_share"]) == (140, True, 25, 1.0)
+
+
+def test_compare_routes_reports_extra_time(toy_graph):
+    attach_speed(toy_graph, {11: 5.0, 12: 20.0, 13: 20.0, 14: 20.0})
+    c = compare_routes(toy_graph, COORDS[A], COORDS[B], 0, 0, 0, 0, prefer_time=True)
+    assert c["shortest"]["properties"]["prefer_time"] is False
+    assert (c["detour_pct"], c["extra_time_pct"]) == (40.0, round((25 / 72 - 1) * 100, 1))
 
 
 ON_AB = (9.2101, 49.14045)  # the bend of A->B, (lon, lat)
@@ -125,3 +157,20 @@ def test_pm_penalty_detours_around_polluted_streets(toy_graph):
     assert f["properties"]["length_m"] == 140
     assert f["properties"]["mean_pm_risk"] == 0.1  # A->C is unmeasured
     assert f["properties"]["pm_measured_share"] == 0.5
+
+
+def test_attach_roughness_marks_measured_estimated_and_unknown(toy_graph):
+    attach_roughness(toy_graph, {11: 80.0, 14: 0.0}, {12: 12.5})
+    got = [(d["roughness"], d["roughness_source"]) for *_, d in toy_graph.edges(data=True)]
+    assert got == [(80.0, "measured"), (12.5, "estimated"), (0.0, "measured")]
+
+    attach_roughness(toy_graph, {11: 80.0, 14: 0.0})
+    assert [d["roughness_source"] for *_, d in toy_graph.edges(data=True)] == ["measured", "unknown", "measured"]
+
+
+def test_route_reports_estimated_share_apart_from_measured(toy_graph):
+    attach_roughness(toy_graph, {11: 80.0, 14: 0.0}, {12: 12.5})
+    p = find_route(toy_graph, COORDS[A], COORDS[B], 10, 0, 0, 0)["features"][0]["properties"]
+    assert p["length_m"] == 140  # A -> C (estimated) -> B (measured)
+    assert (p["measured_share"], p["estimated_share"]) == (0.5, 0.5)
+    assert p["mean_roughness"] == 0  # over the measured part only

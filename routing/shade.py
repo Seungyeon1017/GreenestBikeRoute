@@ -1,8 +1,8 @@
 """Street-tree shade per OSM way, from the Heilbronn Baumkataster (tree cadastre).
 
-    python -X utf8 -m routing.shade          # downloads the cadastre, writes data/shade_heilbronn.json
+    python -X utf8 -m routing.shade          # downloads the cadastre, writes data/custom/shade_heilbronn.json
 
-Idea: walk along every street of data/ready-made/road_network_heilbronn.geojson in 5 m steps
+Idea: walk along every street of road_features() in 5 m steps
 and count a step as shaded when a tree crown reaches the street corridor, i.e. the
 tree stands within (crown radius + SIDE_M) of the street centre line.
 shade = shaded steps / all steps, from 0 (full sun) to 1 (fully under trees).
@@ -31,9 +31,9 @@ TREES_URL = (
     "https://opendata.heilbronn.de/sites/default/files/"
     "SHAPE_BKA_HN20260101_EPSG4326.zip"
 )
-TREES_ZIP = DATA_DIR / "baumkataster_heilbronn_2026.zip"
+TREES_ZIP = DATA_DIR.parent / "cache" / "baumkataster_heilbronn_2026.zip"  # cache/ is git-ignored
 ROADS = DATA_DIR / "ready-made" / "road_network_heilbronn.geojson"
-OUT = DATA_DIR / "shade_heilbronn.json"
+OUT = DATA_DIR / "custom" / "shade_heilbronn.json"
 
 STEP_M = 5.0        # sampling distance along a street
 SIDE_M = 4.0        # tree may stand this far beside the corridor and still shade it
@@ -87,6 +87,7 @@ def download_trees(path=TREES_ZIP):
         print(f"Downloading Baumkataster -> {path.name}")
         r = requests.get(TREES_URL, timeout=120)
         r.raise_for_status()
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(r.content)
     return path
 
@@ -172,6 +173,32 @@ def is_shaded(x, y, grid):
 
 # ---------------------------------------------------------------- roads ----
 
+def road_features(G=None):
+    """Streets to compute shade for, as GeoJSON-like features with an "osmid" property.
+
+    The ATRAI road network (data/ready-made), plus the bike graph's edges on OSM ways it doesn't have,
+    such as the rideable footways routing.graph adds; without them ~12 % of the graph's ways get no shade.
+    """
+    roads = json.loads(ROADS.read_text(encoding="utf-8"))["features"]
+    if G is None:
+        from routing.graph import load_graph  # osmnx, only needed here
+        G = load_graph()
+    have = {w for f in roads for w in osm_way_ids(f["properties"]["osmid"])}
+    seen = set()
+    for u, v, d in G.edges(data=True):
+        ids = d["osmid"] if isinstance(d["osmid"], list) else [d["osmid"]]
+        street = (min(u, v), max(u, v), str(ids))
+        if street in seen or all(int(i) in have for i in ids):
+            continue  # each street once, not once per direction
+        seen.add(street)
+        coords = (list(d["geometry"].coords) if "geometry" in d
+                  else [(G.nodes[u]["x"], G.nodes[u]["y"]), (G.nodes[v]["x"], G.nodes[v]["y"])])
+        missing = [int(i) for i in ids if int(i) not in have]
+        osmid = str(missing[0]) if len(missing) == 1 else str(missing)
+        roads.append({"geometry": {"coordinates": coords}, "properties": {"osmid": osmid}})
+    return roads
+
+
 def line_shade(coords, grid):
     """(shade ratio 0-1, length in m) of one LineString given as [lon, lat] pairs."""
     xy = [to_xy(lon, lat) for lon, lat in coords]
@@ -223,7 +250,7 @@ def main():
     trees = load_trees(Path(sys.argv[1]) if len(sys.argv) > 1 else None)
     print(f"{len(trees):,} trees loaded")
     grid = build_grid(trees)
-    roads = json.loads(ROADS.read_text(encoding="utf-8"))["features"]
+    roads = road_features()
     shade = way_shade(roads, grid)
     OUT.write_text(json.dumps({str(k): round(v, 3) for k, v in shade.items()}))
     vals = sorted(shade.values())

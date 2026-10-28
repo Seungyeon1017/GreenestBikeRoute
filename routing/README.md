@@ -1,23 +1,36 @@
 # How route planning works
 
-The Heilbronn street map (OpenStreetMap, ~34k street pieces) is a graph. Every street piece gets a **cost**, and route planning picks the path with the lowest total cost. Bad streets "feel longer", so a detour wins when it's cheaper than riding through.
+The Heilbronn street map (OpenStreetMap, ~42k street pieces) is a graph. Every street piece gets a **cost**, and route planning picks the path with the lowest total cost. Bad streets "feel longer", so a detour wins when it's cheaper than riding through.
 
 ```
 cost = length × (1 + bump_penalty × roughness / 100 + pm_penalty × pm_risk + stop_penalty × stop_go)
      + danger_penalty × danger
+     + stop_penalty × 100 m × lifts
 ```
 
 - Roughness, PM risk and stop-and-go describe the whole street, so they **scale with length**.
 - Danger counts incidents at spots, so it's **a fixed amount per street**, whatever its length.
+- A lift (`highway=elevator` node, e.g. onto the Campusbrücke) is a stop too: riding through one costs `stop_penalty` × 100 m (waiting plus getting in and out, about 25 s), a **fixed amount per lift**. At the default 0.5 that is 50 m of detour, at 5 it is 500 m. The route reports its `lifts`.
 - All penalties at 0 give the shortest route.
+- With `prefer_time`, `length` becomes riding time: `length × 15.7 km/h / speed`, i.e. metres ridden at the median cyclist speed (see [speed_map](#speed_map_heilbronn-cyclist-speed-per-street-for-prefer_time)). The other terms keep their meaning in metres.
+
+## Which streets are in the graph
+
+OSMnx's bike network, with these changes:
+
+- **Left out:** roads tagged `bicycle=use_sidepath` (~23 km, mostly the B 39 around Europaplatz). Those have a mandatory bike path beside them (StVO §2 Abs. 4, signs 237/240/241), so cycling on the road is illegal; the path itself is mapped as its own way and stays in. Roads with an optional bike path beside them stay in too: riding on the road is legal there, so smoothness or overtaking data may pick either. Ways tagged `bicycle=dismount` are left out as well.
+- **Added:** footways and paths tagged `bicycle=yes|designated|permissive`, which OSMnx drops. Untagged footways stay out (no bikes in Germany), except `bridge=yes` ones and ones touching a lift (`highway=elevator` node): bikes reach the Campusbrücke and BUGA-Brücke by lift. Street crossings (`footway=crossing`) are in even when tagged `bicycle=no`: cyclists push their bike across the lights. Footways tagged `bicycle=no` or without a tag stay out, with two exceptions where cyclists push their bike a short way: a footway up to 30 m long that links two places the graph already reaches (a crossing to a bike path), and an untagged footway up to 150 m long that fills a gap between two `bicycle=yes` ways (path 694954948 next to the Hauptbahnhof). Steps stay out.
+- **Hand-picked ways:** footways without a bicycle tag that cyclists use anyway are listed in [rideable_ways.py](rideable_ways.py) and count as `bicycle=yes` (e.g. the Allee footway 286359672, beside the bus and car lanes). Add a way id and a reason there, then delete the graph file. Planned: users report streets and, once checked, they are added to this list.
+- **Graph file:** `cache/heilbronn_bike_rideable.graphml`, built from OSM on first start (~2 min). Delete it to pick up newer OSM edits.
 
 ## Datasets
 
 ### `bumpy_roads_heilbronn`: roughness per street
 
-- Matched by OSM way id. Values are 0–100, even though the docs say 0–1.
-- A street without data gets **10**, the median. With 0, unknown streets would look perfectly smooth and attract every route.
-- About 31% of streets are measured. `bump_penalty` default: 10.
+- Matched by OSM way id. Values are 0–100 (`Normalized Roughness`; the ATRAI docs call it `normalized_score`).
+- A street without data but with measured streets close by gets an **estimate** from them (`data/custom/roughness_estimates_heilbronn.json`, see [estimation/README.md](../estimation/README.md)). Responses report it as `estimated_share`; `mean_roughness` stays over the measured part.
+- Any other street gets **10**, the median. With 0, unknown streets would look perfectly smooth and attract every route.
+- Graph edges: 38% measured, 28% estimated, 34% unknown. `bump_penalty` default: 10.
 
 ### `danger_zones_raw_heilbronn`: close overtakes, **summed** per street
 
@@ -47,6 +60,17 @@ cost = length × (1 + bump_penalty × roughness / 100 + pm_penalty × pm_risk + 
 - `stop_penalty` default 0.5. Streets differ little (way values ~0.5-0.85, 5-95%), and the shortest route is rarely the slow one: over 40 random trips of 1.5 km or more, a penalty of 1 changes 72% of routes but adds only 0.4% distance and lowers `mean_stop_go` by 0.02. Expect small detours.
 - **Map overlay:** `/flow` serves the raw segments as `stop_go`.
 
+### `speed_map_heilbronn`: cyclist speed per street, for `prefer_time`
+
+- `avg_speed[km/h]` per segment is the speed bikes were measured at, waits at lights included. Not a penalty but a switch: with `prefer_time=true` each street costs its riding time instead of its length (in metres at the median speed, so `danger_penalty` and lifts keep their meaning). Off by default.
+- Matched by OSM way id and aggregated like traffic_flow: points-weighted mean, pulled towards the median (15.7 km/h) by 5 extra points. Unmeasured streets get the median, so they cost their length. About 41% of graph edges (34% of the length) are measured.
+- **Floor of 5 km/h** (walking pace). Some segments with hundreds of points average ~2 km/h (bikes pushed, or waiting), which would make them cost 3-8× their length. 3.7% of measured edges sit at the floor; edge values span 5.7-22 km/h (5-95%).
+- Both directions of a street get the same speed: the dataset is per segment, not per direction, so uphill and downhill are not told apart.
+- **Overlap with stop_go:** traffic_flow is itself built from normalized speed and standing time, so `prefer_time` and `stop_penalty` partly count the same thing. Time mode already lowers `mean_stop_go` on its own (0.67 → 0.59 on the example trip); keep `stop_penalty` low when using it.
+- **Every route** reports `duration_s` (length / speed per street, plus ~23 s per lift) and `speed_measured_share`; `/route/compare` adds `extra_time_pct` next to `detour_pct`. The comparison's shortest route is always by distance.
+- Over 40 random trips of 1.5 km or more: with only `prefer_time` (penalties 0), 95% of routes change, 5.1% longer on average (max 21%) and 8.7% faster (max 29%). With the default penalties, switching it on changes 90% of routes, 3.4% longer and 12.1% faster than the default route.
+- **Map overlay:** `/speed` serves the raw segments as `speed_kmh` (higher = faster, unlike the other overlays).
+
 ## Which overtaking readings count
 
 Each row in `danger_zones_raw_heilbronn` is one overtake, with the gap between car and bike as the sensor measured it. Route planning and `/danger` only count gaps of **more than 25 cm**:
@@ -69,7 +93,7 @@ Note: This is a judgement from the data; the hardware owners haven't confirmed i
 
 - Each overtaking and PM point is assigned to the nearest street within **25 m** (GPS noise). A point with no street that close is ignored. That is 13% of the overtaking points we use and 16% of the PM points.
 - A two-way street gets the same values in both directions.
-- The start and end you request are moved to the nearest street corner. If that corner is more than 500 m away (for example outside Heilbronn), the API returns an error (HTTP 400).
+- The start and end you request are moved onto the nearest street, which is split there so the route can enter or leave it. If that street is more than 500 m away (for example outside Heilbronn), the API returns an error (HTTP 400).
 
 ## Example
 
@@ -77,9 +101,34 @@ From 49.14838, 9.22687 to 49.1262, 9.22439:
 
 | Penalties (bump / danger / PM / stop) | Length  | Roughness | Overtaking spots | Stop-and-go |
 |---------------------------------------|---------|-----------|------------------|-------------|
-| 0 / 0 / 0 / 0 (shortest)              | 3.15 km | 24        | 10               | 0.66        |
-| 10 / 25 / 0.5 / 0.5 (defaults)        | 3.25 km | 11.8      | 26               | 0.69        |
-| 10 / 100 / 0.5 / 0.5                  | 3.33 km | 12.5      | 7                | 0.69        |
-| 0 / 0 / 0 / 5                         | 3.16 km | 23.6      | 12               | 0.66        |
+| 0 / 0 / 0 / 0 (shortest)              | 3.06 km | 24.7      | 10               | 0.67        |
+| 10 / 25 / 0.5 / 0.5 (defaults)        | 3.09 km | 12.3      | 21               | 0.69        |
+| 10 / 100 / 0.5 / 0.5                  | 3.23 km | 12.4      | 6                | 0.69        |
+| 0 / 0 / 0 / 5                         | 3.07 km | 24.3      | 12               | 0.66        |
+| 0 / 0 / 0 / 0, `prefer_time`          | 3.72 km | 19.6      | 9                | 0.59        |
+| 10 / 25 / 0.5 / 0.5, `prefer_time`    | 4.15 km | 11.3      | 3                | 0.60        |
 
-On this trip the defaults pick the smooth street, which has more overtaking spots than the shortest route, and 25 is too weak to change that. At 100 the route avoids both. The default `stop_penalty` doesn't change any of these routes, and even 5 only swaps a few short pieces.
+On this trip the defaults pick the smooth street, which has more overtaking spots than the shortest route, and 25 is too weak to change that. At 100 the route avoids both. The default `stop_penalty` doesn't change any of these routes, and even 5 only swaps a few short pieces. `prefer_time` takes faster streets: 822 s instead of 940 s for the shortest route (−13%), 21% further. With the default penalties it rides 918 s over 4.15 km: the time-scaled penalties now find a detour around nearly all overtaking spots that pays off.
+
+## Grade (display only, not in the route cost)
+
+`/route/grade` takes the same parameters as `/route` and returns **the same path**, split into pieces coloured by how steep they are, so a map can show where the climbs are. Grade never enters `edge_cost`: the route is chosen exactly as before (`tests/test_heilbronn.py` checks that the pieces join up to the `/route` line).
+
+Why not route on it: Heilbronn is mostly flat in the valley, and the hills (Wartberg, east and south) have no flat way around. An uphill penalty of 10 m per metre climbed cut the total climb by only 9%, and valley trips climb about 13 m anyway. So grade is shown, not avoided.
+
+- **Grade of an edge** = height gain in the travel direction / edge length, from the heights of its two end nodes. A two-way street is two edges, so it is uphill one way and downhill the other. Where the start or end splits a street (see [Snapping](#snapping-points-to-streets)), that point gets the height on the straight line between the street's two ends. Consecutive edges with the same class and direction (up/down) are merged into one piece; a piece's `grade_pct` is its total rise / length.
+- **Classes** on the absolute grade: flat < 2%, gentle 2–4%, noticeable 4–6%, steep 6–10%, very_steep ≥ 10% (a bound belongs to the steeper class). Each piece carries a suggested `color`.
+- **Totals** in `summary`: `climb_m`, `descent_m`, start and end height, the steepest uphill (`max_grade_pct`) and downhill piece, and metres per class.
+- **Whole network** (by length, both directions): 57% flat, 21% gentle, 11% noticeable, 9% steep, 3% very steep. Heights range from 150 to 372 m. Example trip: 3.09 km, climbs 25 m (162.7 → 180.8 m), steepest 4.1% (a 10 m piece).
+
+### Heights: `data/custom/elevation_heilbronn.json`
+
+- One height per graph node (17,546), in metres above sea level (NHN, DHHN2016), from the **LGL DGM1** terrain model: 1 m × 1 m cells, ±15 cm. Each node gets the height of the cell it lies in.
+- Built by `python -X utf8 -m routing.elevation --download`: downloads the 43 DGM1 tiles (2 km × 2 km, ~520 MB) the graph touches into `cache/dgm1/` (git-ignored, ~3.5 min), then reads only the 1 km files with nodes (~10 s). The API reads only the 340 kB JSON. Without it, `/route/grade` answers 503.
+- **Bridges and tunnels:** the DGM is bare ground, so a node on a bridge gets the river or railway below it and a node in a tunnel the hill above it. 88 nodes touch only bridge/tunnel edges (519 such edges). 68 of them are interpolated along their structure between the two nearest ends, weighted by distance (a straight line between the abutments of a simple bridge); they moved by up to 10.8 m. The other 20 are on 10 short bridge pieces cut off from the routable network, which keep the terrain height. Example: Kaiserstraße over the Neckar, eastbound. With terrain heights its three bridge edges read −11.3%, −1.9% and +8.8% (the two middle nodes sat about 4 m below the deck); now all three are −0.4%.
+
+Limits:
+- Only nodes have heights. A long edge over a hump shows its average grade; half of the edges are under 35 m, but 10% are over 158 m.
+- Where a street is on a ramp or wall that OSM doesn't tag as a bridge, its nodes get the ground beside or below it. 9 of the 194 routable bridges/tunnels have an approach edge steeper than 15% within 50 m of their ends. Worst: a 7 m piece of Wilhelm-Leuschner-Straße next to the Neckartalstraße bridges at 54%.
+- A node a few metres off the real street, next to an embankment or retaining wall, can make a short piece look steep. Treat very short red pieces with suspicion.
+- **Data:** LGL Baden-Württemberg, Digitales Geländemodell DGM1, https://opengeodata.lgl-bw.de. Licence Datenlizenz Deutschland – Namensnennung – 2.0: the portal states it for every dataset not marked otherwise (DGM1 isn't), and every DGM1 zip ships `GOVDATA-Datenlizenz_Deutschland.pdf`. Required credit: "Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0".

@@ -4,7 +4,7 @@
     python -X utf8 -m routing.shadow                 # compute from the tiles already there -> data/custom/shadow_heilbronn.json
     python -X utf8 -m routing.shadow --date 2026-10-28 --hours 10 13 16
 
-For every street of data/ready-made/road_network_heilbronn.geojson that lies inside the
+For every street of routing.shade.road_features() that lies inside the
 downloaded LoD2 tiles, sample a point every STEP_M metres (on the centre line and
 LANE_OFFSETS_M to both sides) and look from it towards the sun:
 
@@ -35,7 +35,7 @@ from pathlib import Path
 
 import requests
 
-from routing.shade import DATA_DIR, ROADS, load_trees, osm_way_ids, to_xy, utm32_to_lonlat
+from routing.shade import DATA_DIR, load_trees, osm_way_ids, road_features, to_xy, utm32_to_lonlat
 
 OUT = DATA_DIR / "custom" / "shadow_heilbronn.json"
 LOD2_DIR = DATA_DIR.parent / "cache" / "lod2"  # cache/ is git-ignored
@@ -431,7 +431,7 @@ def main(argv=None):
     ap.add_argument("--out", type=Path, default=OUT)
     args = ap.parse_args(argv)
 
-    roads = json.loads(ROADS.read_text(encoding="utf-8"))["features"]
+    roads = road_features()
 
     def found():
         return sorted(LOD2_DIR.glob("LoD2_*.zip")) + sorted(DATA_DIR.glob("LoD2_*.zip"))

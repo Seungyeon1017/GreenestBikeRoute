@@ -1,13 +1,17 @@
-"""End-to-end on the real Heilbronn graph. Skipped until cache/heilbronn_bike.graphml exists
+"""End-to-end on the real Heilbronn graph. Skipped until cache/heilbronn_bike_rideable.graphml exists
 (start the API once, or run `python -c "from routing.graph import load_graph; load_graph()"`)."""
 import json
 
+import networkx as nx
 import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
-from backend.schemas import EXAMPLE_TRIP, RouteComparison
+from backend.schemas import EXAMPLE_TRIP, GradeCollection, RouteComparison
+from routing.costs import osm_way_ids
+from routing.elevation import OUT as ELEVATION_PATH
 from routing.graph import GRAPH_PATH, load_graph
+from tests.conftest import joined
 
 pytestmark = pytest.mark.skipif(not GRAPH_PATH.exists(), reason="Heilbronn graph not cached yet")
 
@@ -56,6 +60,19 @@ def test_hating_stop_and_go_gives_a_more_free_flowing_route(client):
     assert smooth["length_m"] < shortest["length_m"] * 1.05
 
 
+def test_prefer_time_gives_a_faster_route(client):
+    zero = {"bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0}
+    c = client.get("/route/compare", params={**TRIP, **zero, "prefer_time": "true"}).json()
+    assert c["route"]["properties"]["duration_s"] < c["shortest"]["properties"]["duration_s"] * 0.95
+    assert c["extra_time_pct"] < -5 < 0 < c["detour_pct"]
+
+
+def test_speed_overlay_gives_measured_streets(client):
+    features = client.get("/speed").json()["features"]
+    assert len(features) > 7000
+    assert all(f["geometry"]["type"] == "LineString" and f["properties"]["speed_kmh"] >= 0 for f in features)
+
+
 def test_route_starts_and_ends_near_the_requested_points(client):
     coords = client.get("/route", params=TRIP).json()["features"][0]["geometry"]["coordinates"]
     assert len(coords) > 10
@@ -77,3 +94,99 @@ def test_docs_example_is_a_real_response(client):
         coords = real[key]["geometry"]["coordinates"]
         assert example[key]["geometry"]["coordinates"] == [coords[0], coords[len(coords) // 2], coords[-1]]
     assert (real["detour_pct"], real["same_path"]) == (example["detour_pct"], example["same_path"])
+
+
+def test_roads_with_a_mandatory_bike_path_are_left_out(client):
+    """The Europaplatz roundabout and B 39 Mannheimer Straße are tagged bicycle=use_sidepath in OSM."""
+    europaplatz_and_b39 = {142234373, 387411678, 387411679, 142234381, 148821228, 165419181}
+    G = client.app.state.graph
+    assert not any(europaplatz_and_b39 & set(osm_way_ids(d["osmid"])) for *_, d in G.edges(data=True))
+
+
+def test_bike_paths_and_bridges_are_in_the_graph(client):
+    """Rosenbergbrücke cycleway, Campusbrücke, a campus footway with bicycle=yes, the BUGA-Brücke and a signalised crossing tagged bicycle=no."""
+    G = client.app.state.graph
+    in_graph = {w for *_, d in G.edges(data=True) for w in osm_way_ids(d["osmid"])}
+    assert {33498928, 443802903, 739824168, 795115713, 1413078438} <= in_graph
+
+
+def test_route_from_bahnhofstrasse_crosses_at_the_start_to_reach_the_buga_bruecke(client):
+    """Crossing 1413078438 and path 694954948 lead to the BUGA-Brücke, so the route needs no detour via Olgastraße."""
+    r = client.get("/route", params={"from_lat": 49.142288810975934, "from_lon": 9.207969903945925,
+                                     "to_lat": 49.1475, "to_lon": 9.2105}).json()
+    assert r["features"][0]["properties"]["length_m"] < 1000
+
+
+def test_route_can_end_on_a_one_way_street(client):
+    """The snapped end point splits only the direction a one-way street has."""
+    G = client.app.state.graph
+    main = max(nx.strongly_connected_components(G), key=len)
+    u, v, d = next((u, v, d) for u, v, d in G.edges(data=True) if u in main and v in main
+                   and d.get("oneway") in (True, "True") and not G.has_edge(v, u) and "geometry" in d)
+    lon, lat = d["geometry"].interpolate(0.5, normalized=True).coords[0]
+    n_edges = G.number_of_edges()
+    r = client.get("/route", params={"from_lat": 49.14838, "from_lon": 9.22687, "to_lat": lat, "to_lon": lon})
+    assert r.status_code == 200
+    assert G.number_of_edges() == n_edges
+
+
+def test_hand_picked_footways_are_in_the_graph(client):
+    """Footways without a bicycle tag that routing/rideable_ways.py lists, e.g. the Allee footway."""
+    from routing.rideable_ways import RIDEABLE_WAYS
+    G = client.app.state.graph
+    in_graph = {w for *_, d in G.edges(data=True) for w in osm_way_ids(d["osmid"])}
+    assert set(RIDEABLE_WAYS) <= in_graph
+
+
+def test_route_from_next_to_a_cut_off_service_road_snaps_to_the_main_network(client):
+    """Way 130334034 is an island (its only link, path 33921308, is not rideable): the start snaps past it."""
+    r = client.get("/route", params={"from_lat": 49.13584495682357, "from_lon": 9.204933623254533,
+                                     "to_lat": 49.14384658453482, "to_lon": 9.220619201660158})
+    assert r.status_code == 200
+
+
+def test_route_can_end_next_to_a_way_with_parallel_edges(client):
+    """Way 32927311 has a 2 m stub parallel to its long edge; splitting the stub at the point made a 500."""
+    r = client.get("/route/compare", params={"from_lat": 49.13980383591573, "from_lon": 9.208045005798342,
+                                             "to_lat": 49.13531584034481, "to_lon": 9.202290567660226})
+    assert r.status_code == 200
+
+
+needs_elevation = pytest.mark.skipif(not ELEVATION_PATH.exists(), reason="no elevation file: run python -m routing.elevation")
+ZERO = {"bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0}
+
+
+@needs_elevation
+@pytest.mark.parametrize("trip, penalties", [
+    (TRIP, {}), (TRIP, ZERO), (TRIP, {"danger_penalty": 100}),
+    ({"from_lat": 49.16, "from_lon": 9.215, "to_lat": 49.135, "to_lon": 9.235}, {"stop_penalty": 5}),
+    ({"from_lat": 49.1415, "from_lon": 9.205, "to_lat": 49.1405, "to_lon": 9.231}, {}),  # across the Neckar
+])
+def test_grade_route_is_exactly_the_route(client, trip, penalties):
+    route = client.get("/route", params={**trip, **penalties}).json()["features"][0]
+    grade = client.get("/route/grade", params={**trip, **penalties}).json()
+    assert joined(grade["features"]) == route["geometry"]["coordinates"]
+    assert grade["summary"]["length_m"] == route["properties"]["length_m"]
+
+
+@needs_elevation
+def test_grade_docs_example_is_a_real_response(client):
+    """The /route/grade example in /docs is what the example trip returns (its first pieces and the summary)."""
+    example = GradeCollection.model_config["json_schema_extra"]["example"]
+    real = client.get("/route/grade", params=TRIP).json()
+    assert real["summary"] == example["summary"]
+    assert real["features"][:len(example["features"])] == example["features"]
+
+
+@needs_elevation
+def test_neckar_bridge_has_no_grade_spike(client):
+    """Kaiserstraße crosses the Neckar on three bridge edges. The terrain model under the two middle nodes is
+    about 4 m below the deck, which made a fake -11.3 %, -1.9 %, +8.8 % on the way east."""
+    G = client.app.state.graph
+    west, middle, east = G.nodes[392616596], G.nodes[393412335], G.nodes[817445456]
+    assert min(west["elevation"], east["elevation"]) <= middle["elevation"] <= max(west["elevation"], east["elevation"])
+    trip = {"from_lat": 49.1422, "from_lon": 9.2120, "to_lat": 49.1426, "to_lon": 9.2190}
+    grade = client.get("/route/grade", params=trip).json()
+    assert [middle["x"], middle["y"]] in joined(grade["features"])  # the route does cross the bridge
+    assert grade["summary"]["max_grade_pct"] < 4 and grade["summary"]["max_descent_grade_pct"] > -4
+    assert all(f["properties"]["severity"] in ("flat", "gentle") for f in grade["features"])

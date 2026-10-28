@@ -91,3 +91,18 @@ def test_edge_shadow_and_slots():
     assert edge_shadow(3, ways, 0, default=None) is None
     slots = ["2026-07-21T09:00+02:00", "2026-07-21T12:00+02:00", "2026-07-21T15:00+02:00", "2026-07-21T18:00+02:00"]
     assert slot_index(slots, 13) == 1 and slot_index(slots, 20) == 3
+
+
+def test_road_features_adds_graph_edges_missing_from_atrai_roads():
+    import networkx as nx
+    from routing.shade import osm_way_ids, road_features
+    atrai = road_features(nx.MultiDiGraph())
+    known = osm_way_ids(atrai[0]["properties"]["osmid"])[0]
+    G = nx.MultiDiGraph()
+    G.add_node(1, x=9.21, y=49.14)
+    G.add_node(2, x=9.22, y=49.14)
+    G.add_edge(1, 2, osmid=-7)  # new way, both directions
+    G.add_edge(2, 1, osmid=-7)
+    G.add_edge(1, 2, osmid=[known, -8])  # parallel edge, partly known: only the new way is added
+    added = road_features(G)[len(atrai):]
+    assert [f["properties"]["osmid"] for f in added] == ["-7", "-8"]
