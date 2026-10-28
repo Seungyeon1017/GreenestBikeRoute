@@ -1,10 +1,12 @@
 import json
+import sqlite3
+from datetime import datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
-from backend.reports import CLOSED_AT, WINDOW_S, ReportError, Reports
+from backend.reports import CLOSED_AT, DEFAULT_S, GRACE_S, LOCAL_TZ, MAX_S, OPEN_AT, ReportError, Reports
 from backend.schemas import ClosureCollection, ClosureFeature, MappingCollection, MappingFeature
 from routing.rideable_ways import load_rideable_ways
 from routing.route import RouteError, find_route, set_closures
@@ -29,8 +31,12 @@ def reports(clock):
     return Reports(":memory:", clock=clock)
 
 
-def report(reports, reporter, ip, u=A, v=B):
-    return reports.report_closure(u, v, [11], (9.21, 49.14), reporter, ip)
+def report(reports, reporter, ip, u=A, v=B, **kwargs):
+    return reports.report_closure(u, v, [11], (9.21, 49.14), reporter, ip, **kwargs)
+
+
+def today(clock):
+    return datetime.fromtimestamp(clock.t, LOCAL_TZ).date()
 
 
 def test_one_report_marks_a_street_reported(reports):
@@ -59,13 +65,84 @@ def test_both_directions_are_one_segment(reports):
     assert reports.closure_states()[(A, B)]["reports"] == 2
 
 
-def test_reports_expire(reports, clock):
+def test_a_lapsed_closure_is_unconfirmed_for_a_while_then_gone(reports, clock):
     for i in range(CLOSED_AT):
         report(reports, f"r{i}", f"1.1.1.{i}")
-    clock.t += WINDOW_S - 1
+    clock.t += DEFAULT_S - 1
     assert reports.closures() == {(A, B): "closed"}
     clock.t += 2
+    assert reports.closures() == {(A, B): "unconfirmed"}  # routes still avoid it; the app asks riders
+    assert reports.closure_states()[(A, B)]["reports"] == 0
+    clock.t += GRACE_S
     assert reports.closures() == {}
+
+
+def test_a_report_lasts_until_the_day_on_the_sign(reports, clock):
+    state = report(reports, "r1", "1.1.1.1", until=today(clock) + timedelta(days=14))
+    clock.t += 14 * 24 * 3600
+    assert reports.closures() == {(A, B): "reported"}
+    assert state["expires"] == reports.closure_states()[(A, B)]["expires"]
+    clock.t += 24 * 3600
+    assert reports.closures() == {(A, B): "unconfirmed"}
+
+
+def test_an_end_date_counts_at_most_30_days(reports, clock):
+    report(reports, "r1", "1.1.1.1", until=today(clock) + timedelta(days=365))
+    clock.t += MAX_S + 1
+    assert reports.closures() == {(A, B): "unconfirmed"}
+
+
+def test_an_end_date_in_the_past_is_refused(reports, clock):
+    with pytest.raises(ReportError):
+        report(reports, "r1", "1.1.1.1", until=today(clock) - timedelta(days=1))
+
+
+def test_still_closed_keeps_a_closure_alive(reports, clock):
+    report(reports, "r1", "1.1.1.1")
+    clock.t += DEFAULT_S - 60
+    report(reports, "r2", "1.1.1.2")  # "still closed"
+    clock.t += DEFAULT_S - 60
+    assert reports.closures() == {(A, B): "reported"}
+
+
+def test_riders_saying_open_again_lift_a_closure(reports):
+    for i in range(CLOSED_AT):
+        report(reports, f"r{i}", f"1.1.1.{i}")
+    state = report(reports, "o1", "2.2.2.1", still_closed=False)
+    assert (state["status"], state["open_reports"]) == ("closed", 1)
+    state = report(reports, "o2", "2.2.2.2", still_closed=False)
+    assert state["status"] == "open"
+    assert reports.closures() == {}
+    assert report(reports, "r9", "1.1.1.9")["reports"] == 1  # a new closure starts from scratch
+
+
+def test_still_closed_voids_earlier_open_answers(reports):
+    report(reports, "r1", "1.1.1.1")
+    report(reports, "o1", "2.2.2.1", still_closed=False)
+    report(reports, "r2", "1.1.1.2")
+    state = report(reports, "o2", "2.2.2.2", still_closed=False)
+    assert (state["status"], state["open_reports"]) == ("reported", 1)
+
+
+def test_one_rider_cannot_lift_a_closure_alone(reports):
+    report(reports, "r1", "1.1.1.1")
+    for i in range(OPEN_AT):
+        state = report(reports, f"o{i}", "2.2.2.2", still_closed=False)
+    assert state["status"] == "reported"
+
+
+def test_report_files_from_before_end_dates_still_open(tmp_path, clock):
+    path = tmp_path / "reports.sqlite3"
+    db = sqlite3.connect(path)
+    db.execute("CREATE TABLE closure_reports (id INTEGER PRIMARY KEY, created REAL NOT NULL, u INTEGER NOT NULL, "
+               "v INTEGER NOT NULL, osm_way_ids TEXT NOT NULL, lon REAL NOT NULL, lat REAL NOT NULL, "
+               "reporter TEXT NOT NULL, client TEXT NOT NULL, note TEXT)")
+    db.execute("INSERT INTO closure_reports VALUES (1, ?, 1, 2, '[11]', 9.21, 49.14, 'r1', 'c1', 'Baustelle')", (clock.t,))
+    db.commit()
+    db.close()
+    reports = Reports(path, clock=clock)
+    assert reports.closure_states()[(1, 2)]["note"] == "Baustelle"
+    report(reports, "r2", "1.1.1.2", until=today(clock) + timedelta(days=3))
 
 
 def test_a_reported_street_is_avoided_if_the_detour_is_short(toy_graph):
@@ -119,6 +196,29 @@ def test_report_a_closure(client):
 
 def test_a_closure_far_from_every_street_is_refused(client):
     assert client.post("/reports/closures", json={"lat": 49.15, "lon": 9.25}).status_code == 400
+
+
+def test_report_a_closure_until_a_date(client, clock):
+    until = (today(clock) + timedelta(days=5)).isoformat()
+    r = client.post("/reports/closures", json={"lat": 49.14045, "lon": 9.2101, "until": until})
+    assert r.status_code == 201
+    assert r.json()["properties"]["expires"][:10] == until
+    past = (today(clock) - timedelta(days=1)).isoformat()
+    assert client.post("/reports/closures", json={"lat": 49.14045, "lon": 9.2101, "until": past}).status_code == 400
+
+
+def test_answer_still_closed_or_open(client, reports):
+    report(reports, "r1", "1.1.1.1")
+    r = client.post(f"/reports/closures/{A}-{B}/confirm", json={"still_closed": True, "reporter_id": "r2"})
+    assert r.status_code == 200
+    assert ClosureFeature.model_validate(r.json()).properties.reports == 2
+    r = client.post(f"/reports/closures/{A}-{B}/confirm", json={"still_closed": False, "reporter_id": "r3"})
+    assert r.json()["properties"]["open_reports"] == 1
+
+
+def test_answering_on_a_street_without_a_closure_is_404(client):
+    assert client.post(f"/reports/closures/{A}-{C}/confirm", json={"still_closed": True}).status_code == 404
+    assert client.post("/reports/closures/nonsense/confirm", json={"still_closed": True}).status_code == 404
 
 
 def test_routes_use_the_reports(client, reports):

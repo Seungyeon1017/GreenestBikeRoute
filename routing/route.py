@@ -400,8 +400,9 @@ def nearest_street(G, lat, lon):
 
 
 def set_closures(G, closures):
-    """Set edge attribute `closure` ("reported" or "closed") on the streets in `closures`, {(u, v): status}, in both
-    directions, and remove it from every other street. Streets no longer in G are skipped."""
+    """Set edge attribute `closure` ("closed", or "reported" / "unconfirmed", which only cost more) on the streets in
+    `closures`, {(u, v): status}, in both directions, and remove it from every other street. Streets no longer in G
+    are skipped."""
     closures = dict(closures)
     with _GRAPH_LOCK:
         if G.graph.get("closures") == closures:

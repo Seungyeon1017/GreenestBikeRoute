@@ -1,4 +1,5 @@
-"""GeoJSON response shapes, so /docs shows what the endpoints return. Only used for the OpenAPI schema."""
+"""GeoJSON response shapes, so /docs shows what the endpoints return, and the request bodies of the reports."""
+from datetime import date
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
@@ -117,8 +118,9 @@ class RouteProperties(BaseModel):
     lit_known_share: float = Field(description="Share of the route length with lighting data, 0-1")
     lifts: int = Field(description="Lifts (elevators) the route rides through, e.g. onto the Campusbrücke; each one costs stop_penalty x 100 m")
     reported_closures: int = Field(description=(
-        "Streets on the route that users reported closed but too few to close them (see `/reports/closures`); the "
-        "route still rides them, as there was no sensible way round. Worth a warning"))
+        "Streets on the route that riders reported closed, by too few to close them or without a recent report "
+        "(status reported or unconfirmed in `/reports/closures`); the route still rides them, as there was no sensible "
+        "way round. Worth a warning"))
 
 
 class RouteFeature(BaseModel):
@@ -419,20 +421,39 @@ class ClosureReport(BaseModel):
     reporter_id: Optional[str] = Field(None, max_length=64, description=(
         "An anonymous random id the app keeps per device, so one rider's repeated reports count once"))
     note: Optional[str] = Field(None, max_length=500, description="What is closed, e.g. \"Baustelle, bis Freitag\"")
+    until: Optional[date] = Field(None, description=(
+        "The last day it is closed, if known (e.g. from the sign); the report then counts through that day "
+        "(Heilbronn time), at most 30 days. Without it, the report counts for 24 h"))
 
     model_config = {"json_schema_extra": {"example": {"lat": 49.14232, "lon": 9.21885, "reporter_id": "3f9c2a71",
-                                                      "note": "Baustelle, Durchfahrt gesperrt"}}}
+                                                      "note": "Baustelle, Durchfahrt gesperrt", "until": "2026-11-15"}}}
+
+
+class ClosureAnswer(BaseModel):
+    """A rider's one-tap answer on a known closure: still closed, or open again."""
+    still_closed: bool = Field(description=(
+        "true: still closed (counts as a new report, for 24 h); false: open again (2 independent answers lift it)"))
+    reporter_id: Optional[str] = Field(None, max_length=64, description="An anonymous random id the app keeps per device")
+
+    model_config = {"json_schema_extra": {"example": {"still_closed": True, "reporter_id": "3f9c2a71"}}}
 
 
 class ClosureProperties(BaseModel):
     segment: str = Field(description="The street segment (between two junctions) as \"u-v\", its OSM node ids")
     osm_way_ids: list[int] = Field(description="The OpenStreetMap ways the segment is part of")
-    status: Literal["reported", "closed"] = Field(description=(
-        "closed: 3 or more independent reports within 2 h, routes don't use it; reported: fewer, routes avoid it "
-        "if the detour is at most 4x its length"))
-    reports: int = Field(description="Independent reports within the last 2 h (different riders on different networks)")
-    last_report: str = Field(description="When the latest report came in (ISO 8601, UTC)")
-    expires: str = Field(description="When the latest report drops out, unless someone reports it again (ISO 8601, UTC)")
+    status: Literal["closed", "reported", "unconfirmed", "open"] = Field(description=(
+        "closed: 3 or more live independent reports, routes don't use it. reported: fewer, routes avoid it if the "
+        "detour is at most 4x its length. unconfirmed: all reports have lapsed, less than 3 days ago; routes still "
+        "avoid it, and the app should ask riders nearby whether it is still closed. open: only in the answer to "
+        "`/confirm` or a report, when riders' answers just lifted it"))
+    reports: int = Field(description=(
+        "Live independent reports (different riders on different networks). A report counts through its `until` "
+        "day, else 24 h; \"still closed\" answers count as reports"))
+    open_reports: int = Field(description="Independent riders who said it is open again since the last report; 2 lift it")
+    note: Optional[str] = Field(description="The latest reporter's note, e.g. \"Baustelle bis Freitag\"")
+    last_report: str = Field(description="When the latest report or answer came in (ISO 8601, UTC)")
+    expires: str = Field(description=(
+        "When the last report lapses (ISO 8601, UTC); then it is unconfirmed for 3 days unless riders confirm it"))
 
 
 class ClosureFeature(BaseModel):
@@ -442,12 +463,13 @@ class ClosureFeature(BaseModel):
 
 
 CLOSURE_EXAMPLE = {"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {
-    "segment": "268245781-268245790", "osm_way_ids": [24710470], "status": "reported", "reports": 1,
-    "last_report": "2026-10-28T15:10:00+00:00", "expires": "2026-10-28T17:10:00+00:00"}}
+    "segment": "268245781-268245790", "osm_way_ids": [24710470], "status": "reported", "reports": 1, "open_reports": 0,
+    "note": "Baustelle, Durchfahrt gesperrt", "last_report": "2026-10-28T15:10:00+00:00",
+    "expires": "2026-11-15T23:00:00+00:00"}}
 
 
 class ClosureCollection(BaseModel):
-    """Street segments riders reported closed within the last 2 hours. Reports expire by themselves."""
+    """Street segments riders say are closed: reported, closed, or unconfirmed (lapsed, waiting for an answer)."""
     type: Literal["FeatureCollection"]
     features: list[ClosureFeature]
 

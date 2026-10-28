@@ -9,8 +9,8 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.reports import SNAP_M, Reports
-from backend.schemas import EXAMPLE_TRIP, AirCollection, BikeFriendlyCollection, ClosureCollection, ClosureFeature, ClosureReport, \
+from backend.reports import SNAP_M, ReportError, Reports
+from backend.schemas import EXAMPLE_TRIP, AirCollection, BikeFriendlyCollection, ClosureAnswer, ClosureCollection, ClosureFeature, ClosureReport, \
     DangerCollection, Error, FlowCollection, GradeCollection, LightingCollection, MappingCollection, MappingFeature, \
     MappingReport, RouteCollection, RouteComparison, RoughnessCollection, ScoreCollection, ShadeCollection, \
     SpeedCollection, VehicleCollection, ZoneCollection
@@ -159,10 +159,13 @@ grade doesn't change which route is picked).
   value is 0-1 (roughness 0-100), and higher is always worse. `/speed` gives km/h, where higher is faster.
   `/shade` (share in shade per time slot) and `/lighting` (chance a street is lit at night) are 0-1 where higher
   is better. `/bike-friendly-streets` shows the bike paths, bike lanes and bike routes `prefer_bike_friendly` favours.
-- **Closures:** riders report closed streets with `POST /reports/closures`. Three independent reports within 2 hours
-  close the street segment for every route; with fewer, routes avoid it if the detour is at most 4x its length, and
-  `reported_closures` counts the ones a route still rides. Reports expire after 2 hours. `GET /reports/closures`
-  shows them on a map.
+- **Closures:** riders report closed streets with `POST /reports/closures`, optionally with `until` (the last day,
+  e.g. from the sign; else the report counts for 24 h, at most 30 days). Three live independent reports close the
+  street segment for every route; with fewer, routes avoid it if the detour is at most 4x its length, and
+  `reported_closures` counts the ones a route still rides. Since nobody reports a closure they already see, riders
+  answer with one tap instead: `POST /reports/closures/{segment}/confirm` (still closed, or open again: two such
+  answers lift it). When all reports lapse it stays `unconfirmed` for 3 days (routes still avoid it): ask riders
+  whose trip starts or ends near it. `GET /reports/closures` shows them on a map.
 - **Mapping mistakes:** `POST /reports/mapping` with `kind=rideable` reports a footway bikes ride on that routing
   leaves out (OSM lacks bicycle=yes). A maintainer checks it (`python -m backend.reports`); approved ways are routed
   from the next server start.
@@ -405,20 +408,42 @@ def create_app(graph=None, sharing=None, reports=None):
 
     @app.post("/reports/closures", tags=[REPORTS], summary="Report that a street is closed right now",
               status_code=201, response_model=ClosureFeature,
-              responses={400: {"description": "No street within 50 m of the point", "model": Error}},
+              responses={400: {"description": "No street within 50 m of the point, or `until` is in the past", "model": Error}},
               response_description="The street segment the report went to, with how many reports it has now")
     def report_closure(report: ClosureReport, request: Request):
         G = app.state.graph
         u, v, d, dist = nearest_street(G, report.lat, report.lon)
         if dist > SNAP_M:
             raise HTTPException(status_code=400, detail=f"no street within {SNAP_M} m: the nearest is {dist:.0f} m away")
-        state = reports.report_closure(u, v, osm_way_ids(d["osmid"]), (report.lon, report.lat), report.reporter_id,
-                                       client(request), report.note)
+        try:
+            state = reports.report_closure(u, v, osm_way_ids(d["osmid"]), (report.lon, report.lat), report.reporter_id,
+                                           client(request), report.note, report.until)
+        except ReportError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         return closure_feature(G, (min(u, v), max(u, v)), state)
+
+    @app.post("/reports/closures/{segment}/confirm", tags=[REPORTS],
+              summary="Answer whether a reported street is still closed (one tap)", response_model=ClosureFeature,
+              responses={404: {"description": "No closure on this segment", "model": Error}},
+              response_description="The segment with the answer counted; status `open` if the answers lifted it")
+    def confirm_closure(segment: str, answer: ClosureAnswer, request: Request):
+        G = app.state.graph
+        try:
+            key = tuple(map(int, segment.split("-")))
+        except ValueError:
+            key = None
+        state = reports.closure_states().get(key)
+        feature = state and closure_feature(G, key, state)
+        if not feature:
+            raise HTTPException(status_code=404, detail=f"no closure on segment {segment}")
+        coords = feature["geometry"]["coordinates"]
+        state = reports.report_closure(*key, state["osm_way_ids"], coords[len(coords) // 2], answer.reporter_id,
+                                       client(request), still_closed=answer.still_closed)
+        return closure_feature(G, key, state)
 
     @app.get("/reports/closures", tags=[REPORTS], summary="Streets riders reported closed, as GeoJSON for a map overlay",
              response_class=GeoJSONResponse, response_model=ClosureCollection,
-             response_description="LineStrings with `status` (closed / reported) and how many reports")
+             response_description="LineStrings with `status` (closed / reported / unconfirmed) and how many reports")
     def closures():
         features = [closure_feature(app.state.graph, segment, state) for segment, state in reports.closure_states().items()]
         return GeoJSONResponse({"type": "FeatureCollection", "features": [f for f in features if f]})
