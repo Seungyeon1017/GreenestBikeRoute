@@ -5,10 +5,15 @@ Outputs:
 """
 import ast
 import json
+import sys
+from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 DATA = ROOT / "data"
+
+from routing.costs import way_means
 
 HIGHWAY_TO_SURFACE = {
     "motorway": "asphalt", "motorway_link": "asphalt",
@@ -34,6 +39,16 @@ def parse_ways(osmid_val):
         return [int(x) for x in ast.literal_eval(s)] if s.startswith("[") else [int(s)]
     except Exception:
         return []
+
+def value_and_source(idx, ways, by_idx, measured_by_way, estimated_by_way, default):
+    """Same priority as routing/graph.py: measured segment or OSM way, then the estimate, then the default."""
+    if idx in by_idx:
+        return float(by_idx[idx]), "measured"
+    for source, by_way in (("measured", measured_by_way), ("estimated", estimated_by_way)):
+        vals = [by_way[w] for w in ways if w in by_way]
+        if vals:
+            return sum(vals) / len(vals), source
+    return default, "unknown"
 
 def export_enriched():
     print("Loading datasets...")
@@ -73,8 +88,11 @@ def export_enriched():
         if t["properties"].get("avg_traffic_flow") is not None
     }
 
+    rough_by_way = way_means(bumpy["features"], "Normalized Roughness")
+    tf_by_way = way_means(tf["features"], "avg_traffic_flow")
+
     features = roads["features"]
-    counts = {"r_meas": 0, "r_est": 0, "t_meas": 0, "t_est": 0}
+    r_counts, t_counts = Counter(), Counter()
 
     for idx, feat in enumerate(features):
         p = feat["properties"]
@@ -93,33 +111,16 @@ def export_enriched():
         if not surf or str(surf).strip().lower() in ("none", "unknown"):
             surf = HIGHWAY_TO_SURFACE.get(hw, "unknown")
 
-        # Roughness
-        if idx in bumpy_by_idx:
-            r_val = round(float(bumpy_by_idx[idx]), 2)
-            r_src = "measured"
-            counts["r_meas"] += 1
-        else:
-            est_vals = [ml_rough[w] for w in ways if w in ml_rough]
-            r_val = round(sum(est_vals) / len(est_vals), 2) if est_vals else 10.0
-            r_src = "estimated"
-            counts["r_est"] += 1
-
-        # Traffic flow
-        if idx in tf_by_idx:
-            t_val = round(float(tf_by_idx[idx]), 3)
-            t_src = "measured"
-            counts["t_meas"] += 1
-        else:
-            est_tf = [ml_tf[w] for w in ways if w in ml_tf]
-            t_val = round(sum(est_tf) / len(est_tf), 3) if est_tf else 0.374
-            t_src = "estimated"
-            counts["t_est"] += 1
+        r_val, r_src = value_and_source(idx, ways, bumpy_by_idx, rough_by_way, ml_rough, 10.0)
+        t_val, t_src = value_and_source(idx, ways, tf_by_idx, tf_by_way, ml_tf, 0.374)
+        r_counts[r_src] += 1
+        t_counts[t_src] += 1
 
         p["highway"] = hw
         p["surface"] = surf
-        p["roughness"] = r_val
+        p["roughness"] = round(r_val, 2)
         p["roughness_source"] = r_src
-        p["traffic_flow"] = t_val
+        p["traffic_flow"] = round(t_val, 3)
         p["traffic_source"] = t_src
 
     out_file = DATA / "road_network_enriched_heilbronn.geojson"
@@ -128,8 +129,8 @@ def export_enriched():
         json.dump(roads, f)
 
     print("Export Complete!")
-    print(f"Roughness:    {counts['r_meas']} measured, {counts['r_est']} estimated")
-    print(f"Traffic Flow: {counts['t_meas']} measured, {counts['t_est']} estimated")
+    print(f"Roughness:    {dict(r_counts)}")
+    print(f"Traffic Flow: {dict(t_counts)}")
 
 if __name__ == "__main__":
     export_enriched()

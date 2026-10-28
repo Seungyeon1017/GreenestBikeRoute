@@ -4,7 +4,7 @@
     "cv_folds": 5
   },
   "roughness": {
-    "method": "random_forest",
+    "method": "neighbours",
     "default_value": 10.0,
     "cv_unseen_streets": {
       "n": 9599,
@@ -12,9 +12,10 @@
         "mae": 6.1309,
         "r2": -0.1545
       },
-      "random_forest": {
-        "mae": 5.9093,
-        "r2": 0.1476
+      "neighbours": {
+        "mae": 5.6362,
+        "r2": 0.1524,
+        "spearman": 0.3764
       }
     },
     "cv_unseen_1km_areas": {
@@ -23,15 +24,34 @@
         "mae": 6.1515,
         "r2": -0.1512
       },
-      "random_forest": {
-        "mae": 6.7284,
-        "r2": -0.059
+      "neighbours": {
+        "mae": 6.1107,
+        "r2": -0.0817,
+        "spearman": 0.0332
+      }
+    },
+    "cv_random_segments": {
+      "n": 9599,
+      "default": {
+        "mae": 6.1309,
+        "r2": -0.1545
+      },
+      "neighbours": {
+        "mae": 4.9722,
+        "r2": 0.3658,
+        "spearman": 0.538
       }
     },
     "coverage": {
       "segments_measured": 9599,
-      "segments_estimated": 24644,
-      "ways_estimated": 7138
+      "segments_estimated": 11748,
+      "segments_unknown": 12896,
+      "ways_estimated": 3466,
+      "segments_estimated_by_weight": {
+        "1.0": 3136,
+        "0.7": 3274,
+        "0.5": 5338
+      }
     }
   },
   "traffic_flow": {
@@ -45,7 +65,8 @@
       },
       "random_forest": {
         "mae": 0.1047,
-        "r2": 0.3149
+        "r2": 0.3149,
+        "spearman": 0.5312
       }
     },
     "cv_unseen_1km_areas": {
@@ -56,12 +77,14 @@
       },
       "random_forest": {
         "mae": 0.1304,
-        "r2": -0.0666
+        "r2": -0.0666,
+        "spearman": 0.2153
       }
     },
     "coverage": {
       "segments_measured": 7153,
       "segments_estimated": 27090,
+      "segments_unknown": 0,
       "ways_estimated": 6784
     }
   }

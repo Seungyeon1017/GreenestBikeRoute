@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 
 from ml.train_imputer import (
-    MIN_NEIGHBOURS, HIGHWAY_TO_SURFACE, line_geometry, measured_values, neighbour_features, segment_table,
-    way_estimates,
+    MIN_NEIGHBOURS, HIGHWAY_TO_SURFACE, line_geometry, measured_values, neighbour_estimates, neighbour_features,
+    segment_table, way_estimates,
 )
 from routing.costs import way_means
 from routing.graph import ML_ROUGHNESS_PATH, ML_TRAFFIC_FLOW_PATH, attach_roughness, attach_traffic_flow, load_ml_roughness
@@ -66,6 +66,21 @@ def test_neighbour_features_skip_same_street_and_far_segments():
     assert 10 < idw < 15
     assert median == 15
     assert 50 < nearest < 60
+
+
+def test_neighbour_estimates_trust_same_street_and_shrink_by_distance():
+    # Four unmeasured segments (0-3), each ~730 m apart, with one measured segment (4-7) north of it:
+    # same street 55 m away, other street 30 m, 110 m and 200 m away.
+    north = [0.0005, 0.00027, 0.001, 0.0018]
+    table = pd.DataFrame({
+        "lat": [LAT] * 4 + [LAT + n for n in north],
+        "lon": [LON + 0.01 * k for k in range(4)] * 2,
+        "street": ["Q0", "Q1", "Q2", "Q3", "Q0", "Other", "Other", "Other"],
+    })
+    values = np.array([np.nan] * 4 + [30.0] * 4)
+    est, weight = neighbour_estimates(table, np.arange(4, 8), np.arange(4), values, fallback=10.0)
+    assert np.allclose(est[:3], [30.0, 24.0, 20.0]) and np.isnan(est[3])
+    assert np.allclose(weight[:3], [1.0, 0.7, 0.5]) and np.isnan(weight[3])
 
 
 def test_way_estimates_average_per_way_and_skip_measured_ways():

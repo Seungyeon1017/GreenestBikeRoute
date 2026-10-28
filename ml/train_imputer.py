@@ -1,22 +1,21 @@
-"""Fill in roughness and traffic flow for unmeasured Heilbronn streets using OSM highway & surface tags.
+"""Fill in roughness and traffic flow for unmeasured Heilbronn streets.
 
     python ml/train_imputer.py
 
-Workflow:
-1. Loads cached OSM tags from `data/osm_tags_cache.json` (fetched from official OSM API).
-2. Uses road hierarchy (`highway`: primary, secondary, residential, track, cycleway, path...)
-   to fill missing `surface` tags (e.g. track -> gravel, primary -> asphalt).
-3. Trains a Random Forest Regressor on measured sensor data (`bumpy_roads_heilbronn` & `traffic_flow_heilbronn`)
-   using physical infrastructure tags (`highway`, `surface`), geometry (`length`, `sinuosity`),
-   spatial position (`c_lat`, `c_lon`, `dist_center`), and spatial neighbours.
-4. Preserves full dynamic range (roughness up to 60+, traffic flow from 0.08 to 0.95)
-   without artificial shrinkage flattening the contrast.
-5. Evaluates with GroupKFold cross-validation on unseen streets and unseen 1 km spatial blocks.
+Roughness: inverse-distance-weighted mean of the measured segments within 250 m. Used as is when the
+same street was measured within 100 m; otherwise pulled towards the city median, the more the further
+away the nearest measurement is, and left unknown beyond 150 m. On held-out streets this beats a
+Random Forest on the same data, and OSM highway/surface tags carry no roughness signal (ml/README.md).
+
+Traffic flow: Random Forest on OSM highway & surface tags (data/osm_tags_cache.json), geometry and
+spatial neighbours.
+
+Both are evaluated with GroupKFold on unseen streets and unseen 1 km blocks.
 
 Outputs:
   data/ml_predicted_roughness.json, data/ml_predicted_traffic_flow.json
   ml/metrics.json
-  ml/<target>_performance.png, ml/<target>_feature_importance.png
+  ml/<target>_performance.png, ml/traffic_flow_feature_importance.png
 """
 import ast
 import json
@@ -29,9 +28,10 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import numpy as np
 import pandas as pd
+from scipy.stats import spearmanr
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, r2_score
-from sklearn.model_selection import GroupKFold
+from sklearn.model_selection import GroupKFold, KFold
 from sklearn.neighbors import BallTree
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -45,9 +45,18 @@ K_NEIGHBOURS = 25
 IDW_OFFSET_M = 25
 CV_FOLDS = 5
 
+# Roughness: weight of the neighbour mean against the city median. The same street measured within
+# SAME_STREET_RADIUS_M gets full weight; otherwise it depends on how far the nearest measurement is,
+# and beyond the last limit the estimate is no better than the median, so the street stays unknown.
+# Tuned on held-out streets and checked on a second half of the streets (ml/README.md).
+SAME_STREET_RADIUS_M = 100
+SHRINK_BY_NEAREST_M = ((50, 0.7), (150, 0.5))
+
 TARGETS = {
-    "roughness": {"source": "bumpy_roads_heilbronn", "index_key": "id", "value_key": "Normalized Roughness"},
-    "traffic_flow": {"source": "traffic_flow_heilbronn", "index_key": "road_segment", "value_key": "avg_traffic_flow"},
+    "roughness": {"source": "bumpy_roads_heilbronn", "index_key": "id", "value_key": "Normalized Roughness",
+                  "method": "neighbours"},
+    "traffic_flow": {"source": "traffic_flow_heilbronn", "index_key": "road_segment", "value_key": "avg_traffic_flow",
+                     "method": "random_forest"},
 }
 
 HIGHWAY_TO_SURFACE = {
@@ -225,6 +234,33 @@ def add_neighbour_features(table, src_idx, query_idx, values):
     return X
 
 
+def neighbour_estimates(table, src_idx, query_idx, values, fallback):
+    """Estimate per query segment from the measured `src_idx` segments, NaN where none is close enough.
+
+    Also returns the weight given to the neighbour mean (1.0 same street, else from SHRINK_BY_NEAREST_M).
+    """
+    lat, lon, street = table.lat.values, table.lon.values, table.street.values
+    tree = BallTree(np.radians(np.c_[lat[src_idx], lon[src_idx]]), metric="haversine")
+    q_xy = np.radians(np.c_[lat[query_idx], lon[query_idx]])
+    dist, ind = tree.query(q_xy, k=min(K_NEIGHBOURS, len(src_idx)))
+    dist = dist * EARTH_RADIUS_M
+    close = tree.query_radius(q_xy, r=SAME_STREET_RADIUS_M / EARTH_RADIUS_M)
+    est = np.full(len(query_idx), np.nan)
+    weight = np.full(len(query_idx), np.nan)
+    for r, q in enumerate(query_idx):
+        keep = dist[r] <= RADIUS_M
+        if not keep.any():
+            continue
+        d, v = dist[r][keep], values[src_idx[ind[r][keep]]]
+        idw = np.sum(v / (d + IDW_OFFSET_M)) / np.sum(1 / (d + IDW_OFFSET_M))
+        if np.any(street[src_idx[close[r]]] == street[q]):
+            w = 1.0
+        else:
+            w = next((s for limit, s in SHRINK_BY_NEAREST_M if d.min() < limit), np.nan)
+        est[r], weight[r] = fallback + w * (idw - fallback), w
+    return est, weight
+
+
 def new_model():
     return RandomForestRegressor(
         n_estimators=150,
@@ -236,28 +272,27 @@ def new_model():
     )
 
 
-def cross_validate(table, values, measured_idx, groups):
+def cross_validate(table, values, measured_idx, splits, method):
     parts = []
-    for tr, te in GroupKFold(CV_FOLDS).split(measured_idx, groups=groups):
+    for tr, te in splits:
         tr_idx, te_idx = measured_idx[tr], measured_idx[te]
-        X_tr = add_neighbour_features(table, tr_idx, tr_idx, values)
-        X_te = add_neighbour_features(table, tr_idx, te_idx, values)
-        
-        model = new_model().fit(X_tr[FEATURES], values[tr_idx])
-        preds = model.predict(X_te[FEATURES])
         default = float(np.median(values[tr_idx]))
-        
-        parts.append(pd.DataFrame({
-            "y": values[te_idx],
-            "default": default,
-            "random_forest": preds,
-        }))
+        if method == "neighbours":
+            est, _ = neighbour_estimates(table, tr_idx, te_idx, values, default)
+            preds = np.where(np.isnan(est), default, est)
+        else:
+            X_tr = add_neighbour_features(table, tr_idx, tr_idx, values)
+            X_te = add_neighbour_features(table, tr_idx, te_idx, values)
+            preds = new_model().fit(X_tr[FEATURES], values[tr_idx]).predict(X_te[FEATURES])
+        parts.append(pd.DataFrame({"y": values[te_idx], "default": default, method: preds}))
     return pd.concat(parts, ignore_index=True)
 
 
-def scores(cv):
-    return {m: {"mae": round(float(mean_absolute_error(cv.y, cv[m])), 4), "r2": round(float(r2_score(cv.y, cv[m])), 4)}
-            for m in ("default", "random_forest")}
+def scores(cv, method):
+    out = {m: {"mae": round(float(mean_absolute_error(cv.y, cv[m])), 4), "r2": round(float(r2_score(cv.y, cv[m])), 4)}
+           for m in ("default", method)}
+    out[method]["spearman"] = round(float(spearmanr(cv.y, cv[method]).statistic), 4)
+    return out
 
 
 def spatial_blocks(table, idx, size_m=1000):
@@ -276,20 +311,20 @@ def way_estimates(table, segment_idx, predictions, measured_ways):
     return {way: sum(v) / len(v) for way, v in acc.items()}
 
 
-def plot_performance(cv, target, metrics, path):
+def plot_performance(cv, target, metrics, path, method):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 5), dpi=150)
-    lim = [0, max(cv.y.max(), cv["random_forest"].max()) * 1.05]
-    axes[0].scatter(cv.y, cv["random_forest"], s=8, alpha=0.25, color="#16a085", edgecolors="none")
+    lim = [0, max(cv.y.max(), cv[method].max()) * 1.05]
+    axes[0].scatter(cv.y, cv[method], s=8, alpha=0.25, color="#16a085", edgecolors="none")
     axes[0].plot(lim, lim, "--", color="#e74c3c", label="perfect 1:1")
-    axes[0].set(xlim=lim, ylim=lim, xlabel=f"measured {target}", ylabel=f"estimated {target} (Random Forest)")
-    axes[0].set_title(f"Held-out Streets (R2: {metrics['random_forest']['r2']:.3f}, MAE: {metrics['random_forest']['mae']:.2f})", fontweight="bold")
+    axes[0].set(xlim=lim, ylim=lim, xlabel=f"measured {target}", ylabel=f"estimated {target} ({method})")
+    axes[0].set_title(f"Held-out Streets (R2: {metrics[method]['r2']:.3f}, MAE: {metrics[method]['mae']:.2f})", fontweight="bold")
     axes[0].legend()
 
-    for m, color in (("random_forest", "#2980b9"), ("default", "#95a5a6")):
+    for m, color in ((method, "#2980b9"), ("default", "#95a5a6")):
         axes[1].hist(cv.y - cv[m], bins=50, alpha=0.6, color=color, label=f"{m}: MAE {metrics[m]['mae']:.3g}")
     axes[1].axvline(0, ls="--", color="#e74c3c")
     axes[1].set(xlabel="error (measured - estimated)", ylabel="segments")
@@ -321,57 +356,63 @@ def plot_feature_importance(model, target, path):
 
 def impute_target(target, table, road_osmids, load):
     cfg = TARGETS[target]
+    method = cfg["method"]
     measured = measured_values(load(cfg["source"]), cfg["index_key"], cfg["value_key"], road_osmids)
     values = np.full(len(table), np.nan)
     values[list(measured)] = list(measured.values())
     measured_idx = np.array(sorted(measured))
     unmeasured_idx = np.array([i for i in range(len(table)) if i not in measured])
-    print(f"\n[{target}] {len(measured_idx)} measured / {len(table)} segments")
+    print(f"\n[{target}] {len(measured_idx)} measured / {len(table)} segments, method: {method}")
 
-    cv_street = cross_validate(table, values, measured_idx, table.street.values[measured_idx])
-    cv_area = cross_validate(table, values, measured_idx, spatial_blocks(table, measured_idx))
-    s_street, s_area = scores(cv_street), scores(cv_area)
-    
-    print(f"  CV unseen streets (n={len(cv_street)}): default MAE {s_street['default']['mae']:.3f} | RF MAE {s_street['random_forest']['mae']:.3f} R2 {s_street['random_forest']['r2']:.3f}")
-    print(f"  CV unseen areas   (n={len(cv_area)}): default MAE {s_area['default']['mae']:.3f} | RF MAE {s_area['random_forest']['mae']:.3f} R2 {s_area['random_forest']['r2']:.3f}")
+    splits = {
+        "cv_unseen_streets": GroupKFold(CV_FOLDS).split(measured_idx, groups=table.street.values[measured_idx]),
+        "cv_unseen_1km_areas": GroupKFold(CV_FOLDS).split(measured_idx, groups=spatial_blocks(table, measured_idx)),
+    }
+    if method == "neighbours":
+        # Unmeasured parts of measured streets: the same-street rule only shows up here.
+        splits["cv_random_segments"] = KFold(CV_FOLDS, shuffle=True, random_state=0).split(measured_idx)
+    cv = {name: cross_validate(table, values, measured_idx, list(sp), method) for name, sp in splits.items()}
+    cv_scores = {name: scores(c, method) for name, c in cv.items()}
+    for name, sc in cv_scores.items():
+        print(f"  {name:20} default MAE {sc['default']['mae']:.3f} | {method} MAE {sc[method]['mae']:.3f} "
+              f"R2 {sc[method]['r2']:.3f} Spearman {sc[method]['spearman']:.3f}")
 
-    # Fit final Random Forest model on all measured segments
-    X_fit = add_neighbour_features(table, measured_idx, measured_idx, values)
-    model = new_model().fit(X_fit[FEATURES], values[measured_idx])
-
-    # Predict for all unmeasured segments
-    X_unmeasured = add_neighbour_features(table, measured_idx, unmeasured_idx, values)
-    preds = model.predict(X_unmeasured[FEATURES])
-    
-    # Clip to valid domains
-    if target == "roughness":
-        preds = np.clip(preds, 0.0, 100.0)
+    default = float(np.median(values[measured_idx]))
+    if method == "neighbours":
+        est, weight = neighbour_estimates(table, measured_idx, unmeasured_idx, values, default)
+        known = ~np.isnan(est)
+        est_idx, preds = unmeasured_idx[known], np.clip(est[known], 0.0, 100.0)
     else:
-        preds = np.clip(preds, 0.0, 1.0)
+        X_fit = add_neighbour_features(table, measured_idx, measured_idx, values)
+        model = new_model().fit(X_fit[FEATURES], values[measured_idx])
+        X_unmeasured = add_neighbour_features(table, measured_idx, unmeasured_idx, values)
+        preds = np.clip(model.predict(X_unmeasured[FEATURES]), 0.0, 100.0 if target == "roughness" else 1.0)
+        est_idx = unmeasured_idx
+        plot_feature_importance(model, target, ML_DIR / f"{target}_feature_importance.png")
 
     measured_ways = {w for i in measured_idx for w in table.ways.values[i]}
-    ways = way_estimates(table, unmeasured_idx, preds, measured_ways)
-    
+    ways = way_estimates(table, est_idx, preds, measured_ways)
+
     out_path = DATA_DIR / f"ml_predicted_{target}.json"
     out_path.write_text(json.dumps({str(k): round(v, 4) for k, v in sorted(ways.items())}, indent=0))
-
-    plot_performance(cv_street, target, s_street, ML_DIR / f"{target}_performance.png")
-    plot_feature_importance(model, target, ML_DIR / f"{target}_feature_importance.png")
+    plot_performance(cv["cv_unseen_streets"], target, cv_scores["cv_unseen_streets"],
+                     ML_DIR / f"{target}_performance.png", method)
 
     print(f"  Exported {len(ways)} way estimates to {out_path.name}")
-    print(f"  Prediction summary (dynamic range): min={preds.min():.2f}, p50={np.median(preds):.2f}, max={preds.max():.2f}")
+    print(f"  Estimates: min={preds.min():.2f}, p50={np.median(preds):.2f}, max={preds.max():.2f}")
 
-    return {
-        "method": "random_forest",
-        "default_value": round(float(np.median(values[measured_idx])), 4),
-        "cv_unseen_streets": {"n": len(cv_street), **s_street},
-        "cv_unseen_1km_areas": {"n": len(cv_area), **s_area},
-        "coverage": {
-            "segments_measured": len(measured_idx),
-            "segments_estimated": len(unmeasured_idx),
-            "ways_estimated": len(ways),
-        },
+    coverage = {
+        "segments_measured": len(measured_idx),
+        "segments_estimated": len(est_idx),
+        "segments_unknown": len(unmeasured_idx) - len(est_idx),
+        "ways_estimated": len(ways),
     }
+    if method == "neighbours":
+        coverage["segments_estimated_by_weight"] = {
+            str(w): int((weight == w).sum()) for w in (1.0, *(s for _, s in SHRINK_BY_NEAREST_M))
+        }
+    return {"method": method, "default_value": round(default, 4), **{n: {"n": len(c), **cv_scores[n]} for n, c in cv.items()},
+            "coverage": coverage}
 
 
 def main():
