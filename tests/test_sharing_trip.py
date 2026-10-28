@@ -1,7 +1,8 @@
 import networkx as nx
 import pytest
 
-from routing.route import RouteError
+from routing.calories import walk_kcal
+from routing.route import RouteError, find_route
 from routing.sharing_trip import WALK_MAX_M, ParkingRules, WalkNetwork, plan_sharing_trip
 from tests.conftest import COORDS, A, B
 
@@ -25,8 +26,8 @@ def point(lat, lon, **props):
     return {"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]}, "properties": props}
 
 
-def bike(vid, lat, lon, kind="bike", range_m=20000.0):
-    return point(lat, lon, vehicle=kind, vehicle_id=vid, battery_pct=50, range_m=range_m, provider="Dott")
+def bike(vid, lat, lon, kind="bike", range_m=20000.0, electric=True):
+    return point(lat, lon, vehicle=kind, vehicle_id=vid, battery_pct=50, range_m=range_m, provider="Dott", electric=electric)
 
 
 ZONE_AT_B = point(*COORDS[B], name="Zone B", bikes_available=1, scooters_available=0)
@@ -50,6 +51,25 @@ def test_parking_rules_take_the_first_zone_and_refuse_outside_all():
     assert rules.rule("bike", *COORDS[A]) == "anywhere"
     assert rules.rule("bike", 48.7758, 9.1829) == "no"  # Stuttgart, outside Dott's area
     assert ParkingRules([box(49.1407, 9.2095, 49.1411, 9.2105, 0, scooter="no"), AREA]).rule("bike", *COORDS[B]) == "anywhere"
+
+
+def test_ride_kcal_is_for_a_pedelec_and_only_pushing_on_a_scooter(toy_graph, walk):
+    def kcal(vehicle, **kw):
+        trip = plan_sharing_trip(toy_graph, walk, [vehicle], [], COORDS[A], COORDS[B], ZERO, geofencing=[AREA], **kw)
+        return trip["legs"][1]["properties"]["kcal"]
+    route = lambda **kw: find_route(toy_graph, COORDS[A], COORDS[B], *ZERO, **kw)["features"][0]["properties"]["kcal"]
+    assert kcal(bike("e", *COORDS[A])) == route(e_bike=True) < route()
+    assert kcal(bike("p", *COORDS[A], electric=False)) == route()
+    assert kcal(bike("e", *COORDS[A]), weight_kg=90) == route(e_bike=True, weight_kg=90)
+    assert kcal(bike("s", *COORDS[A], kind="scooter")) == 0  # rides round, pushes nowhere
+
+
+def test_walks_count_and_add_up_to_the_trip_kcal(toy_graph, walk):
+    mid = ((COORDS[A][0] + COORDS[B][0]) / 2, COORDS[A][1])
+    trip = plan_sharing_trip(toy_graph, walk, [bike("mid", *mid)], [], COORDS[A], COORDS[B], ZERO, geofencing=[AREA])
+    first, ride, last = (leg["properties"] for leg in trip["legs"])
+    assert first["kcal"] == round(walk_kcal(first["duration_s"]), 1) > 0
+    assert trip["kcal"] == round(first["kcal"] + ride["kcal"] + last["kcal"], 1)
 
 
 def test_free_floating_ride_ends_at_the_destination(toy_graph, walk):

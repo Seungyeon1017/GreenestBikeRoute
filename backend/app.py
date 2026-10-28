@@ -235,9 +235,13 @@ def route_query(
     return (from_lat, from_lon), (to_lat, to_lon), penalties
 
 
+def weight_query(weight_kg: float = Query(DEFAULT_WEIGHT_KG, gt=0, le=250, description=(
+        "Rider weight in kg (with the bike's for climbs), for kcal. Does not change the route"))):
+    return weight_kg
+
+
 def rider_query(
-    weight_kg: float = Query(DEFAULT_WEIGHT_KG, gt=0, le=250, description=(
-        "Rider weight in kg (with the bike's for climbs), for kcal. Does not change the route")),
+    weight_kg=Depends(weight_query),
     e_bike: bool = Query(False, description=(
         "Pedelec: kcal is a rough estimate, see routing/calories.py. Does not change the route")),
 ):
@@ -357,7 +361,8 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
             "all", description="Rent only an e-bike (bike), only an e-scooter (scooter), or whichever is quicker (all)"),
             park_in_zone: bool = Query(False, description=(
                 "Always end the ride at a parking zone. Off: at the end itself, unless parking is not allowed there "
-                "(see /sharing/geofencing); then wherever allowed that gets you to the end soonest"))):
+                "(see /sharing/geofencing); then wherever allowed that gets you to the end soonest")),
+            weight_kg=Depends(weight_query)):
         """The quickest trip with a vehicle free to rent now within 1 km walk of the start, with enough battery.
         Dott is free-floating: the ride ends at the destination, or where its no-parking zones send you.
         400 when there is no vehicle or nowhere to leave it, 503 when the sharing feed can't be read."""
@@ -371,7 +376,7 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
             app.state.walk = WalkNetwork(walk_graph if walk_graph is not None else load_walk_graph())
         try:
             trip = plan_sharing_trip(app.state.graph, app.state.walk, snap["vehicles"], snap["zones"], origin, destination,
-                                     penalties, vehicle, park_in_zone, snap["geofencing"])
+                                     penalties, vehicle, park_in_zone, snap["geofencing"], weight_kg)
         except RouteError as e:
             raise HTTPException(status_code=400, detail=str(e))
         return JSONResponse({**trip, "updated": snap["updated"], "attribution": ATTRIBUTION})

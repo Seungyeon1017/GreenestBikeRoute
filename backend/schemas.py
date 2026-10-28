@@ -104,6 +104,7 @@ class RouteProperties(BaseModel):
     kcal: float = Field(description=(
         "Rough energy use in kcal for riding this route (MET 6.8 for the riding time, plus the climbs), for the weight_kg "
         "rider; e_bike gives a rough pedelec estimate. When `climb_m` is null the climbs count as 0, so it is a lower bound. "
+        "For an e-scooter ride (/route/sharing) only pushing it (pushed_m) counts, as walking: the motor does the riding. "
         "Show it rounded, e.g. \"about 120 kcal\". An estimate, not a measurement; see routing/calories.py"))
     speed_measured_share: float = Field(description="Share of the route length with speed_map measurements, 0-1")
     mean_roughness: Optional[float] = Field(
@@ -621,6 +622,7 @@ class WalkProperties(BaseModel):
     mode: Literal["walk"]
     length_m: float = Field(description="Walking distance in metres")
     duration_s: int = Field(description="Walking time in seconds at 4.8 km/h")
+    kcal: float = Field(description="Rough energy use in kcal for the walk (MET 3.5, climbs not counted), for the weight_kg rider")
 
 
 class WalkFeature(BaseModel):
@@ -630,7 +632,9 @@ class WalkFeature(BaseModel):
 
 
 class RideProperties(RouteProperties):
-    mode: Literal["bike", "scooter"] = Field(description="Ridden on the rented e-bike or e-scooter")
+    mode: Literal["bike", "scooter"] = Field(description=(
+        "Ridden on the rented e-bike or e-scooter. `kcal` is for a pedelec when the bike is electric; on an e-scooter "
+        "it counts only pushing it, as walking"))
 
 
 class RideFeature(BaseModel):
@@ -652,6 +656,7 @@ class SharingTrip(BaseModel):
     walk_m: float = Field(description="Metres walked, both walks")
     ride_m: float = Field(description="Metres ridden")
     ride_s: int = Field(description="Riding time in seconds, what the per-minute price applies to")
+    kcal: float = Field(description="Rough energy use in kcal for the whole trip: both walks and the ride, for the weight_kg rider")
     updated: str = Field(description=SHARING_UPDATED)
     attribution: str = Field(description=SHARING_ATTRIBUTION)
 

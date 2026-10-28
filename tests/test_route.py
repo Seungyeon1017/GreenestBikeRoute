@@ -3,10 +3,10 @@ from datetime import datetime, timezone
 import pytest
 
 from routing import graph
-from routing.calories import DEFAULT_WEIGHT_KG, ride_kcal
+from routing.calories import DEFAULT_WEIGHT_KG, ride_kcal, walk_kcal
 from routing.costs import AIR_HOTSPOT_OFFSET, AIR_PRIOR_RIDES
 from routing.graph import attach_bike_friendly, attach_danger, attach_lighting, attach_roughness, attach_shade, attach_speed, attach_stop_go
-from routing.route import RouteError, compare_routes, day_routes, find_route, sky
+from routing.route import WALK_KMH, RouteError, compare_routes, day_routes, find_route, sky
 from tests.conftest import COORDS, A, B, C
 
 
@@ -330,6 +330,14 @@ def test_route_reports_sunny_metres_by_day_and_unlit_metres_after_dark(sunny_unl
     assert (p["sunny_m"], p["unlit_m"]) == (100, None)
     p = route_props(G, dark_penalty=0, depart_time=SUMMER_NIGHT)
     assert (p["sunny_m"], p["unlit_m"]) == (None, 100)
+
+
+def test_scooter_kcal_counts_only_pushing(toy_graph):
+    for d in toy_graph.edges.values():
+        d.update(roughness=0.0, highway="footway", bicycle="yes")  # every street a footway: push all the way
+    p = find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 0, 0, scooter=True)["features"][0]["properties"]
+    assert p["pushed_m"] == p["length_m"]
+    assert p["kcal"] == pytest.approx(walk_kcal(p["length_m"] / (WALK_KMH / 3.6)), abs=0.1)
 
 
 def test_scooter_is_pushed_on_footways_not_signed_for_bikes(toy_graph):

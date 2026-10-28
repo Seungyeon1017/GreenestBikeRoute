@@ -778,11 +778,15 @@ async function drawTrip() {
     label([back[1], back[0]], `<b>② Leave it</b> ${where.replace(/<\/?b>/g, "")}`).addTo(tripLayer);
 
     const price = priceFor(v.price, t.ride_s), pushed = ride.properties.pushed_m;
-    box.innerHTML = `<div class="total">${minutes(t.duration_s)} min door to door${price ? `, about €${price}` : ""}</div><ol>
-      <li>🚶 Walk ${Math.round(walk1.properties.length_m)} m (${minutes(walk1.properties.duration_s)} min) to pin ①, the ${name} (battery ${v.battery_pct ?? "?"}%)</li>
-      <li>${v.vehicle === "scooter" ? "🛴" : "🚲"} Ride ${(ride.properties.length_m / 1000).toFixed(1)} km (${minutes(t.ride_s)} min)`
+    const kcal = p => Math.round(p.kcal) ? `, ~${Math.round(p.kcal)} kcal` : "";
+    box.innerHTML = `<div class="total">${minutes(t.duration_s)} min door to door${price ? `, about €${price}` : ""}`
+      + `, about ${Math.round(t.kcal)} kcal</div>`
+      + `<div class="row"><span>kcal for the default 70 kg rider: walks at 3.5 MET${v.vehicle === "scooter" ? ", the e-scooter only where you push it"
+        : v.electric ? ", the ride as a pedelec (rough)" : ""}</span></div><ol>
+      <li>🚶 Walk ${Math.round(walk1.properties.length_m)} m (${minutes(walk1.properties.duration_s)} min${kcal(walk1.properties)}) to pin ①, the ${name} (battery ${v.battery_pct ?? "?"}%)</li>
+      <li>${v.vehicle === "scooter" ? "🛴" : "🚲"} Ride ${(ride.properties.length_m / 1000).toFixed(1)} km (${minutes(t.ride_s)} min${kcal(ride.properties)})`
       + `${pushed ? `, pushing it ${pushed} m on footways where e-scooters may not ride` : ""} and leave it at pin P, ${where}</li>`
-      + (walk2.properties.length_m > 0 ? `<li>🚶 Walk ${Math.round(walk2.properties.length_m)} m (${minutes(walk2.properties.duration_s)} min) to the end</li>` : "")
+      + (walk2.properties.length_m > 0 ? `<li>🚶 Walk ${Math.round(walk2.properties.length_m)} m (${minutes(walk2.properties.duration_s)} min${kcal(walk2.properties)}) to the end</li>` : "")
       + `</ol>`
       + `<div><span class="swatch" style="background:#e53935;opacity:.6;height:8px"></span>no parking for ${name}s`
       + `<span class="swatch" style="background:#fb8c00;opacity:.6;height:8px;margin-left:8px"></span>parking zones only</div>`

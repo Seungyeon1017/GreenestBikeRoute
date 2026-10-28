@@ -12,7 +12,7 @@ import shapely
 from shapely import LineString, Point, STRtree
 from shapely.ops import substring
 
-from routing.calories import DEFAULT_WEIGHT_KG, ride_kcal, route_climb
+from routing.calories import DEFAULT_WEIGHT_KG, ride_kcal, route_climb, walk_kcal
 from routing.costs import BAD_AIR_RISK, BUMPY_ROUGHNESS, DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_LIT, \
     DEFAULT_PM_PENALTY, DEFAULT_PM_RISK, DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_ROUGHNESS, DEFAULT_SHADE, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_GO, \
     DEFAULT_STOP_PENALTY, LIFT_WAIT_M, MEDIAN_SPEED_KMH, STOP_GO_HEAVY, edge_cost, osm_way_ids
@@ -405,9 +405,10 @@ def _route_feature(G, a, b, penalties, weight_kg=DEFAULT_WEIGHT_KG, e_bike=False
         # Expected riding time from speed_map (unmeasured streets at the median speed), lifts included.
         "duration_s": round(duration),
         # Total ascent, bridge humps included (null without elevation data), and the rough energy use for it
-        # and the riding time, see routing/calories.py.
+        # and the riding time, see routing/calories.py. On an e-scooter only pushing it counts, as walking.
         "climb_m": None if climb is None else round(climb, 1),
-        "kcal": round(ride_kcal(duration, climb or 0.0, weight_kg, e_bike), 1),
+        "kcal": round(walk_kcal(pushed_m / (WALK_KMH / 3.6), weight_kg) if scooter
+                      else ride_kcal(duration, climb or 0.0, weight_kg, e_bike), 1),
         "speed_measured_share": round(speed_measured_len / length, 2),
         # Length-weighted over the measured part of the route only.
         "mean_roughness": round(rough_len / measured_len, 1) if measured_len else None,

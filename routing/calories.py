@@ -18,12 +18,19 @@ E-bike (pedelec, e_bike=True), a rough estimate:
 - the riding time is the same as for a normal bike (speed_map mixes both kinds of bikes), although
   e-bike riders are usually faster.
 
+Walking (the walks of a trip with a shared vehicle, and pushing an e-scooter where it must not ride):
+    kcal = MET_WALKING * weight_kg * walking hours
+- MET 3.5: walking at an ordinary pace on the flat (Compendium of Physical Activities, walking category,
+  https://pacompendium.com/walking/). The walking network has no heights, so walking climbs are not counted.
+- Riding an e-scooter itself counts as 0: the motor does the work.
+
 An estimate, not a measurement: it ignores wind, stops, tyre pressure and fitness, and the MET
 value is an average across people. Show it rounded ("about 80 kcal"), and mark e-bike values as rough.
 """
 G_MS2 = 9.81
 J_PER_KCAL = 4184.0
 MET_CYCLING = 6.8
+MET_WALKING = 3.5
 EFFICIENCY = 0.25
 BIKE_KG = 15.0
 EBIKE_KG = 25.0
@@ -41,6 +48,11 @@ def ride_kcal(duration_s, climb_m, weight_kg=DEFAULT_WEIGHT_KG, e_bike=False):
         riding *= EBIKE_RIDING_FACTOR
         climbing *= EBIKE_CLIMB_FACTOR
     return riding + climbing
+
+
+def walk_kcal(duration_s, weight_kg=DEFAULT_WEIGHT_KG):
+    """kcal for walking (or pushing an e-scooter) for `duration_s` seconds on the flat."""
+    return MET_WALKING * weight_kg * duration_s / 3600
 
 
 def total_climb(rises_m):

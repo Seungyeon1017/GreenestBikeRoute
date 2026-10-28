@@ -18,6 +18,7 @@ import osmnx as ox
 from shapely import Point, STRtree
 from shapely.geometry import shape
 
+from routing.calories import DEFAULT_WEIGHT_KG, walk_kcal
 from routing.costs import MEDIAN_SPEED_KMH
 from routing.graph import CACHE_DIR, PLACE
 from routing.route import WALK_KMH, RouteError, edge_coords, find_route
@@ -159,11 +160,13 @@ def _return_points(G, walk, rules, zones, kind, origin, destination, to_end):
 
 
 def plan_sharing_trip(G, walk, vehicles, zones, origin, destination, penalties, vehicle="all", park_in_zone=False,
-                      geofencing=None):
+                      geofencing=None, weight_kg=DEFAULT_WEIGHT_KG):
     """The quickest walk - ride - walk trip from origin to destination (both (lat, lon)).
 
     `vehicles`, `zones` and `geofencing` are the GeoJSON Features of /sharing, /sharing/zones and /sharing/geofencing,
-    `penalties` the routing penalties of /route, `vehicle` "bike", "scooter" or "all". The ride ends at the destination
+    `penalties` the routing penalties of /route, `vehicle` "bike", "scooter" or "all". kcal is for a rider of weight_kg:
+    each walk, the ride (as a pedelec when the shared bike is electric; on an e-scooter only pushing it) and the
+    whole trip. The ride ends at the destination
     where the provider allows parking there, else at the nearest place that it does (by walking to the end), or at a
     parking zone; with park_in_zone, always at a parking zone. Without geofencing (no saved copy), at a parking zone.
     Raises RouteError when no vehicle is in reach or there is nowhere to leave it near the destination.
@@ -202,7 +205,8 @@ def plan_sharing_trip(G, walk, vehicles, zones, origin, destination, penalties, 
         kind = v["properties"]["vehicle"]
         for _, ride_to, zone in returns[kind][:CANDIDATES]:  # the best place can be next to the vehicle: no ride
             try:
-                ride = find_route(G, at, ride_to, *penalties, scooter=kind == "scooter")["features"][0]
+                ride = find_route(G, at, ride_to, *penalties, weight_kg=weight_kg, scooter=kind == "scooter",
+                                  e_bike=kind == "bike" and bool(v["properties"].get("electric")))["features"][0]
                 break
             except RouteError:
                 continue
@@ -216,6 +220,8 @@ def plan_sharing_trip(G, walk, vehicles, zones, origin, destination, penalties, 
         _, _, back = to_end
         last = (walk.leg([], destination, destination) if ride_to == destination
                 else walk.leg(back[walk.nearest(*ride_to)[0]], ride_to, destination, reverse=True))
+        for leg in (first, last):
+            leg["properties"]["kcal"] = round(walk_kcal(leg["properties"]["duration_s"], weight_kg), 1)
         legs = [first, ride, last]
         trips.append({
             "vehicle": v,
@@ -228,6 +234,7 @@ def plan_sharing_trip(G, walk, vehicles, zones, origin, destination, penalties, 
             "walk_m": round(first["properties"]["length_m"] + last["properties"]["length_m"], 1),
             "ride_m": ride["properties"]["length_m"],
             "ride_s": ride["properties"]["duration_s"],
+            "kcal": round(sum(leg["properties"]["kcal"] for leg in legs), 1),
         })
     if not trips:
         raise RouteError("no rideable route from the free vehicles near the start")
