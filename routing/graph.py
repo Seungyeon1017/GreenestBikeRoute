@@ -118,18 +118,24 @@ def keep_rideable_footways(G):
 def load_graph(path=GRAPH_PATH):
     """Load the bike graph from cache/, downloading it from OSM the first time (~2 min).
 
-    Delete the .graphml file to pick up newer OSM data.
+    Delete the .graphml file to pick up newer OSM data. It is built again by itself when RIDEABLE_WAYS changed
+    (e.g. an approved user report), as that decides which footways stay.
     """
     path = Path(path)
-    if path.exists():
-        G = ox.load_graphml(path)
-    else:
+    rideable = ",".join(map(str, sorted(RIDEABLE_WAYS)))
+    G = ox.load_graphml(path) if path.exists() else None
+    if G is not None and "rideable_ways" not in G.graph:
+        # Cached before the list was recorded, when it held only the hand-picked ways: record it.
+        G.graph["rideable_ways"] = rideable
+        ox.save_graphml(G, path)
+    if G is None or G.graph["rideable_ways"] != rideable:
         ox.settings.cache_folder = CACHE_DIR
         ox.settings.useful_tags_way = sorted({*ox.settings.useful_tags_way, "bicycle", "footway"})  # keep_rideable_footways needs them
         G = ox.graph_from_place(PLACE, network_type="bike", custom_filter=[BIKE_FILTER, CROSSING_FILTER, NO_BIKE_FOOTWAY_FILTER], simplify=False)
         # Elevator nodes must survive simplification, as the footways only count as rideable near them.
         G = ox.simplify_graph(G, node_attrs_include=["highway"])
         keep_rideable_footways(G)
+        G.graph["rideable_ways"] = rideable
         ox.save_graphml(G, path)
     attach_lifts(G)
     attach_roughness(G, way_roughness(load_features("bumpy_roads_heilbronn")), load_estimates())

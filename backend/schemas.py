@@ -20,6 +20,7 @@ ROUTE_EXAMPLE = {
         "danger_points": 21, "danger_risk": 17.12, "mean_pm_risk": 0.511, "pm_measured_share": 0.65,
         "mean_stop_go": 0.691, "stop_measured_share": 0.97,
         "mean_shade": None, "shade_known_share": 1.0, "mean_lit": 0.986, "lit_known_share": 0.97, "lifts": 0,
+        "reported_closures": 0,
     },
 }
 SHORTEST_EXAMPLE = {
@@ -33,6 +34,7 @@ SHORTEST_EXAMPLE = {
         "danger_points": 10, "danger_risk": 7.94, "mean_pm_risk": 0.524, "pm_measured_share": 0.75,
         "mean_stop_go": 0.665, "stop_measured_share": 0.97,
         "mean_shade": None, "shade_known_share": 1.0, "mean_lit": 0.93, "lit_known_share": 0.99, "lifts": 0,
+        "reported_closures": 0,
     },
 }
 
@@ -114,6 +116,9 @@ class RouteProperties(BaseModel):
         description="Chance the streets are lit at night, 0-1, length-weighted over the part with lighting data; null if none")
     lit_known_share: float = Field(description="Share of the route length with lighting data, 0-1")
     lifts: int = Field(description="Lifts (elevators) the route rides through, e.g. onto the Campusbrücke; each one costs stop_penalty x 100 m")
+    reported_closures: int = Field(description=(
+        "Streets on the route that users reported closed but too few to close them (see `/reports/closures`); the "
+        "route still rides them, as there was no sensible way round. Worth a warning"))
 
 
 class RouteFeature(BaseModel):
@@ -405,6 +410,93 @@ class ZoneCollection(BaseModel):
         "features": [{"type": "Feature", "geometry": {"type": "Point", "coordinates": [9.205396, 49.133834]}, "properties": {
             "provider": "Dott", "name": "Parkingzone Theresienstraße /Badstraße", "bikes_available": 5,
             "scooters_available": 5, "bike_capacity": 5, "scooter_capacity": 5}}]}}}
+
+
+class ClosureReport(BaseModel):
+    """A rider's report that the street at a point is closed right now (construction, event, ...)."""
+    lat: float = Field(ge=-90, le=90, description="Where the street is closed; the report goes to the nearest street within 50 m")
+    lon: float = Field(ge=-180, le=180)
+    reporter_id: Optional[str] = Field(None, max_length=64, description=(
+        "An anonymous random id the app keeps per device, so one rider's repeated reports count once"))
+    note: Optional[str] = Field(None, max_length=500, description="What is closed, e.g. \"Baustelle, bis Freitag\"")
+
+    model_config = {"json_schema_extra": {"example": {"lat": 49.14232, "lon": 9.21885, "reporter_id": "3f9c2a71",
+                                                      "note": "Baustelle, Durchfahrt gesperrt"}}}
+
+
+class ClosureProperties(BaseModel):
+    segment: str = Field(description="The street segment (between two junctions) as \"u-v\", its OSM node ids")
+    osm_way_ids: list[int] = Field(description="The OpenStreetMap ways the segment is part of")
+    status: Literal["reported", "closed"] = Field(description=(
+        "closed: 3 or more independent reports within 2 h, routes don't use it; reported: fewer, routes avoid it "
+        "if the detour is at most 4x its length"))
+    reports: int = Field(description="Independent reports within the last 2 h (different riders on different networks)")
+    last_report: str = Field(description="When the latest report came in (ISO 8601, UTC)")
+    expires: str = Field(description="When the latest report drops out, unless someone reports it again (ISO 8601, UTC)")
+
+
+class ClosureFeature(BaseModel):
+    type: Literal["Feature"]
+    geometry: LineString
+    properties: ClosureProperties
+
+
+CLOSURE_EXAMPLE = {"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {
+    "segment": "268245781-268245790", "osm_way_ids": [24710470], "status": "reported", "reports": 1,
+    "last_report": "2026-10-28T15:10:00+00:00", "expires": "2026-10-28T17:10:00+00:00"}}
+
+
+class ClosureCollection(BaseModel):
+    """Street segments riders reported closed within the last 2 hours. Reports expire by themselves."""
+    type: Literal["FeatureCollection"]
+    features: list[ClosureFeature]
+
+    model_config = collection_example(CLOSURE_EXAMPLE)
+
+
+class MappingReport(BaseModel):
+    """A rider's report that the map is wrong here, e.g. a footway bikes ride on that routing leaves out."""
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    kind: Literal["rideable", "other"] = Field(description=(
+        "rideable: bikes may and do ride here, but routing doesn't use it (a footway without bicycle=yes in OSM); "
+        "once checked it is added to the list of rideable ways. other: any other mistake, described in note"))
+    osm_way_id: Optional[int] = Field(None, gt=0, description="The OpenStreetMap way, if the app knows it")
+    reporter_id: Optional[str] = Field(None, max_length=64, description="An anonymous random id the app keeps per device")
+    note: Optional[str] = Field(None, max_length=500, description="What is wrong; why bikes may ride here")
+
+    model_config = {"json_schema_extra": {"example": {
+        "lat": 49.14425, "lon": 9.21998, "kind": "rideable", "osm_way_id": 286359672, "reporter_id": "3f9c2a71",
+        "note": "Footway beside the tram lane, signed for bikes (Zeichen 240)"}}}
+
+
+class MappingProperties(BaseModel):
+    id: int
+    kind: Literal["rideable", "other"]
+    osm_way_id: Optional[int] = Field(description="The OpenStreetMap way, if given (or set by the maintainer who approved it)")
+    note: Optional[str]
+    status: Literal["pending", "approved", "rejected"] = Field(description=(
+        "pending until a maintainer checks it; an approved rideable way is routed from the next server start"))
+    created: str = Field(description="ISO 8601, UTC")
+    resolved: Optional[str] = Field(description="When it was approved or rejected (ISO 8601, UTC)")
+
+
+class MappingFeature(BaseModel):
+    type: Literal["Feature"]
+    geometry: Point
+    properties: MappingProperties
+
+
+class MappingCollection(BaseModel):
+    """Riders' reports of mapping mistakes."""
+    type: Literal["FeatureCollection"]
+    features: list[MappingFeature]
+
+    model_config = collection_example({"type": "Feature", "geometry": {"type": "Point", "coordinates": [9.21998, 49.14425]},
+                                       "properties": {"id": 7, "kind": "rideable", "osm_way_id": 286359672,
+                                                      "note": "Footway beside the tram lane, signed for bikes",
+                                                      "status": "pending", "created": "2026-10-28T15:10:00+00:00",
+                                                      "resolved": None}})
 
 
 class Error(BaseModel):
