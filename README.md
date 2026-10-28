@@ -129,26 +129,7 @@ uv run pytest
 ```
 
 
-## Running the frontend
-The website lives in `frontend/` (Next.js, based on the Green City Dashboard Heilbronn). It has three tabs: Overview, Plan a Trip and Highlights.
+## License
+Code: [AGPL-3.0](LICENSE), the license of the Green City Dashboard that `frontend/` is forked from.
 
-First time only (and again whenever `frontend/package.json` changes):
-
-```bash
-cd frontend
-npx yarn@1.22.22 install
-npx yarn@1.22.22 prisma generate
-```
-
-Every time:
-
-```bash
-cd frontend
-npx yarn@1.22.22 dev
-```
-
-Then open http://localhost:3000 (`/overview`, `/plan-trip`, `/highlights`). Stop the server with `Ctrl+C`. Use yarn, not `npm install`: npm ignores `yarn.lock` and fails with a peer-dependency error.
-
-Without a database (`DATABASE_URL`) the site still runs and falls back to German texts. For route search, also start the routing API above; the frontend calls `NEXT_PUBLIC_GREENEST_API_URL` (default `http://127.0.0.1:8000`).
-
-The Overview map reads small files from `frontend/public/map-data/`. After downloading new data, rebuild them with `node frontend/scripts/build-map-data.mjs`.
+Data: each dataset keeps its source's license; see [data/README.md](data/README.md#licenses) for credits.
