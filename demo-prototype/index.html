@@ -13,7 +13,7 @@
   html, body { margin: 0; height: 100%; overflow: hidden; font: 14px/1.4 system-ui, sans-serif; color: #1d2733; }
   #map { position: absolute; inset: 0; }
   #panel {
-    position: absolute; top: 12px; left: 12px; z-index: 1000; width: 300px;
+    position: absolute; top: 12px; left: 12px; z-index: 1000; width: 360px;
     max-height: calc(100% - 48px); overflow-y: auto; box-sizing: border-box;
     background: #fff; border-radius: 10px; padding: 14px 16px; box-shadow: 0 2px 12px rgba(0,0,0,.2);
   }
@@ -54,10 +54,14 @@
   <input id="pmPenalty" type="range" min="0" max="5" step="0.25" value="0.5">
   <div class="row"><span>0 = ignore</span><span>5 = strongly avoid</span></div>
 
+  <label for="stopPenalty">How much do you hate stop-and-go: <span id="stopPenaltyValue">0.5</span></label>
+  <input id="stopPenalty" type="range" min="0" max="5" step="0.25" value="0.5">
+  <div class="row"><span>0 = ignore</span><span>5 = strongly avoid</span></div>
+
   <table>
-    <tr><th></th><th>Length</th><th>Rough</th><th title="close-overtaking spots passed">Overtakes</th><th title="mean air rank, 0.5 = typical">PM</th></tr>
-    <tr><td><span class="swatch" style="background:#7a8794"></span>Shortest</td><td id="sLen">–</td><td id="sRough">–</td><td id="sDanger">–</td><td id="sPm">–</td></tr>
-    <tr><td><span class="swatch" style="background:#1a7f37"></span>Your route</td><td id="rLen">–</td><td id="rRough">–</td><td id="rDanger">–</td><td id="rPm">–</td></tr>
+    <tr><th></th><th>Length</th><th>Rough</th><th title="close-overtaking spots passed">Overtakes</th><th title="mean air rank, 0.5 = typical">PM</th><th title="mean stop-and-go, 0-1">Stops</th></tr>
+    <tr><td><span class="swatch" style="background:#7a8794"></span>Shortest</td><td id="sLen">–</td><td id="sRough">–</td><td id="sDanger">–</td><td id="sPm">–</td><td id="sStop">–</td></tr>
+    <tr><td><span class="swatch" style="background:#1a7f37"></span>Your route</td><td id="rLen">–</td><td id="rRough">–</td><td id="rDanger">–</td><td id="rPm">–</td><td id="rStop">–</td></tr>
   </table>
   <div id="summary"></div>
   <div id="error"></div>
@@ -71,6 +75,7 @@
     <span class="swatch" style="background:#d63b3b"></span>30+
     <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showDanger"> Show close-overtaking spots</label>
     <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showAir"> Show air quality (darker = worse than usual)</label>
+    <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showFlow"> Show stop-and-go (darker = more stopping)</label>
   </div>
 </div>
 
@@ -117,6 +122,16 @@ fetch(API + "/air").then(r => r.json()).then(data => {
 });
 document.getElementById("showAir").onchange = e => e.target.checked ? air.addTo(map) : air.remove();
 
+// Stop-and-go from traffic_flow_heilbronn (1 - avg_traffic_flow), darker = more slowing and stopping.
+const flow = L.layerGroup();
+fetch(API + "/flow").then(r => r.json()).then(data => {
+  L.geoJSON(data, {
+    style: f => ({ color: "#e65100", weight: 3, opacity: 0.05 + 0.85 * f.properties.stop_go }),
+    interactive: false,
+  }).addTo(flow);
+});
+document.getElementById("showFlow").onchange = e => e.target.checked ? flow.addTo(map) : flow.remove();
+
 const shortestLayer =L.geoJSON(null, { style: { color: "#7a8794", weight: 5, opacity: 0.9, dashArray: "6 8" } }).addTo(map);
 const routeLayer = L.geoJSON(null, { style: { color: "#1a7f37", weight: 6, opacity: 0.9 } }).addTo(map);
 
@@ -132,7 +147,7 @@ map.on("click", e => {
   update();
 });
 
-const sliders = ["bumpPenalty", "dangerPenalty", "pmPenalty"].map(id => {
+const sliders = ["bumpPenalty", "dangerPenalty", "pmPenalty", "stopPenalty"].map(id => {
   const el = document.getElementById(id);
   el.oninput = () => document.getElementById(id + "Value").textContent = el.value;
   el.onchange = update;
@@ -162,11 +177,12 @@ function show(prefix, p) {
   setText(prefix + "Rough", p && p.mean_roughness != null ? p.mean_roughness.toFixed(1) : "–");
   setText(prefix + "Danger", p ? p.danger_points : "–");
   setText(prefix + "Pm", p && p.mean_pm_risk != null ? p.mean_pm_risk.toFixed(2) : "–");
+  setText(prefix + "Stop", p && p.mean_stop_go != null ? p.mean_stop_go.toFixed(2) : "–");
 }
 
-async function compareRoutes([bump_penalty, danger_penalty, pm_penalty]) {
+async function compareRoutes([bump_penalty, danger_penalty, pm_penalty, stop_penalty]) {
   const a = start.getLatLng(), b = end.getLatLng();
-  const q = new URLSearchParams({ from_lat: a.lat, from_lon: a.lng, to_lat: b.lat, to_lon: b.lng, bump_penalty, danger_penalty, pm_penalty });
+  const q = new URLSearchParams({ from_lat: a.lat, from_lon: a.lng, to_lat: b.lat, to_lon: b.lng, bump_penalty, danger_penalty, pm_penalty, stop_penalty });
   const res = await fetch(API + "/route/compare?" + q);
   const body = await res.json();
   if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail));

@@ -1,4 +1,4 @@
-"""Helpers for turning the ATRAI bumpy_roads and danger_zones data into routing costs on the OSM graph."""
+"""Helpers for turning the ATRAI bumpy_roads, danger_zones, air_quality and traffic_flow data into routing costs on the OSM graph."""
 import ast
 
 import numpy as np
@@ -39,6 +39,18 @@ MIN_RIDE_POINTS = 20
 # part, scaled to sum to 1. Overtaking is already counted through danger_zones_raw.
 PM_WEIGHTS = {"Finedust PM1": 0.4, "Finedust PM2.5": 0.3, "Finedust PM4": 0.2, "Finedust PM10": 0.1}
 
+# traffic_flow: avg_traffic_flow 0-1 per segment, 1 = cyclists roll freely, 0 = slow or stop-and-go
+# (traffic lights, congestion). Routing uses stop_go = 1 - flow, length-scaled like roughness.
+# Half the segments have 7 or fewer points and are noisy, so each way's points-weighted mean is
+# pulled towards the city median by FLOW_PRIOR_POINTS virtual points at that median.
+# Median flow is ~0.37, so unmeasured streets get stop_go 0.63.
+MEDIAN_FLOW = 0.37
+FLOW_PRIOR_POINTS = 5
+DEFAULT_STOP_GO = 1 - MEDIAN_FLOW
+# Way means span ~0.5-0.85 stop_go (5-95%), narrower than air ranks, so a mild default still
+# trades a short detour for streets where bikes don't keep stopping.
+DEFAULT_STOP_PENALTY = 0.5
+
 
 def osm_way_ids(osmid):
     """`osmid` is a string: either "83738619" or a merged list "[439572396, 401802699]"."""
@@ -62,10 +74,27 @@ def edge_roughness(osmid, way_rough):
     """Mean roughness of the OSM ways a graph edge is made of, or None if none was measured.
 
     OSMnx gives `osmid` as an int, or a list of ints when it merged several ways into one edge.
+    Also used for stop_go (any per-way value).
     """
     ids = osmid if isinstance(osmid, list) else [osmid]
     measured = [way_rough[i] for i in ids if i in way_rough]
     return sum(measured) / len(measured) if measured else None
+
+
+def way_stop_go(flow_features):
+    """stop_go (1 - avg_traffic_flow, 0-1) per OSM way id from the traffic_flow_heilbronn features:
+    the points-weighted mean flow, pulled towards MEDIAN_FLOW by FLOW_PRIOR_POINTS.
+    """
+    sums = {}
+    for f in flow_features:
+        p = f["properties"]
+        if p.get("avg_traffic_flow") is None or not p.get("points_in_segment"):
+            continue
+        for way in osm_way_ids(p["osmid"]):
+            flow, n = sums.get(way, (0.0, 0))
+            sums[way] = (flow + p["avg_traffic_flow"] * p["points_in_segment"], n + p["points_in_segment"])
+    return {way: 1 - (flow + FLOW_PRIOR_POINTS * MEDIAN_FLOW) / (n + FLOW_PRIOR_POINTS)
+            for way, (flow, n) in sums.items()}
 
 
 def clean_overtaking(features):
@@ -110,10 +139,12 @@ def point_risks(features, risk_key):
 
 def edge_cost(length_m, normalized_roughness=DEFAULT_ROUGHNESS, bump_penalty=DEFAULT_BUMP_PENALTY,
               danger=0.0, danger_penalty=DEFAULT_DANGER_PENALTY,
-              pm_risk=DEFAULT_PM_RISK, pm_penalty=DEFAULT_PM_PENALTY):
-    """Routing cost: plain length, inflated on rough and polluted streets, plus a fixed
+              pm_risk=DEFAULT_PM_RISK, pm_penalty=DEFAULT_PM_PENALTY,
+              stop_go=DEFAULT_STOP_GO, stop_penalty=DEFAULT_STOP_PENALTY):
+    """Routing cost: plain length, inflated on rough, polluted and stop-and-go streets, plus a fixed
     `danger_penalty` metres per unit of overtaking risk (`danger` = summed risk on the edge).
 
     Normalized Roughness is 0-100 in the live data (not 0-1 as the docs table says).
     """
-    return length_m * (1 + bump_penalty * normalized_roughness / 100 + pm_penalty * pm_risk) + danger_penalty * danger
+    return (length_m * (1 + bump_penalty * normalized_roughness / 100 + pm_penalty * pm_risk + stop_penalty * stop_go)
+            + danger_penalty * danger)

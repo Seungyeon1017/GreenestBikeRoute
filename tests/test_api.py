@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
-from backend.schemas import DangerCollection, RouteCollection, RouteComparison, RoughnessCollection
+from backend.schemas import DangerCollection, FlowCollection, RouteCollection, RouteComparison, RoughnessCollection
 from download_data import HEILBRONN_BBOX, overtaking_risk
 from routing.costs import MIN_OVERTAKING_CM
 from tests.conftest import COORDS, A, B
@@ -74,12 +74,12 @@ def test_unroutable_point_is_400(client):
 def test_penalty_is_documented(client):
     spec = client.get("/openapi.json").json()
     bump_penalty = next(p for p in spec["paths"]["/route"]["get"]["parameters"] if p["name"] == "bump_penalty")
-    assert bump_penalty["description"] == "How much do you hate bumps"
+    assert bump_penalty["description"].startswith("How much do you hate bumps. 0 = ignore")
 
 
 def test_danger_penalties_are_passed_through(client):
-    p = client.get("/route", params={**params(), "danger_penalty": 70, "pm_penalty": 3}).json()["features"][0]["properties"]
-    assert (p["danger_penalty"], p["pm_penalty"]) == (70, 3)
+    p = client.get("/route", params={**params(), "danger_penalty": 70, "pm_penalty": 3, "stop_penalty": 2}).json()["features"][0]["properties"]
+    assert (p["danger_penalty"], p["pm_penalty"], p["stop_penalty"]) == (70, 3, 2)
 
 
 def test_danger_overlay(client):
@@ -105,3 +105,14 @@ def test_roughness_overlay(client):
     assert len(features) > 9000
     assert set(features[0]["properties"]) == {"roughness"}
     RoughnessCollection.model_validate(r.json())
+
+
+def test_flow_overlay(client):
+    r = client.get("/flow")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/geo+json"
+    features = r.json()["features"]
+    assert len(features) > 7000
+    assert all(0 <= f["properties"]["stop_go"] <= 1 for f in features)
+    assert features[0]["geometry"]["type"] == "LineString"
+    FlowCollection.model_validate(r.json())

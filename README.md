@@ -2,17 +2,18 @@
 *Greenest Bike Route* is a smart cycling navigation platform that recommends routes based on environmental quality and cycling comfort, rather than distance alone.
 
 ## Route Planning API
-Serves bike routes that avoid bumpy streets, close-overtaking spots and streets with bad air as GeoJSON. The first start downloads the Heilbronn street graph from OpenStreetMap into `cache/` (about 2 minutes); later starts take a few seconds. See [Backend Setup and Usage](#backend-setup-and-usage) for how to start it.
+Serves bike routes that avoid bumpy streets, close-overtaking spots, streets with bad air and stop-and-go streets as GeoJSON. The first start downloads the Heilbronn street graph from OpenStreetMap into `cache/` (about 2 minutes); later starts take a few seconds. See [Backend Setup and Usage](#backend-setup-and-usage) for how to start it.
 
-Example request: `/route?from_lat=49.14838&from_lon=9.22687&to_lat=49.1262&to_lon=9.22439&bump_penalty=10`. Three penalties steer the route, and setting all of them to 0 gives the shortest route:
+Example request: `/route?from_lat=49.14838&from_lon=9.22687&to_lat=49.1262&to_lon=9.22439&bump_penalty=10`. Four penalties steer the route, and setting all of them to 0 gives the shortest route:
 
 - `bump_penalty` (default 10): how much you hate bumps (`bumpy_roads`).
 - `danger_penalty` (default 25): metres of detour you'd ride to pass one fewer close-overtaking spot (`danger_zones_raw`, summed Risk Index Overtaking; readings of 25 cm or less ignored).
 - `pm_penalty` (default 0.5): how much you hate bad air (`air_quality`, fine dust ranked within each ride so weather drops out, averaged per street).
+- `stop_penalty` (default 0.5): how much you hate slowing down and stopping at traffic lights or in congestion (`traffic_flow`).
 
 `/route/compare` takes the same parameters and returns the route next to the shortest route, to draw both and show what the penalties changed. See `/docs` for the response.
 
-Map overlays: `/roughness` (streets), `/danger` (overtaking spots) and `/air` (air-quality points, 0-1 worse than usual for the same bike trip) return GeoJSON.
+Map overlays: `/roughness` (streets), `/danger` (overtaking spots), `/air` (air-quality points, 0-1 worse than usual for the same bike trip) and `/flow` (streets, 0-1 stop-and-go) return GeoJSON.
 
 Danger points come from `danger_zones_raw_heilbronn` (one row per overtake, with device id and exact distance) and are snapped to the nearest street within 25 m. [routing/README.md](routing/README.md) explains how route planning works and why readings of 25 cm or less are ignored.
 

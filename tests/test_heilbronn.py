@@ -6,12 +6,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
+from backend.schemas import EXAMPLE_TRIP, RouteComparison
 from routing.graph import GRAPH_PATH, load_graph
 
 pytestmark = pytest.mark.skipif(not GRAPH_PATH.exists(), reason="Heilbronn graph not cached yet")
 
 # A trip across the south-east of the city where the shortest route is rough.
-TRIP = {"from_lat": 49.14838, "from_lon": 9.22687, "to_lat": 49.1262, "to_lon": 9.22439}
+TRIP = EXAMPLE_TRIP
 
 
 @pytest.fixture(scope="module")
@@ -20,7 +21,7 @@ def client():
         yield c
 
 
-ONLY_BUMPS = {"danger_penalty": 0, "pm_penalty": 0}
+ONLY_BUMPS = {"danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0}
 
 
 def test_hating_bumps_gives_a_smoother_longer_route(client):
@@ -31,7 +32,7 @@ def test_hating_bumps_gives_a_smoother_longer_route(client):
 
 
 def test_hating_close_overtaking_passes_fewer_danger_spots(client):
-    zero = {"bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0}
+    zero = {"bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0}
     shortest = client.get("/route", params={**TRIP, **zero}).json()["features"][0]["properties"]
     safe = client.get("/route", params={**TRIP, **zero, "danger_penalty": 25}).json()["features"][0]["properties"]
     assert safe["danger_points"] < shortest["danger_points"] / 2
@@ -45,6 +46,16 @@ def test_air_overlay_gives_ranked_points(client):
     assert all(f["geometry"]["type"] == "Point" and 0 <= f["properties"]["air"] <= 1 for f in features)
 
 
+def test_hating_stop_and_go_gives_a_more_free_flowing_route(client):
+    # A north-to-south-east trip where the shortest route runs through stop-and-go streets.
+    trip = {"from_lat": 49.16, "from_lon": 9.215, "to_lat": 49.135, "to_lon": 9.235}
+    zero = {"bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0}
+    shortest = client.get("/route", params={**trip, **zero}).json()["features"][0]["properties"]
+    smooth = client.get("/route", params={**trip, **zero, "stop_penalty": 5}).json()["features"][0]["properties"]
+    assert smooth["mean_stop_go"] < shortest["mean_stop_go"]
+    assert smooth["length_m"] < shortest["length_m"] * 1.05
+
+
 def test_route_starts_and_ends_near_the_requested_points(client):
     coords = client.get("/route", params=TRIP).json()["features"][0]["geometry"]["coordinates"]
     assert len(coords) > 10
@@ -55,3 +66,14 @@ def test_route_starts_and_ends_near_the_requested_points(client):
 
 def test_response_is_plain_json(client):
     json.dumps(client.get("/route", params=TRIP).json())  # no numpy types leak out
+
+
+def test_docs_example_is_a_real_response(client):
+    """The /route and /route/compare examples in /docs are what the example trip returns."""
+    example = RouteComparison.model_config["json_schema_extra"]["example"]
+    real = client.get("/route/compare", params=TRIP).json()
+    for key in ("route", "shortest"):
+        assert real[key]["properties"] == example[key]["properties"]
+        coords = real[key]["geometry"]["coordinates"]
+        assert example[key]["geometry"]["coordinates"] == [coords[0], coords[len(coords) // 2], coords[-1]]
+    assert (real["detour_pct"], real["same_path"]) == (example["detour_pct"], example["same_path"])
