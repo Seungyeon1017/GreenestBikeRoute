@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Turns the ATRAI datasets in ../data (downloaded by ../download_data.py)
+ * Turns the ATRAI datasets in ../data/ready-made (downloaded by ../download_data.py)
  * into small GeoJSON files for the Overview map in public/map-data/.
  *
  *   node scripts/build-map-data.mjs
@@ -13,7 +13,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const DATA_DIR = join(here, '..', '..', 'data')
+const DATA_DIR = join(here, '..', '..', 'data', 'ready-made')
 const OUT_DIR = join(here, '..', 'public', 'map-data')
 
 // Grid used as "area" on the Overview map: ~500 m x 500 m cells.
