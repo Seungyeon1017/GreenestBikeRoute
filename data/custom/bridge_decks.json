@@ -1,0 +1,29 @@
+{
+  "source": "Deck heights read off the LGL DOM1 surface model (captured 2017-02-15) with routing/bridge_profile.py and checked on its plots; Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0",
+  "unit": "m above sea level (NHN, DHHN2016)",
+  "bridges": {
+    "Erwin-Fuchs-Brücke": {
+      "checked": "2026-10-29: smooth hump over the railway yard and the Neckar, abutments within 0.3 m of the DGM1 heights; crest 3.8 m above the line between the abutments",
+      "nodes": {"148083098": 164.3},
+      "crests": [{"lon": 9.199246, "lat": 49.132701, "height_m": 165.8}]
+    },
+    "Karl-Nägele-Brücke": {
+      "checked": "2026-10-29: arch bridge, cars on the deck, bikes on the two side paths. The highest DOM1 points are a jump to 161.7 m near the west end of the north path (not the deck shape) and a sunk 2017 surface near the west end of the south path, so both crests are the deck plateau at 160.7 m, read off the plot at the same cross-section (--at 1=100 --at 2=140)",
+      "nodes": {},
+      "crests": [
+        {"lon": 9.209118, "lat": 49.151349, "height_m": 160.7},
+        {"lon": 9.209148, "lat": 49.151154, "height_m": 160.7}
+      ]
+    },
+    "Bleichinselbrücke": {
+      "checked": "2026-10-29: low hump on the road (both directions) and the two side paths, crests 158.1-158.4 m, 0.6-1.5 m above the line between the abutments. Run 1's highest point is a narrow spike 84 m in (sign or lamp), so its crest is the plateau 55 m in (--at 1=55)",
+      "nodes": {},
+      "crests": [
+        {"lon": 9.211625, "lat": 49.147227, "height_m": 158.1},
+        {"lon": 9.211721, "lat": 49.147148, "height_m": 158.4},
+        {"lon": 9.211581, "lat": 49.147284, "height_m": 158.2},
+        {"lon": 9.211713, "lat": 49.147211, "height_m": 158.1}
+      ]
+    }
+  }
+}

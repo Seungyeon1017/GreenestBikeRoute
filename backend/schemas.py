@@ -15,9 +15,11 @@ ROUTE_EXAMPLE = {
                  "coordinates": [[9.2268683, 49.148385], [9.2228294, 49.1386103], [9.2243909, 49.1262013]]},
     "properties": {
         "bump_penalty": 10.0, "danger_penalty": 25.0, "pm_penalty": 0.5, "stop_penalty": 0.5, "prefer_time": False,
+        "shade_penalty": 0.5, "dark_penalty": 1.0, "prefer_bike_friendly": 0.0, "depart_time": None, "daylight": None, "shade_slot": None,
         "length_m": 3088.2, "duration_s": 940, "speed_measured_share": 0.97, "mean_roughness": 12.3, "measured_share": 0.97, "estimated_share": 0.0,
-        "danger_points": 21, "danger_risk": 17.12, "mean_pm_risk": 0.544, "pm_measured_share": 0.71,
-        "mean_stop_go": 0.691, "stop_measured_share": 0.97, "lifts": 0,
+        "danger_points": 21, "danger_risk": 17.12, "mean_pm_risk": 0.511, "pm_measured_share": 0.65,
+        "mean_stop_go": 0.691, "stop_measured_share": 0.97,
+        "mean_shade": None, "shade_known_share": 1.0, "mean_lit": 0.986, "lit_known_share": 0.97, "lifts": 0,
     },
 }
 SHORTEST_EXAMPLE = {
@@ -26,9 +28,11 @@ SHORTEST_EXAMPLE = {
                  "coordinates": [[9.2268683, 49.148385], [9.2294832, 49.1399564], [9.2243909, 49.1262013]]},
     "properties": {
         "bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0, "prefer_time": False,
+        "shade_penalty": 0, "dark_penalty": 0, "prefer_bike_friendly": 0, "depart_time": None, "daylight": None, "shade_slot": None,
         "length_m": 3061.2, "duration_s": 940, "speed_measured_share": 0.97, "mean_roughness": 24.7, "measured_share": 0.97, "estimated_share": 0.02,
-        "danger_points": 10, "danger_risk": 7.94, "mean_pm_risk": 0.604, "pm_measured_share": 0.77,
-        "mean_stop_go": 0.665, "stop_measured_share": 0.97, "lifts": 0,
+        "danger_points": 10, "danger_risk": 7.94, "mean_pm_risk": 0.524, "pm_measured_share": 0.75,
+        "mean_stop_go": 0.665, "stop_measured_share": 0.97,
+        "mean_shade": None, "shade_known_share": 1.0, "mean_lit": 0.93, "lit_known_share": 0.99, "lifts": 0,
     },
 }
 
@@ -79,6 +83,13 @@ class RouteProperties(BaseModel):
     pm_penalty: float = Field(description=PLANNED_WITH)
     stop_penalty: float = Field(description=PLANNED_WITH)
     prefer_time: bool = Field(description="Whether the route was planned by riding time instead of length, as requested (false for the shortest route)")
+    shade_penalty: float = Field(description=PLANNED_WITH)
+    dark_penalty: float = Field(description=PLANNED_WITH)
+    prefer_bike_friendly: float = Field(description="How much bike-friendly streets were preferred, as requested (0 for the shortest route)")
+    depart_time: Optional[str] = Field(description="The requested depart_time in Heilbronn local time (ISO 8601), or null")
+    daylight: Optional[bool] = Field(
+        description="Whether the sun is up at depart_time (then shade_penalty applies, else dark_penalty); null without depart_time")
+    shade_slot: Optional[str] = Field(description="The shade time slot used by day (nearest to the time of day of depart_time); null otherwise")
     length_m: float = Field(description="Route length in metres")
     duration_s: int = Field(
         description="Expected riding time in seconds from speed_map (measured cyclist speed, waits included; unmeasured streets at 15.7 km/h), lifts included")
@@ -91,11 +102,17 @@ class RouteProperties(BaseModel):
     danger_points: int = Field(description="Close-overtaking spots (danger_zones) on the route")
     danger_risk: float = Field(description="Summed Risk Index Overtaking of those spots")
     mean_pm_risk: Optional[float] = Field(
-        description="Air rank 0-1 from air_quality (0.5 = typical for its ride), length-weighted over the measured part; null if none was measured")
+        description="Air score 0-1 from air_quality (0.5 = typical, see `/air`), length-weighted over the measured part; null if none was measured")
     pm_measured_share: float = Field(description="Share of the route length with air_quality measurements, 0-1")
     mean_stop_go: Optional[float] = Field(
         description="Stop-and-go 0-1 from traffic_flow (1 - avg_traffic_flow; higher = more slowing and stopping), length-weighted over the measured part; null if none was measured")
     stop_measured_share: float = Field(description="Share of the route length with traffic_flow measurements, 0-1")
+    mean_shade: Optional[float] = Field(
+        description="Share in building or tree shade at shade_slot, 0-1, length-weighted over the part with shade data; null unless by day")
+    shade_known_share: float = Field(description="Share of the route length with shade data, 0-1")
+    mean_lit: Optional[float] = Field(
+        description="Chance the streets are lit at night, 0-1, length-weighted over the part with lighting data; null if none")
+    lit_known_share: float = Field(description="Share of the route length with lighting data, 0-1")
     lifts: int = Field(description="Lifts (elevators) the route rides through, e.g. onto the Campusbrücke; each one costs stop_penalty x 100 m")
 
 
@@ -116,7 +133,7 @@ class RouteCollection(BaseModel):
 class RouteComparison(BaseModel):
     """The route next to the shortest route between the same points, e.g. to draw both and show what the penalties changed."""
     route: RouteFeature = Field(description="The route for the given penalties, as from /route")
-    shortest: RouteFeature = Field(description="The shortest route: all penalties 0, prefer_time off")
+    shortest: RouteFeature = Field(description="The shortest route: all penalties 0, prefer_time off, same depart_time")
     detour_pct: float = Field(description="How much longer the route is than the shortest route, in %")
     extra_time_pct: float = Field(description="How much longer the route takes than the shortest route (by duration_s), in %; negative if faster")
     same_path: bool = Field(description="True if the route follows the same streets as the shortest route")
@@ -198,11 +215,14 @@ class AirFeature(BaseModel):
     type: Literal["Feature"]
     geometry: Point
     properties: dict[Literal["air"], float] = Field(
-        description="How much worse than usual the air is, 0-1: compared with the rest of the same bike trip, where 0.5 is typical and higher is worse. Not an absolute PM value")
+        description="How much worse than usual the air is, 0-1, where 0.5 is typical and higher is worse. Not an absolute PM value: "
+                    "each bike reading is divided by the fine dust the senseBox:home stations measured in that hour "
+                    "(so weather and the time of day drop out), then compared with the rest of the same bike trip "
+                    "(so the bike sensor's own offset drops out). 1 = about 1.35x the trip's usual, 0 = as far below")
 
 
 class AirCollection(BaseModel):
-    """Air readings about every 20 m of every ride (~166,000 points, ~21 MB): load it only when the layer is shown."""
+    """Air readings about every 20 m of every ride (~165,000 points, ~21 MB): load it only when the layer is shown."""
     type: Literal["FeatureCollection"]
     features: list[AirFeature]
 
@@ -240,6 +260,151 @@ class SpeedCollection(BaseModel):
 
     model_config = collection_example({"type": "Feature", "geometry": {"type": "LineString", "coordinates": [
         [9.2213487, 49.1495941], [9.2212358, 49.1495259]]}, "properties": {"speed_kmh": 12.8}})
+
+
+LINE_EXAMPLE = {"type": "LineString", "coordinates": [[9.2213487, 49.1495941], [9.2212358, 49.1495259]]}
+
+
+class ShadeFeature(BaseModel):
+    type: Literal["Feature"]
+    geometry: LineString
+    properties: dict[Literal["shade"], list[float]] = Field(
+        description="Share of the street in building or tree shade, 0-1, one value per entry of the collection's `slots`")
+
+
+class ShadeCollection(BaseModel):
+    """Bike graph streets with shade from LoD2 buildings and street trees, computed for a few hours of 21 July
+    (routing.shadow). Sources: LGL BW LoD2 and Stadt Heilbronn Baumkataster, dl-de/by-2-0."""
+    type: Literal["FeatureCollection"]
+    slots: list[str] = Field(description="The time of each shade value, ISO 8601 local time, e.g. 2026-07-21T15:00+02:00")
+    features: list[ShadeFeature]
+
+    model_config = {"json_schema_extra": {"example": {
+        "type": "FeatureCollection",
+        "slots": ["2026-07-21T09:00+02:00", "2026-07-21T12:00+02:00", "2026-07-21T15:00+02:00", "2026-07-21T18:00+02:00"],
+        "features": [{"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"shade": [0.42, 0.1, 0.05, 0.31]}}]}}}
+
+
+class LightingFeature(BaseModel):
+    type: Literal["Feature"]
+    geometry: LineString
+    properties: dict[Literal["lit"], float] = Field(
+        description="Chance the street is lit at night, 0-1: 1/0 from OSM lit=*, else from Mapillary street lights or a road-type rule")
+
+
+class LightingCollection(BaseModel):
+    """Bike graph streets with street lighting (routing.lighting). Sources: OpenStreetMap contributors (ODbL),
+    Mapillary (CC BY-SA 4.0), LGL BW LoD2 (dl-de/by-2-0)."""
+    type: Literal["FeatureCollection"]
+    features: list[LightingFeature]
+
+    model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"lit": 0.96}})
+
+
+class BikeFriendlyFeature(BaseModel):
+    type: Literal["Feature"]
+    geometry: LineString
+    properties: dict[Literal["osm_id"], int] = Field(description="OpenStreetMap way id")
+
+
+class BikeFriendlyCollection(BaseModel):
+    """Bike paths, bike lanes, bike roads and signed bike routes in Heilbronn (OSM via Overpass,
+    data/custom/bike_friendly_streets_heilbronn.overpassql): the streets prefer_bike_friendly favours.
+    Source: OpenStreetMap contributors (ODbL)."""
+    type: Literal["FeatureCollection"]
+    features: list[BikeFriendlyFeature]
+
+    model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"osm_id": 4087087}})
+
+
+class ScoreFeature(BaseModel):
+    type: Literal["Feature"]
+    geometry: LineString
+    properties: dict[Literal["score"], float] = Field(
+        description="Overall score 0-100: the street's percentile, by length, among Heilbronn streets ranked by routing cost per "
+                    "metre for the request's penalties (higher = better; 50 = median). Combines roughness, close-overtaking spots "
+                    "and air-quality points snapped to the street, stop-and-go and lifts; with depart_time also sun "
+                    "(by day) or no street lighting (after dark). Streets without data count at the routing defaults")
+
+
+class ScoreCollection(BaseModel):
+    """Every bike graph street once, with its overall score."""
+    type: Literal["FeatureCollection"]
+    features: list[ScoreFeature]
+
+    model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"score": 72.4}})
+
+
+class VehicleProperties(BaseModel):
+    provider: str = Field(description="Sharing provider, e.g. Dott")
+    vehicle: Literal["bike", "scooter"] = Field(description="bike (incl. cargo bikes) or scooter (e-scooter)")
+    vehicle_id: str
+    electric: bool = Field(description="True for e-scooters, pedelecs (pedal assist) and other electric bikes")
+    battery_pct: Optional[int] = Field(description="Battery level 0-100, null if the provider doesn't say")
+    range_m: Optional[float] = Field(description="Distance the battery still lasts, in metres, as the provider estimates")
+    price: Optional[str] = Field(description="Price as the provider publishes it, e.g. \"€1.00 to unlock + €0.44/min\"")
+    rent_url: Optional[str] = Field(description="Link that opens this vehicle in the provider's app (or its web page) to rent it")
+    last_reported: Optional[str] = Field(description="When the provider last reported this vehicle (ISO 8601)")
+    distance_m: Optional[int] = Field(None, description="Metres from the near_lat/near_lon point, when one was given")
+
+
+class VehicleFeature(BaseModel):
+    type: Literal["Feature"]
+    geometry: Point
+    properties: VehicleProperties
+
+
+SHARING_UPDATED = "When this snapshot was read from the feed (ISO 8601, UTC); it is at most a minute old unless the feed is down"
+SHARING_ATTRIBUTION = "Data credit to show with the layer"
+
+
+class VehicleCollection(BaseModel):
+    """Shared e-bikes and e-scooters free to rent right now (live, not reserved or broken).
+    Heilbronn: Dott, about 140 pedelecs and 350 e-scooters."""
+    type: Literal["FeatureCollection"]
+    features: list[VehicleFeature]
+    updated: str = Field(description=SHARING_UPDATED)
+    attribution: str = Field(description=SHARING_ATTRIBUTION)
+
+    model_config = {"json_schema_extra": {"example": {
+        "type": "FeatureCollection", "updated": "2026-10-28T15:51:58+00:00",
+        "attribution": "MobiData BW (dl-de/by-2-0), sharing data by the providers",
+        "features": [{"type": "Feature", "geometry": {"type": "Point", "coordinates": [9.2131, 49.1478]}, "properties": {
+            "provider": "Dott", "vehicle": "bike", "vehicle_id": "DOU:Vehicle:9909176a-3cf4-44a8-85c7-7cd6728e77dc", "electric": True,
+            "battery_pct": 73, "range_m": 26800.0, "price": "€1.00 to unlock + €0.44/min",
+            "rent_url": "https://go.ridedott.com/vehicles/9909176a-3cf4-44a8-85c7-7cd6728e77dc?platform=android",
+            "last_reported": "2026-10-28T15:38:14.000+00:00", "distance_m": 614}}]}}}
+
+
+class ZoneProperties(BaseModel):
+    provider: str
+    name: str
+    bikes_available: int = Field(description="E-bikes parked in the zone right now")
+    scooters_available: int = Field(description="E-scooters parked in the zone right now")
+    bike_capacity: Optional[int] = Field(description="How many bikes the zone is meant for, null if unknown")
+    scooter_capacity: Optional[int] = Field(description="How many scooters the zone is meant for, null if unknown")
+    distance_m: Optional[int] = Field(None, description="Metres from the near_lat/near_lon point, when one was given")
+
+
+class ZoneFeature(BaseModel):
+    type: Literal["Feature"]
+    geometry: Point
+    properties: ZoneProperties
+
+
+class ZoneCollection(BaseModel):
+    """Parking zones where shared bikes and scooters are picked up and left (Dott: about 35 in Heilbronn), with live counts."""
+    type: Literal["FeatureCollection"]
+    features: list[ZoneFeature]
+    updated: str = Field(description=SHARING_UPDATED)
+    attribution: str = Field(description=SHARING_ATTRIBUTION)
+
+    model_config = {"json_schema_extra": {"example": {
+        "type": "FeatureCollection", "updated": "2026-10-28T15:51:58+00:00",
+        "attribution": "MobiData BW (dl-de/by-2-0), sharing data by the providers",
+        "features": [{"type": "Feature", "geometry": {"type": "Point", "coordinates": [9.205396, 49.133834]}, "properties": {
+            "provider": "Dott", "name": "Parkingzone Theresienstraße /Badstraße", "bikes_available": 5,
+            "scooters_available": 5, "bike_capacity": 5, "scooter_capacity": 5}}]}}}
 
 
 class Error(BaseModel):

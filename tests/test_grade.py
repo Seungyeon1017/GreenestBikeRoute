@@ -5,7 +5,8 @@ import networkx as nx
 import pytest
 
 import routing.elevation as elevation
-from routing.elevation import fix_structures, ground_heights, read_xyz, structure_nodes, tile_2km
+from routing.elevation import attach_elevation, fix_structures, ground_heights, load_bridge_decks, place_crests, \
+    read_xyz, structure_nodes, structure_nodes_from_ways, tile_2km
 from routing.grade import NoElevationError, edge_grade, route_grade, severity
 from routing.route import find_route
 from routing.shade import utm32_to_lonlat
@@ -126,6 +127,76 @@ def test_bridge_no_is_a_normal_street():
         if "bridge" in d:
             d["bridge"] = "no"
     assert structure_nodes(G) == set() and fix_structures(G, heights) == {}
+
+
+def test_nodes_on_bridges_come_from_the_osm_ways():
+    """An inner point of a bridge way, or where two meet, is on the structure; its plain ends are not."""
+    G = nx.MultiDiGraph()
+    pts = {"a": (9.0, 49.0), "b": (9.001, 49.0), "c": (9.002, 49.0), "d": (9.003, 49.0), "e": (9.004, 49.0)}
+    for n, (x, y) in pts.items():
+        G.add_node(n, x=x, y=y)
+    lines = [[pts["a"], pts["b"], pts["c"]], [pts["c"], pts["d"]], [pts["d"], pts["e"]]]
+    assert structure_nodes_from_ways(G, lines) == {"b", "c", "d"}
+
+
+def test_crest_and_deck_heights_shape_the_bridge():
+    """L (160 m) -- 10 m -- P1 -- 20 m -- P2 -- 30 m -- R (166 m), crest 170 m halfway between P1 and P2."""
+    G, heights = bridge_graph()
+    crest = {"u": "P1", "v": "P2", "frac": 0.5, "height": 170.0, "length": 20.0}
+    fix_structures(G, heights, crests=[crest])
+    # straight lines L -> crest (20 m in) and crest -> R (40 m on)
+    assert heights["P1"] == pytest.approx(165.0) and heights["P2"] == pytest.approx(169.0)
+    assert all(isinstance(n, str) for n in heights)  # the crest is not left behind as a node
+
+    G, heights = bridge_graph()
+    fixed = fix_structures(G, heights, deck={"P1": 168.0})
+    assert fixed["P1"] == heights["P1"] == 168.0
+    assert heights["P2"] == pytest.approx(168.0 - 2.0 * 20 / 50)  # on the line P1 (168 m) -> R (166 m)
+
+
+def test_crests_go_on_the_nearest_bridge_edge(toy_graph):
+    toy_graph.edges[A, C, 0]["bridge"] = "yes"
+    (placed,) = place_crests(toy_graph, [(9.2104, 49.1402, 160.0)])  # halfway along A -> C
+    assert (placed["u"], placed["v"], placed["height"], placed["length"]) == (A, C, 160.0, 70.0)
+    assert placed["frac"] == pytest.approx(0.5, abs=0.01)
+    with pytest.raises(ValueError):
+        place_crests(toy_graph, [(9.2200, 49.1500, 160.0)])  # a kilometre away
+
+
+def test_bridge_decks_file(tmp_path):
+    path = tmp_path / "bridge_decks.json"
+    path.write_text('{"bridges": {"X-Brücke": {"nodes": {"7": 164.3}, "crests": [{"lon": 9.1, "lat": 49.1, "height_m": 165.8}]},'
+                    ' "Y-Brücke": {"crests": [{"lon": 9.2, "lat": 49.2, "height_m": 160.7}]}}}', encoding="utf-8")
+    assert load_bridge_decks(path) == ({7: 164.3}, [(9.1, 49.1, 165.8), (9.2, 49.2, 160.7)])
+    assert load_bridge_decks(tmp_path / "missing.json") == ({}, [])
+
+
+def test_crests_are_attached_to_both_directions(toy_graph):
+    toy_graph.add_edge(C, A, osmid=12, length=70.0, roughness=None)
+    attach_elevation(toy_graph, HEIGHTS, [{"u": A, "v": C, "frac": 0.25, "height": 160.0, "length": 70.0}])
+    assert toy_graph.edges[A, C, 0]["crest"] == (0.25, 160.0)
+    assert toy_graph.edges[C, A, 0]["crest"] == (0.75, 160.0)
+    assert "crest" not in toy_graph.edges[A, B, 0]
+
+
+def test_a_crest_splits_its_edge_into_up_and_down(hilly):
+    hilly.edges[A, C, 0]["crest"] = (0.5, 156.0)  # A (150 m) -> crest (156 m) -> C (155 m) -> B (153 m)
+    fc = route_grade(hilly, COORDS[A], COORDS[B], bump_penalty=10)
+    pieces = [(f["properties"]["severity"], f["properties"]["grade_pct"], f["properties"]["start_m"]) for f in fc["features"]]
+    assert pieces == [("very_steep", 17.1, 0), ("gentle", -2.9, 35)]  # crest -> C and C -> B: both -2.9 %
+    assert fc["features"][0]["geometry"]["coordinates"][-1] == pytest.approx([9.2104, 49.1402])
+    s = fc["summary"]
+    assert (s["length_m"], s["climb_m"], s["descent_m"], s["max_grade_pct"]) == (140, 6, 3, 17.1)
+
+
+def test_a_start_on_a_crest_edge_keeps_the_climb(hilly):
+    """The start splits A -> C halfway, before its crest (158 m, 3/4 along): it sits on the line A -> crest."""
+    hilly.edges[A, C, 0]["crest"] = (0.75, 158.0)
+    halfway = ((COORDS[A][0] + COORDS[C][0]) / 2, (COORDS[A][1] + COORDS[C][1]) / 2)
+    s = route_grade(hilly, halfway, COORDS[B], bump_penalty=10)["summary"]
+    assert s["start_elevation_m"] == pytest.approx(150 + 8 * 0.5 / 0.75, abs=0.05)
+    assert s["climb_m"] == pytest.approx(158 - (150 + 8 * 0.5 / 0.75), abs=0.05) and s["descent_m"] == 5
+    assert hilly.edges[A, C, 0]["crest"] == (0.75, 158.0) and "snap-start" not in hilly
 
 
 # ------------------------------------------------------------ DGM1 files --

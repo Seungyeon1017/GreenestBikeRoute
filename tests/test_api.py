@@ -2,10 +2,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
-from backend.schemas import DangerCollection, FlowCollection, GradeCollection, RouteCollection, RouteComparison, \
-    RoughnessCollection, SpeedCollection
+from backend.schemas import DangerCollection, FlowCollection, GradeCollection, LightingCollection, RouteCollection, \
+    RouteComparison, RoughnessCollection, ScoreCollection, ShadeCollection, SpeedCollection
 from download_data import HEILBRONN_BBOX, overtaking_risk
 from routing.costs import MIN_OVERTAKING_CM
+from routing.graph import attach_lighting, attach_shade
 from tests.conftest import COORDS, A, B, joined
 
 
@@ -134,6 +135,82 @@ def test_speed_overlay(client):
     assert all(0 <= f["properties"]["speed_kmh"] < 100 for f in features)
     assert features[0]["geometry"]["type"] == "LineString"
     SpeedCollection.model_validate(r.json())
+
+
+SLOTS = ["2026-07-21T09:00+02:00", "2026-07-21T15:00+02:00"]
+
+
+@pytest.fixture
+def lit_client(toy_graph):
+    attach_shade(toy_graph, SLOTS, {11: [0.2, 0.6], 13: [1.0, 1.0]})
+    attach_lighting(toy_graph, {11: 0.96, 12: 0.0})
+    with TestClient(create_app(graph=toy_graph)) as c:
+        yield c
+
+
+def test_depart_time_is_passed_through_and_off_by_default(lit_client):
+    p = lit_client.get("/route", params=params()).json()["features"][0]["properties"]
+    assert (p["depart_time"], p["daylight"], p["shade_penalty"], p["dark_penalty"]) == (None, None, 0.5, 1.0)
+    p = lit_client.get("/route", params={**params(), "depart_time": "2026-07-21T14:00", "shade_penalty": 2}).json()["features"][0]["properties"]
+    assert (p["depart_time"], p["daylight"], p["shade_slot"], p["shade_penalty"]) == ("2026-07-21T14:00+02:00", True, SLOTS[1], 2)
+    p = lit_client.get("/route", params={**params(), "depart_time": "2026-10-28T19:30"}).json()["features"][0]["properties"]
+    assert (p["depart_time"], p["daylight"], p["mean_shade"]) == ("2026-10-28T19:30+01:00", False, None)
+    RouteCollection.model_validate(lit_client.get("/route", params={**params(), "depart_time": "2026-07-21T14:00"}).json())
+
+
+def test_bad_depart_time_is_invalid(lit_client):
+    assert lit_client.get("/route", params={**params(), "depart_time": "tomorrow"}).status_code == 422
+
+
+def test_shade_overlay(lit_client):
+    r = lit_client.get("/shade")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/geo+json"
+    body = r.json()
+    assert body["slots"] == SLOTS
+    assert [f["properties"]["shade"] for f in body["features"]] == [[0.2, 0.6], [1.0, 1.0]]  # A -> C has no shade data
+    ShadeCollection.model_validate(body)
+
+
+def test_lighting_overlay(lit_client):
+    r = lit_client.get("/lighting")
+    assert r.status_code == 200
+    features = r.json()["features"]
+    assert [f["properties"]["lit"] for f in features] == [0.96, 0.0]
+    assert features[0]["geometry"]["type"] == "LineString"
+    LightingCollection.model_validate(r.json())
+
+
+def test_score_overlay_ranks_streets_by_cost_per_metre(client):
+    r = client.get("/score")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/geo+json"
+    body = ScoreCollection.model_validate(r.json())
+    # C -> B (smooth, 70 m) beats A -> C (default roughness, 70 m) beats A -> B (bumpy, 100 m): midpoint
+    # percentile of the 240 m by cost per metre, e.g. C -> B (170 + 70 / 2) / 240.
+    assert [f.properties["score"] for f in body.features] == [85.4, 56.2, 20.8]
+
+
+def test_score_overlay_follows_the_penalties(client):
+    scores = lambda **p: [f["properties"]["score"] for f in client.get("/score", params=p).json()["features"]]
+    # Without the bump penalty, the bumpy A -> B costs what the others do: all three tie in the middle.
+    assert scores(bump_penalty=0) == [50.0, 50.0, 50.0]
+    assert scores(bump_penalty=0, danger_penalty=0, pm_penalty=0, stop_penalty=0) == [50.0, 50.0, 50.0]
+    assert scores(bump_penalty=50) == scores()  # same order: A -> B is the bumpiest either way
+    assert client.get("/score", params={"bump_penalty": -1}).status_code == 422
+    spec = client.get("/openapi.json").json()["paths"]
+    names = lambda path: [p["name"] for p in spec[path]["get"]["parameters"]]
+    assert names("/score") == names("/route")[4:]  # everything but the start and end
+
+
+def test_score_overlay_counts_unlit_streets_after_dark(toy_graph):
+    attach_lighting(toy_graph, {12: 1.0, 13: 0.0, 14: 0.0})  # the smooth C -> B is unlit
+    with TestClient(create_app(graph=toy_graph)) as c:
+        scores = lambda **p: [f["properties"]["score"] for f in c.get("/score", params=p).json()["features"]]
+        assert scores() == [85.4, 56.2, 20.8]
+        # After dark C -> B costs as much per metre as A -> C: both get the middle of their 140 m.
+        assert sorted(scores(depart_time="2026-10-28T19:30")) == [20.8, 70.8, 70.8]
+        assert c.get("/score", params={"depart_time": "tomorrow"}).status_code == 422
 
 
 @pytest.fixture

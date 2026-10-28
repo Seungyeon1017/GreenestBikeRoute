@@ -1,21 +1,34 @@
-"""The Heilbronn bike graph from OSM (via OSMnx), with ATRAI roughness, stop-and-go, speed and danger on every edge."""
+"""The Heilbronn bike graph from OSM (via OSMnx), with ATRAI roughness, stop-and-go, speed and danger, shade and
+street lighting on every edge."""
 import json
 import math
 from pathlib import Path
 
 import numpy as np
 import osmnx as ox
-from shapely import LineString, STRtree, points
+import pandas as pd
+from shapely import LineString, STRtree, points, union_all
 
 from download_data import load_features
-from routing.costs import SNAP_M, air_ranks, clean_overtaking, edge_roughness, osm_way_ids, point_risks, way_roughness, way_speed, way_stop_go
+from routing.costs import AIR_HOTSPOT_OFFSET, AIR_PRIOR_RIDES, DEFAULT_PM_RISK, SNAP_M, air_scores, clean_overtaking, edge_roughness, osm_way_ids, point_risks, way_roughness, way_speed, way_stop_go
+from routing.lighting import load_lighting
 from routing.rideable_ways import RIDEABLE_WAYS
+from routing.shade import load_way_shade
+from routing.shadow import load_shadow
 
 CACHE_DIR = Path(__file__).resolve().parent.parent / "cache"
 # Renamed when the filter below changes, so an old cached graph isn't reused.
 GRAPH_PATH = CACHE_DIR / "heilbronn_bike_rideable.graphml"
 # Written by estimation/estimate_roughness.py: roughness of unmeasured OSM ways close to measured streets.
 ESTIMATED_ROUGHNESS_PATH = CACHE_DIR.parent / "data" / "custom" / "roughness_estimates_heilbronn.json"
+# Written by routing/air_hotspots.py: the car roads of the clean-air plan's NO2 hotspot sections. A bike street with at
+# least HOTSPOT_ALONG_SHARE of its length within HOTSPOT_ALONG_M of them runs along one (side paths, pavements), a
+# street that only crosses one doesn't.
+AIR_HOTSPOTS_PATH = CACHE_DIR.parent / "data" / "custom" / "air_hotspots_heilbronn.json"
+HOTSPOT_ALONG_M = 15.0
+HOTSPOT_ALONG_SHARE = 0.5
+# Bike paths, bike lanes and bike routes from OSM (Overpass query next to it), for prefer_bike_friendly.
+BIKE_FRIENDLY_PATH = CACHE_DIR.parent / "data" / "custom" / "bike_friendly_streets_heilbronn.geojson"
 PLACE = "Heilbronn, Germany"
 
 # OSMnx's network_type="bike" filter, with three changes:
@@ -123,7 +136,11 @@ def load_graph(path=GRAPH_PATH):
     attach_stop_go(G, way_stop_go(load_features("traffic_flow_heilbronn")))
     attach_speed(G, way_speed(load_features("speed_map_heilbronn")))
     attach_danger(G, point_risks(clean_overtaking(load_features("danger_zones_raw_heilbronn")), "Risk Index Overtaking"),
-                  air_ranks(load_features("air_quality_heilbronn")))
+                  air_scores(load_features("air_quality_heilbronn"), load_features("air_background_heilbronn")),
+                  load_hotspot_roads())
+    attach_shade(G, *load_shadow(), load_way_shade())
+    attach_lighting(G, load_lighting())
+    attach_bike_friendly(G, load_bike_friendly_ways())
     return G
 
 
@@ -140,6 +157,12 @@ def load_estimates(path=ESTIMATED_ROUGHNESS_PATH):
     """{OSM way id: estimated roughness} from estimation/estimate_roughness.py, or {} if the file is missing."""
     path = Path(path)
     return {int(k): v for k, v in json.loads(path.read_text()).items()} if path.exists() else {}
+
+
+def load_hotspot_roads(path=AIR_HOTSPOTS_PATH):
+    """[(lon, lat), ...] lines of the clean-air plan's NO2 hotspot roads (routing/air_hotspots.py), or [] if the file is missing."""
+    path = Path(path)
+    return json.loads(path.read_text(encoding="utf-8"))["roads"] if path.exists() else []
 
 
 def attach_roughness(G, way_rough, estimated=None):
@@ -165,6 +188,39 @@ def attach_speed(G, way_kmh):
     Both directions of a street get the same value: speed_map is per segment, not per direction."""
     for _, _, d in G.edges(data=True):
         d["speed_kmh"] = edge_roughness(d["osmid"], way_kmh)
+
+
+def attach_shade(G, slots, way_shadow, way_tree_shade=None):
+    """Set edge attribute `shade`: a list with the share in shade (0-1) per time slot of `slots` (stored as
+    G.graph["shade_slots"]), from routing.shadow; where a way has no shadow value, its static tree shade from
+    routing.shade for every slot; None where neither is known.
+    """
+    G.graph["shade_slots"] = list(slots)
+    for _, _, d in G.edges(data=True):
+        ids = d["osmid"] if isinstance(d["osmid"], list) else [d["osmid"]]
+        per_way = [way_shadow[i] if i in way_shadow else [way_tree_shade[i]] * len(slots)
+                   for i in ids if i in way_shadow or i in (way_tree_shade or {})]
+        d["shade"] = [sum(s) / len(per_way) for s in zip(*per_way)] if per_way else None
+
+
+def load_bike_friendly_ways(path=BIKE_FRIENDLY_PATH):
+    """OSM way ids of the bike-friendly streets ("way/123" -> 123), or an empty set if the file is missing."""
+    path = Path(path)
+    if not path.exists():
+        return set()
+    return {int(f["id"].split("/")[1]) for f in json.loads(path.read_text(encoding="utf-8"))["features"]}
+
+
+def attach_bike_friendly(G, ways):
+    """Set edge attribute `bike_friendly`: whether any OSM way the edge is made of is in `ways`."""
+    for _, _, d in G.edges(data=True):
+        d["bike_friendly"] = any(i in ways for i in osm_way_ids(d["osmid"]))
+
+
+def attach_lighting(G, way_lit):
+    """Set edge attribute `lit` (chance the street is lit at night, 0-1, or None where unknown) from routing.lighting."""
+    for _, _, d in G.edges(data=True):
+        d["lit"] = edge_roughness(d["osmid"], way_lit)
 
 
 def _to_metres(lonlat, lat0):
@@ -197,12 +253,15 @@ def snap_to_streets(lines, lonlat, lat0, max_m=SNAP_M):
     return snapped
 
 
-def attach_danger(G, overtaking, pm):
+def attach_danger(G, overtaking, pm, hotspot_roads=()):
     """Snap the overtaking and PM points to their nearest street and set edge attributes:
-    `danger` (summed Risk Index Overtaking), `danger_points` (how many) and
-    `pm_risk` (mean air rank of the PM points, or None where none was measured).
+    `danger` (summed Risk Index Overtaking), `danger_points` (how many),
+    `pm_prior` (air score before any ride: DEFAULT_PM_RISK, plus AIR_HOTSPOT_OFFSET on a street that runs along
+    one of `hotspot_roads`, [(lon, lat), ...] lines), `pm_risk` (air score, or None where none was measured) and `pm_rides` (how many rides
+    measured it). `pm_risk` is the mean over rides of each ride's mean score on the street, pulled towards
+    `pm_prior` by AIR_PRIOR_RIDES virtual rides: a street one bike passed once stays close to its prior.
 
-    `overtaking` and `pm` are (lon/lat list, risk list) pairs from point_risks.
+    `overtaking` is a (lon/lat list, risk list) pair from point_risks, `pm` the (lon/lat, score, ride) lists of air_scores.
     """
     lat0 = float(np.mean([y for _, y in G.nodes(data="y")]))
     streets = _streets(G, lat0)
@@ -216,10 +275,22 @@ def attach_danger(G, overtaking, pm):
         return n, total
 
     danger_n, danger_sum = per_street(*overtaking)
-    pm_n, pm_sum = per_street(*pm)
+    pm_lonlat, pm_score, pm_ride = pm
+    pm_street = snap_to_streets(lines, pm_lonlat, lat0)
+    per_ride = pd.DataFrame({"street": pm_street, "ride": pm_ride, "score": pm_score}, columns=["street", "ride", "score"])
+    per_ride = per_ride[pm_street >= 0].groupby(["street", "ride"]).score.mean().groupby(level=0)
+    pm_n, pm_sum = per_ride.size(), per_ride.sum()
+    hot = np.zeros(len(lines), bool)
+    if len(hotspot_roads):
+        zone = union_all([LineString(_to_metres(r, lat0)).buffer(HOTSPOT_ALONG_M) for r in hotspot_roads])
+        for i in STRtree(lines).query(zone, predicate="intersects"):
+            hot[i] = lines[i].intersection(zone).length >= HOTSPOT_ALONG_SHARE * lines[i].length
     for i, (_, edges) in enumerate(streets):
         for u, v, k in edges:
             d = G.edges[u, v, k]
             d["danger"] = float(danger_sum[i])
             d["danger_points"] = int(danger_n[i])
-            d["pm_risk"] = float(pm_sum[i] / pm_n[i]) if pm_n[i] else None
+            d["pm_prior"] = DEFAULT_PM_RISK + AIR_HOTSPOT_OFFSET * bool(hot[i])
+            n = int(pm_n.get(i, 0))
+            d["pm_risk"] = float((pm_sum[i] + AIR_PRIOR_RIDES * d["pm_prior"]) / (n + AIR_PRIOR_RIDES)) if n else None
+            d["pm_rides"] = n
