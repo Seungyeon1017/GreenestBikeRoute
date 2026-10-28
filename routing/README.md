@@ -11,6 +11,10 @@ cost = length × (1 + bump_penalty × roughness / 100 + pm_penalty × pm_risk + 
 - Danger counts incidents at spots, so it's **a fixed amount per street**, whatever its length.
 - All penalties at 0 give the shortest route.
 
+## Which streets are in the graph
+
+OSMnx's bike network, minus roads tagged `bicycle=use_sidepath` (~23 km, mostly the B 39 around Europaplatz). Those have a mandatory bike path beside them (StVO §2 Abs. 4, signs 237/240/241), so cycling on the road is illegal; the path itself is mapped as its own way and stays in. Roads with an optional bike path beside them stay in too: riding on the road is legal there, so smoothness or overtaking data may pick either.
+
 ## Datasets
 
 ### `bumpy_roads_heilbronn`: roughness per street

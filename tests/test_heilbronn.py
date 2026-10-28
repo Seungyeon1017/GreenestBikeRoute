@@ -1,4 +1,4 @@
-"""End-to-end on the real Heilbronn graph. Skipped until cache/heilbronn_bike.graphml exists
+"""End-to-end on the real Heilbronn graph. Skipped until cache/heilbronn_bike_legal.graphml exists
 (start the API once, or run `python -c "from routing.graph import load_graph; load_graph()"`)."""
 import json
 
@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from backend.app import create_app
 from backend.schemas import EXAMPLE_TRIP, RouteComparison
+from routing.costs import osm_way_ids
 from routing.graph import GRAPH_PATH, load_graph
 
 pytestmark = pytest.mark.skipif(not GRAPH_PATH.exists(), reason="Heilbronn graph not cached yet")
@@ -77,3 +78,10 @@ def test_docs_example_is_a_real_response(client):
         coords = real[key]["geometry"]["coordinates"]
         assert example[key]["geometry"]["coordinates"] == [coords[0], coords[len(coords) // 2], coords[-1]]
     assert (real["detour_pct"], real["same_path"]) == (example["detour_pct"], example["same_path"])
+
+
+def test_roads_with_a_mandatory_bike_path_are_left_out(client):
+    """The Europaplatz roundabout and B 39 Mannheimer Straße are tagged bicycle=use_sidepath in OSM."""
+    europaplatz_and_b39 = {142234373, 387411678, 387411679, 142234381, 148821228, 165419181}
+    G = client.app.state.graph
+    assert not any(europaplatz_and_b39 & set(osm_way_ids(d["osmid"])) for *_, d in G.edges(data=True))

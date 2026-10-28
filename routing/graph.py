@@ -10,8 +10,20 @@ from download_data import load_features
 from routing.costs import SNAP_M, air_ranks, clean_overtaking, edge_roughness, point_risks, way_roughness, way_stop_go
 
 CACHE_DIR = Path(__file__).resolve().parent.parent / "cache"
-GRAPH_PATH = CACHE_DIR / "heilbronn_bike.graphml"
+# Renamed when the filter below changes, so an old cached graph isn't reused.
+GRAPH_PATH = CACHE_DIR / "heilbronn_bike_legal.graphml"
 PLACE = "Heilbronn, Germany"
+
+# OSMnx's network_type="bike" filter, plus: leave out roads tagged bicycle=use_sidepath.
+# They have a mandatory bike path beside them (StVO signs 237/240/241), so cycling on the road is
+# illegal; that path is mapped as its own way and stays in the graph.
+BIKE_FILTER = (
+    '["highway"]["area"!~"yes"]["access"!~"private"]'
+    '["highway"!~"abandoned|bus_guideway|construction|corridor|elevator|'
+    'escalator|footway|motor|no|planned|platform|proposed|raceway|razed|'
+    'rest_area|services|steps"]'
+    '["bicycle"!~"no|use_sidepath"]["service"!~"private"]'
+)
 
 
 def load_graph(path=GRAPH_PATH):
@@ -24,7 +36,7 @@ def load_graph(path=GRAPH_PATH):
         G = ox.load_graphml(path)
     else:
         ox.settings.cache_folder = CACHE_DIR
-        G = ox.graph_from_place(PLACE, network_type="bike")
+        G = ox.graph_from_place(PLACE, network_type="bike", custom_filter=BIKE_FILTER)
         ox.save_graphml(G, path)
     attach_roughness(G, way_roughness(load_features("bumpy_roads_heilbronn")))
     attach_stop_go(G, way_stop_go(load_features("traffic_flow_heilbronn")))
