@@ -103,7 +103,7 @@ export default function AreaDetailsPanel({
     : []
 
   return (
-    <Card className="flex flex-col gap-3">
+    <Card className="flex flex-col gap-3 lg:max-h-full lg:min-h-0">
       <div className="flex items-center justify-between gap-2">
         <button
           aria-expanded={open}
@@ -133,7 +133,7 @@ export default function AreaDetailsPanel({
       </div>
       {open &&
         (area ? (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 lg:-mr-3 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:pr-3">
             <p className="text-xs text-leaf-muted">
               {t('greenest.overview.areaNote')}
             </p>

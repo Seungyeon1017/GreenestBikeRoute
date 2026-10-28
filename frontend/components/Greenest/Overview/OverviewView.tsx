@@ -51,16 +51,21 @@ export default function OverviewView() {
     })
 
   return (
-    <div className="mx-auto flex w-full max-w-[1920px] flex-1 flex-col gap-4 px-4 py-4 md:px-8">
+    // data-workspace: on wide screens the page fills the window and doesn't
+    // scroll; the map's row takes the remaining height and the side panels
+    // scroll inside it, so a panel growing never moves or resizes the map.
+    <div
+      className="mx-auto flex min-h-0 w-full max-w-[1920px] flex-1 flex-col gap-4 px-4 py-4 md:px-8"
+      data-workspace
+    >
       <PageIntro
         eyebrow={t('greenest.overview.eyebrow')}
         subtitle={t('greenest.overview.subtitle')}
         title={t('greenest.overview.title')}
       />
-      {/* On wide screens the row has a fixed height and the side panels scroll inside it,
-          so a panel growing when a layer is toggled never moves or resizes the map. */}
-      <div className="grid flex-1 grid-cols-1 gap-4 lg:h-[calc(100vh-7rem)] lg:flex-none lg:grid-cols-[18rem_minmax(0,1fr)_20rem] lg:grid-rows-[minmax(0,1fr)]">
-        <aside className="order-2 lg:order-1 lg:overflow-y-auto">
+      <div className="grid flex-1 grid-cols-1 gap-4 lg:min-h-0 lg:grid-cols-[18rem_minmax(0,1fr)_20rem] lg:grid-rows-[minmax(0,1fr)]">
+        {/* On phones the area details come right under the map, the layer list after them. */}
+        <aside className="order-3 lg:order-1 lg:flex lg:min-h-0 lg:flex-col">
           <LayerPanel
             enabled={enabled}
             layers={ENVIRONMENT_LAYERS}
@@ -93,7 +98,7 @@ export default function OverviewView() {
             </div>
           )}
         </section>
-        <aside className="order-3 lg:overflow-y-auto">
+        <aside className="order-2 lg:order-3 lg:flex lg:min-h-0 lg:flex-col">
           <AreaDetailsPanel
             area={selectedArea}
             onClear={() => setSelectedCell(null)}

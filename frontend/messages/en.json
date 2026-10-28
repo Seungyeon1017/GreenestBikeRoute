@@ -194,6 +194,11 @@
   },
   "greenest": {
     "vision": "The fastest route gets you there sooner. The greenest route makes the journey better.",
+    "map": {
+      "ctrlScroll": "Use Ctrl + scroll to zoom the map",
+      "cmdScroll": "Use ⌘ + scroll to zoom the map",
+      "twoFingers": "Use two fingers to move the map"
+    },
     "nav": {
       "label": "Main navigation",
       "overview": "Overview",
