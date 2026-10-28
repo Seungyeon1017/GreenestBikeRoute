@@ -1,4 +1,4 @@
-"""Helpers for turning the ATRAI bumpy_roads, danger_zones, air_quality and traffic_flow data into routing costs on the OSM graph."""
+"""Helpers for turning the ATRAI bumpy_roads, danger_zones, air_quality, traffic_flow and speed_map data into routing costs on the OSM graph."""
 import ast
 
 import numpy as np
@@ -53,6 +53,16 @@ DEFAULT_STOP_PENALTY = 0.5
 # Waiting for a lift and getting in and out, as metres of riding at stop_penalty 1 (about 25 s at 15 km/h).
 LIFT_WAIT_M = 100
 
+# speed_map: avg_speed[km/h] per segment, the speed bikes were measured at, waits included (5-95%: 4.5-26 km/h).
+# Aggregated per way like traffic_flow: points-weighted, pulled towards the city median by SPEED_PRIOR_POINTS.
+# Used only when a route prefers time: the base cost becomes length x MEDIAN_SPEED_KMH / speed, i.e. metres
+# ridden at the median speed, so danger_penalty and lifts keep meaning metres. Unmeasured streets get the median.
+MEDIAN_SPEED_KMH = 15.7
+SPEED_PRIOR_POINTS = 5
+# Ways measured slower are raised to walking pace: segments of ~2 km/h with hundreds of points are bikes pushed
+# or waiting, and would otherwise cost like a street 3x+ as long.
+MIN_SPEED_KMH = 5.0
+
 
 def osm_way_ids(osmid):
     """`osmid` is a string: either "83738619" or a merged list "[439572396, 401802699]"."""
@@ -99,6 +109,22 @@ def way_stop_go(flow_features):
             for way, (flow, n) in sums.items()}
 
 
+def way_speed(speed_features):
+    """Cyclist speed in km/h per OSM way id from the speed_map_heilbronn features: the points-weighted mean
+    speed, pulled towards MEDIAN_SPEED_KMH by SPEED_PRIOR_POINTS, at least MIN_SPEED_KMH.
+    """
+    sums = {}
+    for f in speed_features:
+        p = f["properties"]
+        if p.get("avg_speed[km/h]") is None or not p.get("points_in_segment"):
+            continue
+        for way in osm_way_ids(p["osmid"]):
+            speed, n = sums.get(way, (0.0, 0))
+            sums[way] = (speed + p["avg_speed[km/h]"] * p["points_in_segment"], n + p["points_in_segment"])
+    return {way: max(MIN_SPEED_KMH, (speed + SPEED_PRIOR_POINTS * MEDIAN_SPEED_KMH) / (n + SPEED_PRIOR_POINTS))
+            for way, (speed, n) in sums.items()}
+
+
 def clean_overtaking(features):
     """The danger_zones_raw rows routing counts: a measured distance over MIN_OVERTAKING_CM.
 
@@ -142,13 +168,17 @@ def point_risks(features, risk_key):
 def edge_cost(length_m, normalized_roughness=DEFAULT_ROUGHNESS, bump_penalty=DEFAULT_BUMP_PENALTY,
               danger=0.0, danger_penalty=DEFAULT_DANGER_PENALTY,
               pm_risk=DEFAULT_PM_RISK, pm_penalty=DEFAULT_PM_PENALTY,
-              stop_go=DEFAULT_STOP_GO, stop_penalty=DEFAULT_STOP_PENALTY, lift_ends=0):
+              stop_go=DEFAULT_STOP_GO, stop_penalty=DEFAULT_STOP_PENALTY, lift_ends=0, speed_kmh=MEDIAN_SPEED_KMH):
     """Routing cost: plain length, inflated on rough, polluted and stop-and-go streets, plus a fixed
     `danger_penalty` metres per unit of overtaking risk (`danger` = summed risk on the edge) and a fixed
     `stop_penalty * LIFT_WAIT_M` metres per lift ridden through. A lift sits where two edges meet, so each
     edge ending at one (`lift_ends` = 0, 1 or 2) carries half of it.
 
+    `speed_kmh` turns length into riding time, as metres at MEDIAN_SPEED_KMH: a street ridden at half the
+    median speed costs twice its length. The default (the median) leaves the length as it is.
+
     Normalized Roughness is 0-100 in the live data (not 0-1 as the docs table says).
     """
-    return (length_m * (1 + bump_penalty * normalized_roughness / 100 + pm_penalty * pm_risk + stop_penalty * stop_go)
+    base = length_m * (MEDIAN_SPEED_KMH / speed_kmh)
+    return (base * (1 + bump_penalty * normalized_roughness / 100 + pm_penalty * pm_risk + stop_penalty * stop_go)
             + danger_penalty * danger + stop_penalty * LIFT_WAIT_M * lift_ends / 2)

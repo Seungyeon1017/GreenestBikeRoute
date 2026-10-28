@@ -12,6 +12,7 @@ cost = length × (1 + bump_penalty × roughness / 100 + pm_penalty × pm_risk + 
 - Danger counts incidents at spots, so it's **a fixed amount per street**, whatever its length.
 - A lift (`highway=elevator` node, e.g. onto the Campusbrücke) is a stop too: riding through one costs `stop_penalty` × 100 m (waiting plus getting in and out, about 25 s), a **fixed amount per lift**. At the default 0.5 that is 50 m of detour, at 5 it is 500 m. The route reports its `lifts`.
 - All penalties at 0 give the shortest route.
+- With `prefer_time`, `length` becomes riding time: `length × 15.7 km/h / speed`, i.e. metres ridden at the median cyclist speed (see [speed_map](#speed_map_heilbronn-cyclist-speed-per-street-for-prefer_time)). The other terms keep their meaning in metres.
 
 ## Which streets are in the graph
 
@@ -59,6 +60,17 @@ OSMnx's bike network, with these changes:
 - `stop_penalty` default 0.5. Streets differ little (way values ~0.5-0.85, 5-95%), and the shortest route is rarely the slow one: over 40 random trips of 1.5 km or more, a penalty of 1 changes 72% of routes but adds only 0.4% distance and lowers `mean_stop_go` by 0.02. Expect small detours.
 - **Map overlay:** `/flow` serves the raw segments as `stop_go`.
 
+### `speed_map_heilbronn`: cyclist speed per street, for `prefer_time`
+
+- `avg_speed[km/h]` per segment is the speed bikes were measured at, waits at lights included. Not a penalty but a switch: with `prefer_time=true` each street costs its riding time instead of its length (in metres at the median speed, so `danger_penalty` and lifts keep their meaning). Off by default.
+- Matched by OSM way id and aggregated like traffic_flow: points-weighted mean, pulled towards the median (15.7 km/h) by 5 extra points. Unmeasured streets get the median, so they cost their length. About 41% of graph edges (34% of the length) are measured.
+- **Floor of 5 km/h** (walking pace). Some segments with hundreds of points average ~2 km/h (bikes pushed, or waiting), which would make them cost 3-8× their length. 3.7% of measured edges sit at the floor; edge values span 5.7-22 km/h (5-95%).
+- Both directions of a street get the same speed: the dataset is per segment, not per direction, so uphill and downhill are not told apart.
+- **Overlap with stop_go:** traffic_flow is itself built from normalized speed and standing time, so `prefer_time` and `stop_penalty` partly count the same thing. Time mode already lowers `mean_stop_go` on its own (0.67 → 0.59 on the example trip); keep `stop_penalty` low when using it.
+- **Every route** reports `duration_s` (length / speed per street, plus ~23 s per lift) and `speed_measured_share`; `/route/compare` adds `extra_time_pct` next to `detour_pct`. The comparison's shortest route is always by distance.
+- Over 40 random trips of 1.5 km or more: with only `prefer_time` (penalties 0), 95% of routes change, 5.1% longer on average (max 21%) and 8.7% faster (max 29%). With the default penalties, switching it on changes 90% of routes, 3.4% longer and 12.1% faster than the default route.
+- **Map overlay:** `/speed` serves the raw segments as `speed_kmh` (higher = faster, unlike the other overlays).
+
 ## Which overtaking readings count
 
 Each row in `danger_zones_raw_heilbronn` is one overtake, with the gap between car and bike as the sensor measured it. Route planning and `/danger` only count gaps of **more than 25 cm**:
@@ -93,5 +105,7 @@ From 49.14838, 9.22687 to 49.1262, 9.22439:
 | 10 / 25 / 0.5 / 0.5 (defaults)        | 3.12 km | 12.2      | 21               | 0.69        |
 | 10 / 100 / 0.5 / 0.5                  | 3.25 km | 12.3      | 6                | 0.69        |
 | 0 / 0 / 0 / 5                         | 3.07 km | 24.3      | 12               | 0.66        |
+| 0 / 0 / 0 / 0, `prefer_time`          | 3.72 km | 19.6      | 9                | 0.59        |
+| 10 / 25 / 0.5 / 0.5, `prefer_time`    | 4.15 km | 11.3      | 3                | 0.60        |
 
-On this trip the defaults pick the smooth street, which has more overtaking spots than the shortest route, and 25 is too weak to change that. At 100 the route avoids both. The default `stop_penalty` doesn't change any of these routes, and even 5 only swaps a few short pieces.
+On this trip the defaults pick the smooth street, which has more overtaking spots than the shortest route, and 25 is too weak to change that. At 100 the route avoids both. The default `stop_penalty` doesn't change any of these routes, and even 5 only swaps a few short pieces. `prefer_time` takes faster streets: 822 s instead of 940 s for the shortest route (−13%), 21% further. With the default penalties it rides 918 s over 4.15 km: the time-scaled penalties now find a detour around nearly all overtaking spots that pays off.

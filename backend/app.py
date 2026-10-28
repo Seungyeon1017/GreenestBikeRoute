@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.schemas import EXAMPLE_TRIP, AirCollection, DangerCollection, Error, FlowCollection, RouteCollection, \
-    RouteComparison, RoughnessCollection
+    RouteComparison, RoughnessCollection, SpeedCollection
 from download_data import load_features
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_PM_PENALTY, DEFAULT_STOP_PENALTY, air_ranks, \
     clean_overtaking
@@ -60,9 +60,19 @@ def flow_collection():
     return {"type": "FeatureCollection", "features": features}
 
 
+@cache
+def speed_collection():
+    """The measured streets from speed_map_heilbronn, trimmed to geometry + speed_kmh (mean cyclist speed)."""
+    features = [
+        {"type": "Feature", "geometry": f["geometry"], "properties": {"speed_kmh": f["properties"]["avg_speed[km/h]"]}}
+        for f in load_features("speed_map_heilbronn") if f["properties"].get("avg_speed[km/h]") is not None
+    ]
+    return {"type": "FeatureCollection", "features": features}
+
+
 API_DESCRIPTION = """
 Bike routes through **Heilbronn** that avoid bumpy streets, close-overtaking spots, bad air and stop-and-go,
-based on ATRAI bike sensor data.
+based on ATRAI bike sensor data, optionally the fastest one by measured cyclist speed.
 
 **Quick start:** call `/route/compare` with the example trip (pre-filled under *Try it out*) and draw
 `route` and `shortest` on a map. `/route` returns just the route as GeoJSON.
@@ -70,10 +80,12 @@ based on ATRAI bike sensor data.
 - **Coordinate order:** the query takes `lat` and `lon` separately, but every GeoJSON response is in
   **[lon, lat]** order (Leaflet's `L.geoJSON` handles this; raw `L.polyline` needs `[lat, lon]`).
 - **Penalties:** 0 ignores a factor; all four at 0 give the shortest route. Higher values accept longer detours.
+- **prefer_time:** weighs each street by its riding time at the speed bikes were measured at (`speed_map`) instead
+  of its length. Every route reports its expected `duration_s` either way.
 - **Errors:** 400 with a readable `detail` when a point is more than 500 m from a Heilbronn street or no
   route exists; 422 when a parameter is missing or out of range.
 - **Map overlays:** `/roughness`, `/danger`, `/air` and `/flow` are static GeoJSON layers. Each
-  value is 0-1 (roughness 0-100), and higher is always worse.
+  value is 0-1 (roughness 0-100), and higher is always worse. `/speed` gives km/h, where higher is faster.
 """
 
 
@@ -98,9 +110,12 @@ def route_query(
     stop_penalty: float = Query(DEFAULT_STOP_PENALTY, ge=0, le=5, description=(
         "How much do you hate stop-and-go (traffic lights, congestion, waiting for a lift). 0 = ignore, "
         "5 = strongly avoid; detours stay small, as streets differ little. Each lift costs this x 100 m")),
+    prefer_time: bool = Query(False, description=(
+        "Time matters, not distance: weigh each street by its riding time at the measured cyclist speed "
+        "(unmeasured streets at the median, 15.7 km/h) instead of its length. The penalties still apply")),
 ):
     """The query parameters shared by /route and /route/compare."""
-    return (from_lat, from_lon), (to_lat, to_lon), (bump_penalty, danger_penalty, pm_penalty, stop_penalty)
+    return (from_lat, from_lon), (to_lat, to_lon), (bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time)
 
 
 ROUTE_ERRORS = {400: {"description": "Start or end is outside Heilbronn, or no route exists",
@@ -161,6 +176,12 @@ def create_app(graph=None):
              response_description="LineStrings with `stop_go` 0-1 (higher = more slowing and stopping); unmeasured streets are left out")
     def flow():
         return GeoJSONResponse(flow_collection())
+
+    @app.get("/speed", summary="How fast bikes ride per street, as GeoJSON for a map overlay",
+             response_class=GeoJSONResponse, response_model=SpeedCollection,
+             response_description="LineStrings with `speed_kmh` (mean measured cyclist speed, waits included; higher = faster); unmeasured streets are left out")
+    def speed():
+        return GeoJSONResponse(speed_collection())
 
     return app
 

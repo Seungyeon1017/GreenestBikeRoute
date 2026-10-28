@@ -14,8 +14,8 @@ ROUTE_EXAMPLE = {
     "geometry": {"type": "LineString",
                  "coordinates": [[9.2268683, 49.148385], [9.2228294, 49.1386103], [9.2243909, 49.1262013]]},
     "properties": {
-        "bump_penalty": 10.0, "danger_penalty": 25.0, "pm_penalty": 0.5, "stop_penalty": 0.5,
-        "length_m": 3088.2, "mean_roughness": 12.3, "measured_share": 0.97, "estimated_share": 0.0,
+        "bump_penalty": 10.0, "danger_penalty": 25.0, "pm_penalty": 0.5, "stop_penalty": 0.5, "prefer_time": False,
+        "length_m": 3088.2, "duration_s": 940, "speed_measured_share": 0.97, "mean_roughness": 12.3, "measured_share": 0.97, "estimated_share": 0.0,
         "danger_points": 21, "danger_risk": 17.12, "mean_pm_risk": 0.544, "pm_measured_share": 0.71,
         "mean_stop_go": 0.691, "stop_measured_share": 0.97, "lifts": 0,
     },
@@ -25,8 +25,8 @@ SHORTEST_EXAMPLE = {
     "geometry": {"type": "LineString",
                  "coordinates": [[9.2268683, 49.148385], [9.2294832, 49.1399564], [9.2243909, 49.1262013]]},
     "properties": {
-        "bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0,
-        "length_m": 3061.2, "mean_roughness": 24.7, "measured_share": 0.97, "estimated_share": 0.02,
+        "bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0, "prefer_time": False,
+        "length_m": 3061.2, "duration_s": 940, "speed_measured_share": 0.97, "mean_roughness": 24.7, "measured_share": 0.97, "estimated_share": 0.02,
         "danger_points": 10, "danger_risk": 7.94, "mean_pm_risk": 0.604, "pm_measured_share": 0.77,
         "mean_stop_go": 0.665, "stop_measured_share": 0.97, "lifts": 0,
     },
@@ -55,7 +55,11 @@ class RouteProperties(BaseModel):
     danger_penalty: float = Field(description=PLANNED_WITH)
     pm_penalty: float = Field(description=PLANNED_WITH)
     stop_penalty: float = Field(description=PLANNED_WITH)
+    prefer_time: bool = Field(description="Whether the route was planned by riding time instead of length, as requested (false for the shortest route)")
     length_m: float = Field(description="Route length in metres")
+    duration_s: int = Field(
+        description="Expected riding time in seconds from speed_map (measured cyclist speed, waits included; unmeasured streets at 15.7 km/h), lifts included")
+    speed_measured_share: float = Field(description="Share of the route length with speed_map measurements, 0-1")
     mean_roughness: Optional[float] = Field(
         description="Normalized Roughness 0-100, length-weighted over the measured part; null if none was measured")
     measured_share: float = Field(description="Share of the route length with bumpy_roads measurements, 0-1")
@@ -89,12 +93,13 @@ class RouteCollection(BaseModel):
 class RouteComparison(BaseModel):
     """The route next to the shortest route between the same points, e.g. to draw both and show what the penalties changed."""
     route: RouteFeature = Field(description="The route for the given penalties, as from /route")
-    shortest: RouteFeature = Field(description="The shortest route: all penalties 0")
+    shortest: RouteFeature = Field(description="The shortest route: all penalties 0, prefer_time off")
     detour_pct: float = Field(description="How much longer the route is than the shortest route, in %")
+    extra_time_pct: float = Field(description="How much longer the route takes than the shortest route (by duration_s), in %; negative if faster")
     same_path: bool = Field(description="True if the route follows the same streets as the shortest route")
 
     model_config = {"json_schema_extra": {"example": {
-        "route": ROUTE_EXAMPLE, "shortest": SHORTEST_EXAMPLE, "detour_pct": 0.9, "same_path": False}}}
+        "route": ROUTE_EXAMPLE, "shortest": SHORTEST_EXAMPLE, "detour_pct": 0.9, "extra_time_pct": 0.0, "same_path": False}}}
 
 
 class RoughnessFeature(BaseModel):
@@ -157,6 +162,22 @@ class FlowCollection(BaseModel):
 
     model_config = collection_example({"type": "Feature", "geometry": {"type": "LineString", "coordinates": [
         [9.2213487, 49.1495941], [9.2212358, 49.1495259]]}, "properties": {"stop_go": 0.662}})
+
+
+class SpeedFeature(BaseModel):
+    type: Literal["Feature"]
+    geometry: LineString
+    properties: dict[Literal["speed_kmh"], float] = Field(
+        description="Mean speed bikes were measured at in km/h, waits at lights included; higher = faster")
+
+
+class SpeedCollection(BaseModel):
+    """Measured street segments from speed_map (~7,400 lines, ~1.6 MB)."""
+    type: Literal["FeatureCollection"]
+    features: list[SpeedFeature]
+
+    model_config = collection_example({"type": "Feature", "geometry": {"type": "LineString", "coordinates": [
+        [9.2213487, 49.1495941], [9.2212358, 49.1495259]]}, "properties": {"speed_kmh": 12.8}})
 
 
 class Error(BaseModel):

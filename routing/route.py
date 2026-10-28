@@ -8,7 +8,7 @@ from shapely import LineString, Point, STRtree
 from shapely.ops import substring
 
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_PM_PENALTY, DEFAULT_PM_RISK, \
-    DEFAULT_ROUGHNESS, DEFAULT_STOP_GO, DEFAULT_STOP_PENALTY, edge_cost
+    DEFAULT_ROUGHNESS, DEFAULT_STOP_GO, DEFAULT_STOP_PENALTY, LIFT_WAIT_M, MEDIAN_SPEED_KMH, edge_cost
 
 # Start/end points further than this from any street are treated as outside Heilbronn.
 MAX_SNAP_M = 500
@@ -131,16 +131,22 @@ def _stop_go(d):
     return DEFAULT_STOP_GO if d.get("stop_go") is None else d["stop_go"]
 
 
+def _speed_kmh(d):
+    return MEDIAN_SPEED_KMH if d.get("speed_kmh") is None else d["speed_kmh"]
+
+
 def _cost(d, penalties):
-    bump_penalty, danger_penalty, pm_penalty, stop_penalty = penalties
+    bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time = penalties
     return edge_cost(d["length"], _roughness(d), bump_penalty,
                      d.get("danger", 0.0), danger_penalty, _pm_risk(d), pm_penalty, _stop_go(d), stop_penalty,
-                     lift_ends=d.get("lift_start", False) + d.get("lift_end", False))
+                     lift_ends=d.get("lift_start", False) + d.get("lift_end", False),
+                     speed_kmh=_speed_kmh(d) if prefer_time else MEDIAN_SPEED_KMH)
 
 
 def _route_feature(G, a, b, penalties):
-    """The cheapest route between graph nodes a and b for `penalties`, as one GeoJSON Feature."""
-    bump_penalty, danger_penalty, pm_penalty, stop_penalty = penalties
+    """The cheapest route between graph nodes a and b for `penalties` (the four penalties and prefer_time),
+    as one GeoJSON Feature."""
+    bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time = penalties
 
     # MultiDiGraph: between two nodes there can be parallel edges; use the cheapest.
     def weight(u, v, parallel):
@@ -155,6 +161,8 @@ def _route_feature(G, a, b, penalties):
     coords, length, rough_len, measured_len, estimated_len = [], 0.0, 0.0, 0.0, 0.0
     danger, danger_points, pm_len, pm_measured_len = 0.0, 0, 0.0, 0.0
     stop_len, stop_measured_len = 0.0, 0.0
+    # Riding time from speed_map, plus waiting for each lift at the median speed.
+    duration, speed_measured_len = lifts * LIFT_WAIT_M / (MEDIAN_SPEED_KMH / 3.6), 0.0
     for u, v in zip(path[:-1], path[1:]):
         d = min(G[u][v].values(), key=lambda d: _cost(d, penalties))
         if "geometry" in d:  # OSMnx edge geometries run from u to v
@@ -177,13 +185,20 @@ def _route_feature(G, a, b, penalties):
         if d.get("stop_go") is not None:
             stop_measured_len += edge_len
             stop_len += d["stop_go"] * edge_len
+        duration += edge_len / (_speed_kmh(d) / 3.6)
+        if d.get("speed_kmh") is not None:
+            speed_measured_len += edge_len
 
     properties = {
         "bump_penalty": bump_penalty,
         "danger_penalty": danger_penalty,
         "pm_penalty": pm_penalty,
         "stop_penalty": stop_penalty,
+        "prefer_time": prefer_time,
         "length_m": round(length, 1),
+        # Expected riding time from speed_map (unmeasured streets at the median speed), lifts included.
+        "duration_s": round(duration),
+        "speed_measured_share": round(speed_measured_len / length, 2),
         # Length-weighted over the measured part of the route only.
         "mean_roughness": round(rough_len / measured_len, 1) if measured_len else None,
         "measured_share": round(measured_len / length, 2),
@@ -206,28 +221,30 @@ def _route_feature(G, a, b, penalties):
 
 def find_route(G, origin, destination, bump_penalty=DEFAULT_BUMP_PENALTY,
                danger_penalty=DEFAULT_DANGER_PENALTY, pm_penalty=DEFAULT_PM_PENALTY,
-               stop_penalty=DEFAULT_STOP_PENALTY):
+               stop_penalty=DEFAULT_STOP_PENALTY, prefer_time=False):
     """Cheapest route from origin to destination, both (lat, lon), as a GeoJSON FeatureCollection.
 
     All penalties 0 give the shortest route; higher values take longer detours to avoid rough
     streets (bump_penalty), spots where cars overtook closely (danger_penalty), streets with bad
-    air (pm_penalty) and streets where bikes keep stopping (stop_penalty).
+    air (pm_penalty) and streets where bikes keep stopping (stop_penalty). prefer_time weighs each
+    street by its riding time at the measured speed instead of its length.
     """
     with _snapped_ends(G, origin, destination) as (a, b):
-        feature = _route_feature(G, a, b, (bump_penalty, danger_penalty, pm_penalty, stop_penalty))
+        feature = _route_feature(G, a, b, (bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time))
     return {"type": "FeatureCollection", "features": [feature]}
 
 
 def compare_routes(G, origin, destination, bump_penalty=DEFAULT_BUMP_PENALTY,
                    danger_penalty=DEFAULT_DANGER_PENALTY, pm_penalty=DEFAULT_PM_PENALTY,
-                   stop_penalty=DEFAULT_STOP_PENALTY):
-    """The route from find_route next to the shortest route, with how much they differ."""
+                   stop_penalty=DEFAULT_STOP_PENALTY, prefer_time=False):
+    """The route from find_route next to the shortest route (by distance), with how much they differ."""
     with _snapped_ends(G, origin, destination) as (a, b):
-        route = _route_feature(G, a, b, (bump_penalty, danger_penalty, pm_penalty, stop_penalty))
-        shortest = _route_feature(G, a, b, (0, 0, 0, 0))
+        route = _route_feature(G, a, b, (bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time))
+        shortest = _route_feature(G, a, b, (0, 0, 0, 0, False))
     return {
         "route": route,
         "shortest": shortest,
         "detour_pct": round((route["properties"]["length_m"] / shortest["properties"]["length_m"] - 1) * 100, 1),
+        "extra_time_pct": round((route["properties"]["duration_s"] / shortest["properties"]["duration_s"] - 1) * 100, 1),
         "same_path": route["geometry"] == shortest["geometry"],
     }

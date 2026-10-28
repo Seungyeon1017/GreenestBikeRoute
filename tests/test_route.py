@@ -1,6 +1,6 @@
 import pytest
 
-from routing.graph import attach_danger, attach_roughness, attach_stop_go
+from routing.graph import attach_danger, attach_roughness, attach_speed, attach_stop_go
 from routing.route import RouteError, compare_routes, find_route
 from tests.conftest import COORDS, A, B, C
 
@@ -83,6 +83,30 @@ def test_stop_penalty_detours_around_stop_and_go_streets(toy_graph):
     f = find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 0, 2)["features"][0]  # 100 x 2.8 > 140 x 1.2
     assert (f["properties"]["length_m"], f["properties"]["mean_stop_go"]) == (140, 0.1)
     assert (f["properties"]["stop_penalty"], f["properties"]["stop_measured_share"]) == (2, 1.0)
+
+
+
+def test_attach_speed(toy_graph):
+    attach_speed(toy_graph, {11: 12.0, 13: 10.0, 14: 20.0})
+    assert [d["speed_kmh"] for *_, d in toy_graph.edges(data=True)] == [12.0, None, 15.0]
+
+
+def test_prefer_time_takes_the_faster_detour(toy_graph):
+    for d in toy_graph.edges.values():
+        d["roughness"] = 0.0
+    attach_speed(toy_graph, {11: 5.0, 12: 20.0, 13: 20.0, 14: 20.0})
+    p = find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 0, 0)["features"][0]["properties"]
+    assert (p["length_m"], p["prefer_time"], p["duration_s"]) == (100, False, 72)  # 100 m at 5 km/h
+    # 100 m at 5 km/h takes longer than 140 m at 20 km/h
+    p = find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 0, 0, prefer_time=True)["features"][0]["properties"]
+    assert (p["length_m"], p["prefer_time"], p["duration_s"], p["speed_measured_share"]) == (140, True, 25, 1.0)
+
+
+def test_compare_routes_reports_extra_time(toy_graph):
+    attach_speed(toy_graph, {11: 5.0, 12: 20.0, 13: 20.0, 14: 20.0})
+    c = compare_routes(toy_graph, COORDS[A], COORDS[B], 0, 0, 0, 0, prefer_time=True)
+    assert c["shortest"]["properties"]["prefer_time"] is False
+    assert (c["detour_pct"], c["extra_time_pct"]) == (40.0, round((25 / 72 - 1) * 100, 1))
 
 
 ON_AB = (9.2101, 49.14045)  # the bend of A->B, (lon, lat)

@@ -6,7 +6,7 @@ fetched by `download_data.py`, logged in `manifest.json`, Heilbronn only.
 ATRAI collections as served (`api.atrai.bike`); for details, see https://hackathon.greencity.hn/resources/bike-data
 - `tracks` and `statistics` are filtered to Heilbronn
 
-Routing uses `bumpy_roads` and `traffic_flow` from here.
+Routing uses `bumpy_roads`, `traffic_flow` and `speed_map` from here.
 
 ## `custom/`
 Built by us from raw `osem_bike_data`, used by routing

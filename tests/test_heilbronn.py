@@ -58,6 +58,19 @@ def test_hating_stop_and_go_gives_a_more_free_flowing_route(client):
     assert smooth["length_m"] < shortest["length_m"] * 1.05
 
 
+def test_prefer_time_gives_a_faster_route(client):
+    zero = {"bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0}
+    c = client.get("/route/compare", params={**TRIP, **zero, "prefer_time": "true"}).json()
+    assert c["route"]["properties"]["duration_s"] < c["shortest"]["properties"]["duration_s"] * 0.95
+    assert c["extra_time_pct"] < -5 < 0 < c["detour_pct"]
+
+
+def test_speed_overlay_gives_measured_streets(client):
+    features = client.get("/speed").json()["features"]
+    assert len(features) > 7000
+    assert all(f["geometry"]["type"] == "LineString" and f["properties"]["speed_kmh"] >= 0 for f in features)
+
+
 def test_route_starts_and_ends_near_the_requested_points(client):
     coords = client.get("/route", params=TRIP).json()["features"][0]["geometry"]["coordinates"]
     assert len(coords) > 10

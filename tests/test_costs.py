@@ -2,8 +2,9 @@ import pytest
 
 from download_data import overtaking_risk
 from routing import costs
-from routing.costs import DEFAULT_PM_RISK, DEFAULT_ROUGHNESS, DEFAULT_STOP_GO, FLOW_PRIOR_POINTS, MEDIAN_FLOW, MIN_RIDE_POINTS, \
-    air_ranks, air_risks, clean_overtaking, edge_cost, edge_roughness, osm_way_ids, point_risks, way_roughness, way_stop_go
+from routing.costs import DEFAULT_PM_RISK, DEFAULT_ROUGHNESS, DEFAULT_STOP_GO, FLOW_PRIOR_POINTS, MEDIAN_FLOW, MEDIAN_SPEED_KMH, \
+    MIN_RIDE_POINTS, MIN_SPEED_KMH, SPEED_PRIOR_POINTS, air_ranks, air_risks, clean_overtaking, edge_cost, edge_roughness, \
+    osm_way_ids, point_risks, way_roughness, way_speed, way_stop_go
 
 
 def test_osm_way_ids_single_and_merged():
@@ -116,3 +117,24 @@ def test_lift_costs_stop_penalty_times_100_m_per_ride_through():
     assert edge_cost(10, bump_penalty=0, pm_penalty=0, stop_penalty=0, lift_ends=1) == 10
     one_edge = edge_cost(10, bump_penalty=0, pm_penalty=0, stop_penalty=2, stop_go=0, lift_ends=1)
     assert one_edge == 10 + 2 * 100 / 2
+
+
+def test_edge_cost_speed_turns_length_into_time():
+    zero = {"bump_penalty": 0, "pm_penalty": 0, "stop_penalty": 0}
+    assert edge_cost(100, 0, **zero) == 100  # the median speed by default: plain length
+    assert edge_cost(100, 0, **zero, speed_kmh=MEDIAN_SPEED_KMH / 2) == pytest.approx(200)
+    # danger stays metres per risk, whatever the speed
+    assert edge_cost(100, 0, **zero, danger=1, danger_penalty=40, speed_kmh=MEDIAN_SPEED_KMH * 2) == pytest.approx(90)
+
+
+def speed(osmid, kmh, n):
+    return {"properties": {"osmid": osmid, "avg_speed[km/h]": kmh, "points_in_segment": n}}
+
+
+def test_way_speed_weights_by_points_pulls_to_the_median_and_has_a_floor():
+    k = SPEED_PRIOR_POINTS
+    kmh = way_speed([speed("1", 30.0, 1000), speed("[1, 2]", 10.0, 10), speed("3", None, 5), speed("4", 0.0, 500)])
+    assert kmh[1] == pytest.approx((30 * 1000 + 10 * 10 + k * MEDIAN_SPEED_KMH) / (1010 + k))
+    assert kmh[2] == pytest.approx((10 * 10 + k * MEDIAN_SPEED_KMH) / (10 + k))
+    assert 3 not in kmh
+    assert kmh[4] == MIN_SPEED_KMH

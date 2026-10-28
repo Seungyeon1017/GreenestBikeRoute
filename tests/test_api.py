@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
-from backend.schemas import DangerCollection, FlowCollection, RouteCollection, RouteComparison, RoughnessCollection
+from backend.schemas import DangerCollection, FlowCollection, RouteCollection, RouteComparison, RoughnessCollection, SpeedCollection
 from download_data import HEILBRONN_BBOX, overtaking_risk
 from routing.costs import MIN_OVERTAKING_CM
 from tests.conftest import COORDS, A, B
@@ -116,3 +116,20 @@ def test_flow_overlay(client):
     assert all(0 <= f["properties"]["stop_go"] <= 1 for f in features)
     assert features[0]["geometry"]["type"] == "LineString"
     FlowCollection.model_validate(r.json())
+
+
+def test_prefer_time_is_passed_through_and_off_by_default(client):
+    assert client.get("/route", params=params()).json()["features"][0]["properties"]["prefer_time"] is False
+    p = client.get("/route", params={**params(), "prefer_time": "true"}).json()["features"][0]["properties"]
+    assert p["prefer_time"] is True and p["duration_s"] > 0
+
+
+def test_speed_overlay(client):
+    r = client.get("/speed")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/geo+json"
+    features = r.json()["features"]
+    assert len(features) > 7000
+    assert all(0 <= f["properties"]["speed_kmh"] < 100 for f in features)
+    assert features[0]["geometry"]["type"] == "LineString"
+    SpeedCollection.model_validate(r.json())
