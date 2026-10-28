@@ -2,7 +2,7 @@
 
     python -X utf8 -m routing.shade          # downloads the cadastre, writes data/shade_heilbronn.json
 
-Idea: walk along every street of data/road_network_heilbronn.geojson in 5 m steps
+Idea: walk along every street of data/ready-made/road_network_heilbronn.geojson in 5 m steps
 and count a step as shaded when a tree crown reaches the street corridor, i.e. the
 tree stands within (crown radius + SIDE_M) of the street centre line.
 shade = shaded steps / all steps, from 0 (full sun) to 1 (fully under trees).
@@ -15,7 +15,7 @@ https://opendata.heilbronn.de/dataset/baumkataster
 Caveat: trees not maintained by the city often only have a default 2 m crown,
 so shade is underestimated there.
 """
-import io
+import ast
 import json
 import math
 import struct
@@ -25,7 +25,6 @@ from pathlib import Path
 
 import requests
 
-from routing.costs import osm_way_ids
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 TREES_URL = (
@@ -33,7 +32,7 @@ TREES_URL = (
     "SHAPE_BKA_HN20260101_EPSG4326.zip"
 )
 TREES_ZIP = DATA_DIR / "baumkataster_heilbronn_2026.zip"
-ROADS = DATA_DIR / "road_network_heilbronn.geojson"
+ROADS = DATA_DIR / "ready-made" / "road_network_heilbronn.geojson"
 OUT = DATA_DIR / "shade_heilbronn.json"
 
 STEP_M = 5.0        # sampling distance along a street
@@ -47,8 +46,38 @@ M_PER_DEG_LAT = 111_132.0
 M_PER_DEG_LON = 111_320.0 * math.cos(math.radians(LAT0))
 
 
+def osm_way_ids(osmid):
+    """`osmid` is a string: either "83738619" or a merged list "[439572396, 401802699]" (same as routing.costs)."""
+    s = str(osmid)
+    return [int(x) for x in ast.literal_eval(s)] if s.startswith("[") else [int(s)]
+
+
 def to_xy(lon, lat):
     return (lon - LON0) * M_PER_DEG_LON, (lat - LAT0) * M_PER_DEG_LAT
+
+
+def utm32_to_lonlat(e, n):
+    """ETRS89 / UTM zone 32N (EPSG:25832) -> (lon, lat), standard series inverse (~mm accuracy)."""
+    a, f, k0, lon0 = 6378137.0, 1 / 298.257222101, 0.9996, math.radians(9)
+    e2 = f * (2 - f)
+    ep2 = e2 / (1 - e2)
+    x, y = e - 500_000.0, n
+    m = y / k0
+    mu = m / (a * (1 - e2 / 4 - 3 * e2**2 / 64 - 5 * e2**3 / 256))
+    e1 = (1 - math.sqrt(1 - e2)) / (1 + math.sqrt(1 - e2))
+    phi1 = (mu + (3 * e1 / 2 - 27 * e1**3 / 32) * math.sin(2 * mu)
+            + (21 * e1**2 / 16 - 55 * e1**4 / 32) * math.sin(4 * mu)
+            + (151 * e1**3 / 96) * math.sin(6 * mu))
+    s, c, t = math.sin(phi1), math.cos(phi1), math.tan(phi1)
+    n1 = a / math.sqrt(1 - e2 * s * s)
+    t1, c1 = t * t, ep2 * c * c
+    r1 = a * (1 - e2) / (1 - e2 * s * s) ** 1.5
+    d = x / (n1 * k0)
+    lat = phi1 - (n1 * t / r1) * (d * d / 2 - (5 + 3 * t1 + 10 * c1 - 4 * c1 * c1 - 9 * ep2) * d**4 / 24
+                                 + (61 + 90 * t1 + 298 * c1 + 45 * t1 * t1 - 252 * ep2 - 3 * c1 * c1) * d**6 / 720)
+    lon = lon0 + (d - (1 + 2 * t1 + c1) * d**3 / 6
+                  + (5 - 2 * c1 + 28 * t1 - 3 * c1 * c1 + 8 * ep2 + 24 * t1 * t1) * d**5 / 120) / c
+    return math.degrees(lon), math.degrees(lat)
 
 
 # ---------------------------------------------------------------- trees ----
@@ -96,17 +125,24 @@ def _read_point_shp(raw):
 
 
 def load_trees(path=None):
-    """List of (x, y, crown_radius_m) in local metres."""
+    """List of (x, y, crown_radius_m) in local metres.
+
+    Accepts either cadastre zip: WGS84 (EPSG:4326) or UTM32N (EPSG:25832).
+    """
     path = path or download_trees()
     with zipfile.ZipFile(path) as z:
         shp = next(n for n in z.namelist() if n.lower().endswith(".shp"))
         dbf = shp[:-4] + ".dbf"
+        prj = shp[:-4] + ".prj"
+        is_utm = prj in z.namelist() and b"UTM" in z.read(prj).upper()
         pts = _read_point_shp(z.read(shp))
         rows = _read_dbf(z.read(dbf))
     trees = []
     for pt, row in zip(pts, rows):
         if pt is None:
             continue
+        if is_utm:
+            pt = utm32_to_lonlat(*pt)
         try:
             crown = float(row.get("KRONE_DM") or 0)
         except ValueError:
@@ -182,7 +218,9 @@ def load_way_shade(path=OUT):
 
 
 def main():
-    trees = load_trees()
+    import sys
+    # Optional: python -m routing.shade path\to\SHAPE_BKA_...zip  (either projection)
+    trees = load_trees(Path(sys.argv[1]) if len(sys.argv) > 1 else None)
     print(f"{len(trees):,} trees loaded")
     grid = build_grid(trees)
     roads = json.loads(ROADS.read_text(encoding="utf-8"))["features"]
