@@ -4,7 +4,7 @@ Grade of an edge = rise in the travel direction / edge length, from the node hei
 routing.elevation. A two-way street is two edges, so it is uphill one way and downhill the other.
 """
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_PM_PENALTY, \
-    DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY
+    DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY
 from routing.route import edge_coords, route_edges
 
 # Severity on the absolute grade in %: (upper bound, name, colour). Bounds belong to the steeper class.
@@ -123,8 +123,10 @@ def grade_summary(G, edges):
 
 def route_grade(G, origin, destination, bump_penalty=DEFAULT_BUMP_PENALTY, danger_penalty=DEFAULT_DANGER_PENALTY,
                 pm_penalty=DEFAULT_PM_PENALTY, stop_penalty=DEFAULT_STOP_PENALTY, prefer_time=False,
-                shade_penalty=DEFAULT_SHADE_PENALTY, dark_penalty=DEFAULT_DARK_PENALTY, depart_time=None):
+                shade_penalty=DEFAULT_SHADE_PENALTY, dark_penalty=DEFAULT_DARK_PENALTY,
+                prefer_bike_friendly=DEFAULT_PREFER_BIKE_FRIENDLY, depart_time=None):
     """The route find_route picks, as a FeatureCollection of pieces coloured by grade, plus route totals."""
-    penalties = (bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty, depart_time)
+    penalties = (bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty,
+                 prefer_bike_friendly, depart_time)
     with route_edges(G, origin, destination, penalties) as edges:
         return {"type": "FeatureCollection", "features": grade_pieces(G, edges), "summary": grade_summary(G, edges)}

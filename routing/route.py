@@ -13,7 +13,7 @@ from shapely import LineString, Point, STRtree
 from shapely.ops import substring
 
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_LIT, \
-    DEFAULT_PM_PENALTY, DEFAULT_PM_RISK, DEFAULT_ROUGHNESS, DEFAULT_SHADE, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_GO, \
+    DEFAULT_PM_PENALTY, DEFAULT_PM_RISK, DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_ROUGHNESS, DEFAULT_SHADE, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_GO, \
     DEFAULT_STOP_PENALTY, LIFT_WAIT_M, MEDIAN_SPEED_KMH, edge_cost, osm_way_ids
 from routing.shadow import sun_position
 
@@ -234,18 +234,21 @@ def _plan(G, penalties):
 
 
 def _cost(d, plan):
-    bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty, slot, dark = plan
+    bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty, prefer_bike_friendly, \
+        slot, dark = plan
     return edge_cost(d["length"], _roughness(d), bump_penalty,
                      d.get("danger", 0.0), danger_penalty, _pm_risk(d), pm_penalty, _stop_go(d), stop_penalty,
                      lift_ends=d.get("lift_start", False) + d.get("lift_end", False),
                      speed_kmh=_speed_kmh(d) if prefer_time else MEDIAN_SPEED_KMH,
                      sun=0.0 if slot is None else 1 - _shade(d, slot), shade_penalty=shade_penalty,
-                     dark=1 - _lit(d) if dark else 0.0, dark_penalty=dark_penalty)
+                     dark=1 - _lit(d) if dark else 0.0, dark_penalty=dark_penalty,
+                     bike_friendly=d.get("bike_friendly", False), prefer_bike_friendly=prefer_bike_friendly)
 
 
 def street_scores(G, bump_penalty=DEFAULT_BUMP_PENALTY, danger_penalty=DEFAULT_DANGER_PENALTY,
                   pm_penalty=DEFAULT_PM_PENALTY, stop_penalty=DEFAULT_STOP_PENALTY, prefer_time=False,
-                  shade_penalty=DEFAULT_SHADE_PENALTY, dark_penalty=DEFAULT_DARK_PENALTY, depart_time=None):
+                  shade_penalty=DEFAULT_SHADE_PENALTY, dark_penalty=DEFAULT_DARK_PENALTY,
+                  prefer_bike_friendly=DEFAULT_PREFER_BIKE_FRIENDLY, depart_time=None):
     """Each street once (a two-way street is two edges) as a GeoJSON LineString with `score` 0-100: its percentile, by
     street length, among Heilbronn streets ranked by routing cost per metre for these penalties (as find_route),
     cheapest at 100 (higher = better).
@@ -256,7 +259,7 @@ def street_scores(G, bump_penalty=DEFAULT_BUMP_PENALTY, danger_penalty=DEFAULT_D
     make every street cost the same: all score 50.
     """
     plan = _plan(G, (bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty,
-                     depart_time))
+                     prefer_bike_friendly, depart_time))
     streets = {}
     for u, v, d in G.edges(data=True):
         street = (min(u, v), max(u, v), str(d["osmid"]), round(float(d["length"]), 1))
@@ -281,9 +284,10 @@ def street_scores(G, bump_penalty=DEFAULT_BUMP_PENALTY, danger_penalty=DEFAULT_D
 
 
 def _route_feature(G, a, b, penalties):
-    """The cheapest route between graph nodes a and b for `penalties` (the six penalties, prefer_time and
-    depart_time), as one GeoJSON Feature."""
-    bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty, depart_time = penalties
+    """The cheapest route between graph nodes a and b for `penalties` (the six penalties, prefer_time,
+    prefer_bike_friendly and depart_time), as one GeoJSON Feature."""
+    bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty, prefer_bike_friendly, \
+        depart_time = penalties
     plan = _plan(G, penalties)
     slot, dark = plan[-2:]
     path = _path(G, a, b, plan)
@@ -333,6 +337,7 @@ def _route_feature(G, a, b, penalties):
         "prefer_time": prefer_time,
         "shade_penalty": shade_penalty,
         "dark_penalty": dark_penalty,
+        "prefer_bike_friendly": prefer_bike_friendly,
         "depart_time": local_time(depart_time).isoformat(timespec="minutes") if depart_time else None,
         # Sun above the horizon at depart_time (null without one): shade counts by day, lighting after dark.
         "daylight": None if depart_time is None else not dark,
@@ -406,7 +411,7 @@ def route_edges(G, origin, destination, penalties):
 def find_route(G, origin, destination, bump_penalty=DEFAULT_BUMP_PENALTY,
                danger_penalty=DEFAULT_DANGER_PENALTY, pm_penalty=DEFAULT_PM_PENALTY,
                stop_penalty=DEFAULT_STOP_PENALTY, prefer_time=False, shade_penalty=DEFAULT_SHADE_PENALTY,
-               dark_penalty=DEFAULT_DARK_PENALTY, depart_time=None):
+               dark_penalty=DEFAULT_DARK_PENALTY, prefer_bike_friendly=DEFAULT_PREFER_BIKE_FRIENDLY, depart_time=None):
     """Cheapest route from origin to destination, both (lat, lon), as a GeoJSON FeatureCollection.
 
     All penalties 0 give the shortest route; higher values take longer detours to avoid rough
@@ -414,8 +419,10 @@ def find_route(G, origin, destination, bump_penalty=DEFAULT_BUMP_PENALTY,
     air (pm_penalty) and streets where bikes keep stopping (stop_penalty). prefer_time weighs each
     street by its riding time at the measured speed instead of its length. With a depart_time (datetime),
     sunny streets cost extra by day (shade_penalty) and unlit streets after dark (dark_penalty).
+    prefer_bike_friendly makes streets that are not bike paths, bike lanes or bike routes cost extra.
     """
-    penalties = (bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty, depart_time)
+    penalties = (bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty,
+                 prefer_bike_friendly, depart_time)
     with _snapped_ends(G, origin, destination) as (a, b):
         feature = _route_feature(G, a, b, penalties)
     return {"type": "FeatureCollection", "features": [feature]}
@@ -424,12 +431,13 @@ def find_route(G, origin, destination, bump_penalty=DEFAULT_BUMP_PENALTY,
 def compare_routes(G, origin, destination, bump_penalty=DEFAULT_BUMP_PENALTY,
                    danger_penalty=DEFAULT_DANGER_PENALTY, pm_penalty=DEFAULT_PM_PENALTY,
                    stop_penalty=DEFAULT_STOP_PENALTY, prefer_time=False, shade_penalty=DEFAULT_SHADE_PENALTY,
-                   dark_penalty=DEFAULT_DARK_PENALTY, depart_time=None):
+                   dark_penalty=DEFAULT_DARK_PENALTY, prefer_bike_friendly=DEFAULT_PREFER_BIKE_FRIENDLY, depart_time=None):
     """The route from find_route next to the shortest route (by distance) at the same depart_time, with how much they differ."""
-    penalties = (bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty, depart_time)
+    penalties = (bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty,
+                 prefer_bike_friendly, depart_time)
     with _snapped_ends(G, origin, destination) as (a, b):
         route = _route_feature(G, a, b, penalties)
-        shortest = _route_feature(G, a, b, (0, 0, 0, 0, False, 0, 0, depart_time))
+        shortest = _route_feature(G, a, b, (0, 0, 0, 0, False, 0, 0, 0, depart_time))
     return {
         "route": route,
         "shortest": shortest,

@@ -15,7 +15,7 @@ ROUTE_EXAMPLE = {
                  "coordinates": [[9.2268683, 49.148385], [9.2228294, 49.1386103], [9.2243909, 49.1262013]]},
     "properties": {
         "bump_penalty": 10.0, "danger_penalty": 25.0, "pm_penalty": 0.5, "stop_penalty": 0.5, "prefer_time": False,
-        "shade_penalty": 0.5, "dark_penalty": 1.0, "depart_time": None, "daylight": None, "shade_slot": None,
+        "shade_penalty": 0.5, "dark_penalty": 1.0, "prefer_bike_friendly": 0.0, "depart_time": None, "daylight": None, "shade_slot": None,
         "length_m": 3088.2, "duration_s": 940, "speed_measured_share": 0.97, "mean_roughness": 12.3, "measured_share": 0.97, "estimated_share": 0.0,
         "danger_points": 21, "danger_risk": 17.12, "mean_pm_risk": 0.511, "pm_measured_share": 0.65,
         "mean_stop_go": 0.691, "stop_measured_share": 0.97,
@@ -28,7 +28,7 @@ SHORTEST_EXAMPLE = {
                  "coordinates": [[9.2268683, 49.148385], [9.2294832, 49.1399564], [9.2243909, 49.1262013]]},
     "properties": {
         "bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0, "prefer_time": False,
-        "shade_penalty": 0, "dark_penalty": 0, "depart_time": None, "daylight": None, "shade_slot": None,
+        "shade_penalty": 0, "dark_penalty": 0, "prefer_bike_friendly": 0, "depart_time": None, "daylight": None, "shade_slot": None,
         "length_m": 3061.2, "duration_s": 940, "speed_measured_share": 0.97, "mean_roughness": 24.7, "measured_share": 0.97, "estimated_share": 0.02,
         "danger_points": 10, "danger_risk": 7.94, "mean_pm_risk": 0.524, "pm_measured_share": 0.75,
         "mean_stop_go": 0.665, "stop_measured_share": 0.97,
@@ -85,6 +85,7 @@ class RouteProperties(BaseModel):
     prefer_time: bool = Field(description="Whether the route was planned by riding time instead of length, as requested (false for the shortest route)")
     shade_penalty: float = Field(description=PLANNED_WITH)
     dark_penalty: float = Field(description=PLANNED_WITH)
+    prefer_bike_friendly: float = Field(description="How much bike-friendly streets were preferred, as requested (0 for the shortest route)")
     depart_time: Optional[str] = Field(description="The requested depart_time in Heilbronn local time (ISO 8601), or null")
     daylight: Optional[bool] = Field(
         description="Whether the sun is up at depart_time (then shade_penalty applies, else dark_penalty); null without depart_time")

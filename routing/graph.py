@@ -27,6 +27,8 @@ ESTIMATED_ROUGHNESS_PATH = CACHE_DIR.parent / "data" / "custom" / "roughness_est
 AIR_HOTSPOTS_PATH = CACHE_DIR.parent / "data" / "custom" / "air_hotspots_heilbronn.json"
 HOTSPOT_ALONG_M = 15.0
 HOTSPOT_ALONG_SHARE = 0.5
+# Bike paths, bike lanes and bike routes from OSM (Overpass query next to it), for prefer_bike_friendly.
+BIKE_FRIENDLY_PATH = CACHE_DIR.parent / "data" / "custom" / "bike_friendly_streets_heilbronn.geojson"
 PLACE = "Heilbronn, Germany"
 
 # OSMnx's network_type="bike" filter, with three changes:
@@ -138,6 +140,7 @@ def load_graph(path=GRAPH_PATH):
                   load_hotspot_roads())
     attach_shade(G, *load_shadow(), load_way_shade())
     attach_lighting(G, load_lighting())
+    attach_bike_friendly(G, load_bike_friendly_ways())
     return G
 
 
@@ -198,6 +201,20 @@ def attach_shade(G, slots, way_shadow, way_tree_shade=None):
         per_way = [way_shadow[i] if i in way_shadow else [way_tree_shade[i]] * len(slots)
                    for i in ids if i in way_shadow or i in (way_tree_shade or {})]
         d["shade"] = [sum(s) / len(per_way) for s in zip(*per_way)] if per_way else None
+
+
+def load_bike_friendly_ways(path=BIKE_FRIENDLY_PATH):
+    """OSM way ids of the bike-friendly streets ("way/123" -> 123), or an empty set if the file is missing."""
+    path = Path(path)
+    if not path.exists():
+        return set()
+    return {int(f["id"].split("/")[1]) for f in json.loads(path.read_text(encoding="utf-8"))["features"]}
+
+
+def attach_bike_friendly(G, ways):
+    """Set edge attribute `bike_friendly`: whether any OSM way the edge is made of is in `ways`."""
+    for _, _, d in G.edges(data=True):
+        d["bike_friendly"] = any(i in ways for i in osm_way_ids(d["osmid"]))
 
 
 def attach_lighting(G, way_lit):

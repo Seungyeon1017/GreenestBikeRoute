@@ -92,6 +92,10 @@ DEFAULT_LIT = 0.5
 # Over the same trips at 21:00, dark_penalty 1 changes 26 of 30 routes for a 3% mean detour, raising the
 # length-weighted chance of being lit from 0.80 to 0.91; 2 adds little more (0.92 for a 4% detour).
 DEFAULT_DARK_PENALTY = 1.0
+# bike_friendly (OSM bike paths, bike lanes and bike routes, data/custom/bike_friendly_streets_heilbronn.*): streets
+# NOT on that list cost this much more per metre, so routes prefer the ones on it. 0 leaves routes as they were;
+# 1 makes other streets feel twice as long.
+DEFAULT_PREFER_BIKE_FRIENDLY = 0.0
 
 
 def osm_way_ids(osmid):
@@ -197,9 +201,10 @@ def edge_cost(length_m, normalized_roughness=DEFAULT_ROUGHNESS, bump_penalty=DEF
               danger=0.0, danger_penalty=DEFAULT_DANGER_PENALTY,
               pm_risk=DEFAULT_PM_RISK, pm_penalty=DEFAULT_PM_PENALTY,
               stop_go=DEFAULT_STOP_GO, stop_penalty=DEFAULT_STOP_PENALTY, lift_ends=0, speed_kmh=MEDIAN_SPEED_KMH,
-              sun=0.0, shade_penalty=DEFAULT_SHADE_PENALTY, dark=0.0, dark_penalty=DEFAULT_DARK_PENALTY):
-    """Routing cost: plain length, inflated on rough, polluted, stop-and-go, sunny (`sun`, by day) and unlit
-    (`dark`, at night) streets, plus a fixed
+              sun=0.0, shade_penalty=DEFAULT_SHADE_PENALTY, dark=0.0, dark_penalty=DEFAULT_DARK_PENALTY,
+              bike_friendly=False, prefer_bike_friendly=DEFAULT_PREFER_BIKE_FRIENDLY):
+    """Routing cost: plain length, inflated on rough, polluted, stop-and-go, sunny (`sun`, by day), unlit
+    (`dark`, at night) and not bike-friendly streets, plus a fixed
     `danger_penalty` metres per unit of overtaking risk (`danger` = summed risk on the edge) and a fixed
     `stop_penalty * LIFT_WAIT_M` metres per lift ridden through. A lift sits where two edges meet, so each
     edge ending at one (`lift_ends` = 0, 1 or 2) carries half of it.
@@ -211,5 +216,5 @@ def edge_cost(length_m, normalized_roughness=DEFAULT_ROUGHNESS, bump_penalty=DEF
     """
     base = length_m * (MEDIAN_SPEED_KMH / speed_kmh)
     return (base * (1 + bump_penalty * normalized_roughness / 100 + pm_penalty * pm_risk + stop_penalty * stop_go
-                    + shade_penalty * sun + dark_penalty * dark)
+                    + shade_penalty * sun + dark_penalty * dark + (0 if bike_friendly else prefer_bike_friendly))
             + danger_penalty * danger + stop_penalty * LIFT_WAIT_M * lift_ends / 2)

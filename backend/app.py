@@ -1,4 +1,5 @@
 """HTTP API for the bike router. From the repo root: uvicorn backend.app:app"""
+import json
 from contextlib import asynccontextmanager
 from datetime import datetime
 from functools import cache
@@ -12,9 +13,9 @@ from backend.schemas import EXAMPLE_TRIP, AirCollection, DangerCollection, Error
     LightingCollection, RouteCollection, RouteComparison, RoughnessCollection, ScoreCollection, ShadeCollection, \
     SpeedCollection, VehicleCollection, ZoneCollection
 from backend.sharing import Sharing, SharingUnavailable
-from download_data import load_features
+from download_data import DATA_DIR, load_features
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_PM_PENALTY, \
-    DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, air_scores, clean_overtaking
+    DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, air_scores, clean_overtaking
 from routing.elevation import attach_elevation, load_elevation
 from routing.grade import NoElevationError, route_grade
 from routing.graph import load_graph
@@ -76,6 +77,21 @@ def speed_collection():
     return {"type": "FeatureCollection", "features": features}
 
 
+
+BIKE_FRIENDLY_PATH = DATA_DIR / "custom" / "bike_friendly_streets_heilbronn.geojson"
+
+
+@cache
+def bike_friendly_collection():
+    """Bike paths, bike lanes and bike routes from OSM (Overpass query next to the file), trimmed to geometry + osm_id."""
+    data = json.loads(BIKE_FRIENDLY_PATH.read_text(encoding="utf-8"))
+    features = [
+        {"type": "Feature", "geometry": f["geometry"], "properties": {"osm_id": int(f["id"].split("/")[1])}}
+        for f in data["features"] if f["geometry"]["type"] == "LineString"
+    ]
+    return {"type": "FeatureCollection", "features": features}
+
+
 def street_collection(G, key):
     """The graph's streets with a value for edge attribute `key`, each street once (a two-way street is two edges),
     trimmed to geometry + that value."""
@@ -120,9 +136,9 @@ grade doesn't change which route is picked).
 - **Map overlays:** `/roughness`, `/danger`, `/air` and `/flow` are static GeoJSON layers. Each
   value is 0-1 (roughness 0-100), and higher is always worse. `/speed` gives km/h, where higher is faster.
   `/shade` (share in shade per time slot) and `/lighting` (chance a street is lit at night) are 0-1 where higher
-  is better.
+  is better. `/bike-friendly-streets` shows the bike paths, bike lanes and bike routes `prefer_bike_friendly` favours.
 - **Overall score:** `/score` puts every street on one 0-100 scale (higher = better): its percentile, by length, among
-  Heilbronn streets ranked by routing cost per metre. It takes the same penalties, `prefer_time` and `depart_time` as
+  Heilbronn streets ranked by routing cost per metre. It takes the same penalties, `prefer_time`, `prefer_bike_friendly` and `depart_time` as
   `/route`, so it shows the streets the way that route request weighs them. Overtaking spots and air points count for
   the street they are snapped to.
 
@@ -157,14 +173,17 @@ def penalty_query(
     dark_penalty: float = Query(DEFAULT_DARK_PENALTY, ge=0, le=5, description=(
         "After dark: how much do you hate unlit streets. 0 = ignore, 5 = strongly prefer lit streets. "
         "Only applies with a depart_time between sunset and sunrise")),
+    prefer_bike_friendly: float = Query(DEFAULT_PREFER_BIKE_FRIENDLY, ge=0, le=5, description=(
+        "How much do you prefer bike-friendly streets (bike paths, bike lanes, bike routes; see /bike-friendly-streets). "
+        "0 = ignore; 1 makes other streets feel twice as long")),
     depart_time: Optional[datetime] = Query(None, description=(
         "When the trip starts, e.g. 2026-07-21T15:00 (Heilbronn local time) or with a time zone. Sun up: "
         "shade_penalty applies; sun down: dark_penalty applies. Leave out to ignore both"),
         openapi_examples={"afternoon": {"summary": "Summer afternoon (shade counts)", "value": "2026-07-21T15:00"},
                           "night": {"summary": "Autumn evening after sunset (lighting counts)", "value": "2026-10-28T19:30"}}),
 ):
-    """The penalties, prefer_time and depart_time, shared by the routes and /score."""
-    return bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty, depart_time
+    """The penalties, prefer_time, prefer_bike_friendly and depart_time, shared by the routes and /score."""
+    return bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty,         prefer_bike_friendly, depart_time
 
 
 def route_query(
@@ -312,6 +331,13 @@ def create_app(graph=None, sharing=None):
         if not hasattr(app.state, "lighting"):
             app.state.lighting = street_collection(app.state.graph, "lit")
         return GeoJSONResponse(app.state.lighting)
+
+    @app.get("/bike-friendly-streets", tags=[OVERLAYS],
+             summary="Streets that suit bikes (bike paths, bike lanes, bike routes), as GeoJSON for a map overlay",
+             response_class=GeoJSONResponse,
+             response_description="LineStrings with `osm_id` (OpenStreetMap way id)")
+    def bike_friendly_streets():
+        return GeoJSONResponse(bike_friendly_collection())
 
     @app.get("/score", tags=[OVERLAYS], summary="Overall score per street, all factors in one, as GeoJSON for a map overlay",
              response_class=GeoJSONResponse, response_model=ScoreCollection,

@@ -4,7 +4,7 @@ import pytest
 
 from routing import graph
 from routing.costs import AIR_HOTSPOT_OFFSET, AIR_PRIOR_RIDES
-from routing.graph import attach_danger, attach_lighting, attach_roughness, attach_shade, attach_speed, attach_stop_go
+from routing.graph import attach_bike_friendly, attach_danger, attach_lighting, attach_roughness, attach_shade, attach_speed, attach_stop_go
 from routing.route import RouteError, compare_routes, find_route, sky
 from tests.conftest import COORDS, A, B, C
 
@@ -285,3 +285,12 @@ def test_compare_routes_plans_the_shortest_route_for_the_same_time(sunny_unlit_s
     r = compare_routes(sunny_unlit_shortcut, COORDS[A], COORDS[B], 0, 0, 0, 0, shade_penalty=1, depart_time=SUMMER_AFTERNOON)
     assert r["shortest"]["properties"]["depart_time"] == "2026-07-21T15:00+02:00"
     assert (r["shortest"]["properties"]["mean_shade"], r["route"]["properties"]["mean_shade"]) == (0.0, 1.0)
+
+
+def test_prefer_bike_friendly_detours_onto_bike_friendly_streets(toy_graph):
+    attach_bike_friendly(toy_graph, {12, 13})  # A->C and C->B (osmid [13, 14]) are bike lanes, A->B is not
+    zero = {"bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0}
+    assert find_route(toy_graph, COORDS[A], COORDS[B], **zero)["features"][0]["properties"]["length_m"] == 100
+    f = find_route(toy_graph, COORDS[A], COORDS[B], **zero, prefer_bike_friendly=1)["features"][0]
+    assert f["properties"]["length_m"] == 140
+    assert f["properties"]["prefer_bike_friendly"] == 1
