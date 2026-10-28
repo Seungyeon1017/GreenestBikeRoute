@@ -82,6 +82,7 @@
   <label for="departTime">Departure (empty = time doesn't matter)</label>
   <input id="departTime" type="datetime-local">
   <div class="row"><span id="sky">By day shade counts, after dark lighting</span></div>
+  <div class="row"><span id="skyHint">Set a departure time to use the shade and lighting sliders</span></div>
 
   <label><input type="checkbox" id="dayMode"> Slide through the day</label>
   <div id="dayControls" hidden>
@@ -525,7 +526,23 @@ const sliders = ["bumpPenalty", "dangerPenalty", "pmPenalty", "stopPenalty", "sh
 const preferTime = document.getElementById("preferTime");
 preferTime.onchange = () => { drawScore(); update(); };
 const departTime = document.getElementById("departTime");
-departTime.onchange = () => { drawShade(); drawScore(); update(); };
+// The shade and lighting sliders only count with a departure time, and only one of them: shade while the sun is up,
+// lighting after dark. The route says which (`daylight`); until there is one for this time, both stay on.
+let daylight = null;
+function syncSkySliders() {
+  const noTime = !departTime.value;
+  const off = { shadePenalty: noTime || daylight === false, darkPenalty: noTime || daylight === true };
+  for (const id in off) {
+    const el = document.getElementById(id);
+    el.disabled = off[id];
+    document.querySelector(`label[for=${id}]`).style.opacity = el.style.opacity = off[id] ? 0.4 : "";
+  }
+  document.getElementById("skyHint").parentElement.style.display = off.shadePenalty || off.darkPenalty ? "" : "none";
+  document.getElementById("skyHint").textContent = noTime ? "Set a departure time to use the shade and lighting sliders"
+    : daylight ? "Sun is up: the lighting slider doesn't apply" : "After dark: the shade slider doesn't apply";
+}
+departTime.onchange = () => { daylight = null; syncSkySliders(); drawShade(); drawScore(); update(); };
+syncSkySliders();
 
 // The query parameters of the current sliders, checkbox and departure time, as /route and /score take them.
 function settings() {
@@ -679,6 +696,7 @@ function drawDay() {
   setText("dayClock", st.from);
   const before = departTime.value;
   departTime.value = day.date + "T" + st.from;
+  syncSkySliders();
   if (before !== departTime.value && document.getElementById("showShade").checked) drawShade();
   if (st === dayShown) return;
   dayShown = st;
@@ -701,6 +719,8 @@ function drawComparison({ route, shortest, detour_pct, extra_time_pct, same_path
   shortestLayer.clearLayers().addData(shortest);
   routeLayer.clearLayers().addData(route);
   const s = shortest.properties, r = route.properties;
+  daylight = r.daylight;
+  syncSkySliders();
   show("s", s); show("r", r);
   explain(s, r, detour_pct, same_path);
   setText("sky", r.daylight == null ? "By day shade counts, after dark lighting"
