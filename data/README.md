@@ -21,7 +21,15 @@ Built by us from raw `osem_bike_data`, `osem_home_data_heilbronn` and other sour
 - `rideable_ways.json`: footways without a bicycle tag that cyclists may and do ride (OSM way id: why), hand-picked or approved from riders' reports (`python -m backend.reports approve`); see [routing/README.md](../routing/README.md#which-streets-are-in-the-graph)
 - `bridge_decks.json`: hand-checked deck heights of humped bridges (Erwin-Fuchs-, Karl-Nägele-, Bleichinselbrücke) from the LGL DOM1 surface model, read with `python -m routing.bridge_profile`; see [routing/README.md](../routing/README.md#humped-bridges-datacustombridge_decksjson). Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0
 
-## `reports.sqlite3`
-Riders' reports of closed streets and mapping mistakes (`backend/reports.py`), created on first start. Not in git: it holds live user input.
+## Licenses
 
-Details: [routing/README.md](../routing/README.md)
+| Source | License                                                         | Credit                                     | Used in |
+|---|-----------------------------------------------------------------|--------------------------------------------|---|
+| openSenseMap (raw `osem_*` bike and senseBox:home readings, via ATRAI) | [PDDL 1.0](https://opendatacommons.org/licenses/pddl/1-0/)      | --  | `danger_zones_raw`, `air_quality`, `air_background` |
+| ATRAI ready-made collections (reedu GmbH & Co. KG, `api.atrai.bike`) | to-be-added                                                     | "ATRAI, reedu GmbH & Co. KG"               | `ready-made/*`, `roughness_estimates` |
+| © OpenStreetMap contributors (graph, tags, Overpass, Nominatim) | [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/)      | "© OpenStreetMap contributors"             | every file keyed by OSM way or node; data derived from them stays ODbL |
+| LGL Baden-Württemberg (DGM1, DOM1, LoD2) | [dl-de/by-2-0](https://www.govdata.de/dl-de/by-2-0)             | "Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0" | `elevation`, `bridge_decks`, `shadow`, `lighting` |
+| Stadt Heilbronn, Baumkataster | [dl-de/by-2-0](https://www.govdata.de/dl-de/by-2-0)             | "Stadt Heilbronn, Baumkataster, dl-de/by-2-0" | `shade`, `shadow` |
+| Mapillary map features | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) | "Mapillary, CC BY-SA 4.0"                  | `street_lights_mapillary`, `lighting` |
+| MobiData BW, bikesharing GBFS (live, not stored) | [dl-de/by-2-0](https://www.govdata.de/dl-de/by-2-0)             | "MobiData BW, dl-de/by-2-0"                | `/sharing` |
+| Luftreinhalteplan Heilbronn 2020 (street names of the NO₂ hotspots only) | official document, facts only                                   | "Regierungspräsidium Stuttgart"            | `air_hotspots` |

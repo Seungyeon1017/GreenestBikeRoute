@@ -128,3 +128,8 @@ Run the test suite from the project root:
 uv run pytest
 ```
 
+
+## License
+Code: [AGPL-3.0](LICENSE), the license of the Green City Dashboard that `frontend/` is forked from.
+
+Data: each dataset keeps its source's license; see [data/README.md](data/README.md#licenses) for credits.
