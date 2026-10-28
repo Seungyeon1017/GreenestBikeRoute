@@ -211,7 +211,7 @@ Features: OpenStreetMap highway and surface tags (`data/osm_tags_cache.json`, fe
 | `export_enriched_geojson.py` | Writes one GeoJSON with every segment's values and sources, for Kepler.gl / QGIS |
 | `../data/ml_predicted_roughness.json` | Roughness estimates for 3,466 unmeasured OpenStreetMap ways |
 | `../data/ml_predicted_traffic_flow.json` | Traffic flow estimates for 6,784 unmeasured ways |
-| `../data/road_network_enriched_heilbronn.geojson` | All 34,243 segments with `roughness`, `traffic_flow`, `highway`, `surface` and their source (`measured` / `estimated` / `unknown`) |
+| `../data/road_network_enriched_heilbronn.geojson` | All 34,243 segments with `roughness`, `traffic_flow`, `highway`, `surface` and their source (`measured` / `estimated` / `unknown`). **Not in git** (16 MB, nothing reads it): run `export_enriched_geojson.py` to create it |
 | `metrics.json` | Validation numbers and coverage |
 | `roughness_performance.png`, `traffic_flow_performance.png` | Measured vs estimated on held-out streets |
 
