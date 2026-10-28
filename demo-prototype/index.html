@@ -419,25 +419,34 @@ function show(prefix, p) {
 
 // "Why this route?": per factor, the metres on bad streets of the shortest route (grey bar) and of yours (green bar).
 const WHY = [
-  ["bumpy_m", "bumpy streets", "m"],
-  ["danger_points", "close-overtaking spots", ""],
-  ["bad_air_m", "streets with bad air", "m"],
-  ["stop_go_m", "stop-and-go streets", "m"],
-  ["sunny_m", "in the sun", "m"],
-  ["unlit_m", "on unlit streets", "m"],
-  ["bike_friendly_m", "on bike paths and lanes", "m", true],  // more is better
+  ["bumpy_m", "On bumpy streets", "m"],
+  ["danger_points", "Close-overtaking spots", ""],
+  ["bad_air_m", "On streets with bad air", "m"],
+  ["stop_go_m", "On stop-and-go streets", "m"],
+  ["sunny_m", "In the sun", "m"],
+  ["unlit_m", "On unlit streets", "m"],
+  ["bike_friendly_m", "On bike paths and lanes", "m", true],  // more is better
 ];
 function explain(s, r, detour_pct, same_path) {
   const why = document.getElementById("why");
-  if (same_path) { why.hidden = true; return; }
+  const shown = WHY.filter(([k]) => r[k] != null && s[k] != null && (r[k] || s[k]));
+  if (same_path) {  // nothing traded: what the route is like, so the card doesn't just vanish
+    const max = Math.max(...shown.filter(([, , unit]) => unit).map(([k]) => r[k]), 1);
+    why.innerHTML = `<h2>Why this route?</h2><div class="cost">It is also the shortest route: for your settings no detour `
+      + `is worth it (${(r.length_m / 1000).toFixed(2)} km, ${Math.round(r.duration_s / 60)} min). On the way:</div>`
+      + shown.map(([k, what, unit]) => `<div class="why-row"><span>${what}</span><span class="delta same">${r[k]}${unit ? " m" : ""}</span>`
+        + (unit ? `<div class="why-bars"><div style="width:${100 * r[k] / max}%;background:#1a7f37"></div></div>` : "") + `</div>`).join("");
+    why.hidden = false;
+    return;
+  }
   const dm = Math.round(r.length_m - s.length_m), dt = Math.round((r.duration_s - s.duration_s) / 60);
-  const rows = WHY.filter(([k]) => r[k] != null && s[k] != null && (r[k] || s[k])).map(([k, what, unit, more]) => {
+  const rows = shown.map(([k, what, unit, more]) => {
     const d = r[k] - s[k], good = more ? d > 0 : d < 0;
     const cls = Math.abs(d) < (unit ? 20 : 1) ? "same" : good ? "better" : "worse";
     const amount = Math.abs(d) + (unit ? " m" : "");
     const text = cls === "same" ? "about the same" : unit ? `${amount} ${d < 0 ? "less" : "more"}` : `${amount} ${d < 0 ? "fewer" : "more"}`;
     const max = Math.max(r[k], s[k]);
-    return `<div class="why-row"><span>${unit ? "Metres " : ""}${what}</span><span class="delta ${cls}">${text}</span>
+    return `<div class="why-row"><span>${what}</span><span class="delta ${cls}">${text}</span>
       <div class="why-bars" title="shortest ${s[k]}${unit ? " m" : ""}, yours ${r[k]}${unit ? " m" : ""}">
         <div style="width:${100 * s[k] / max}%;background:#7a8794"></div><div style="width:${100 * r[k] / max}%;background:#1a7f37"></div></div></div>`;
   });
