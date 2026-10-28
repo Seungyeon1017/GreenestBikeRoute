@@ -60,6 +60,14 @@ def test_same_start_and_end_is_rejected(toy_graph):
         find_route(toy_graph, COORDS[A], COORDS[A])
 
 
+def test_start_on_a_merged_two_way_street_can_leave_both_ways(toy_graph):
+    # OSMnx lists merged way ids in riding order, so the way back lists them reversed.
+    toy_graph.add_edge(B, C, osmid=[14, 13], length=70.0, roughness=0.0)
+    mid_cb = (49.14065, 9.2104)
+    for end in (B, C):
+        assert find_route(toy_graph, mid_cb, COORDS[end], 0, 0, 0, 0)["features"][0]["properties"]["length_m"] == 35
+
+
 def test_no_path_is_rejected(toy_graph):
     with pytest.raises(RouteError, match="no bike route"):
         find_route(toy_graph, COORDS[B], COORDS[A])  # all edges are one-way towards B

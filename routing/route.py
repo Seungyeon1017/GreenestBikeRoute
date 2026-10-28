@@ -1,14 +1,16 @@
 """A-to-B routing on the bike graph, returned as GeoJSON."""
 import math
 import threading
+import weakref
 from contextlib import contextmanager
 
 import networkx as nx
+import shapely
 from shapely import LineString, Point, STRtree
 from shapely.ops import substring
 
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_PM_PENALTY, DEFAULT_PM_RISK, \
-    DEFAULT_ROUGHNESS, DEFAULT_STOP_GO, DEFAULT_STOP_PENALTY, LIFT_WAIT_M, MEDIAN_SPEED_KMH, edge_cost
+    DEFAULT_ROUGHNESS, DEFAULT_STOP_GO, DEFAULT_STOP_PENALTY, LIFT_WAIT_M, MEDIAN_SPEED_KMH, edge_cost, osm_way_ids
 
 # Start/end points further than this from any street are treated as outside Heilbronn.
 MAX_SNAP_M = 500
@@ -47,21 +49,57 @@ def _edge_line(G, u, v, d):
     return LineString([(G.nodes[u]["x"], G.nodes[u]["y"]), (G.nodes[v]["x"], G.nodes[v]["y"])])
 
 
-def _nearest_edge(G, lat, lon):
-    """The edge (u, v, key, data) closest to (lat, lon), its distance in metres and the point on it.
+class _SnapIndex:
+    """The streets of the main network as lines in metres around the graph's mean latitude, in an STRtree.
 
     Only streets of the main network count: a point next to a cut-off island (say a service road whose
     only link is a footway bikes may not use) snaps to the nearest street that can be routed from.
+    Building it takes ~0.3 s on Heilbronn, so it is built once per graph (see _snap_index).
+    """
+
+    def __init__(self, G):
+        self.size = (G.number_of_nodes(), G.number_of_edges())
+        self.lat0 = sum(y for _, y in G.nodes(data="y")) / G.number_of_nodes()
+        main = max(nx.weakly_connected_components(G), key=len)
+        self.edges = [(u, v, k) for u, v, k in G.edges(keys=True) if u in main and v in main]
+        plane = _Plane(self.lat0)
+        scale = (plane.cos_lat * plane.scale, plane.scale)
+        lines = shapely.transform([_edge_line(G, u, v, G.edges[u, v, k]) for u, v, k in self.edges], lambda xy: xy * scale)
+        self.tree = STRtree(lines)
+
+
+# One _SnapIndex per graph; a graph whose node or edge count changed gets a new one.
+_SNAP_INDEXES = weakref.WeakKeyDictionary()
+
+
+def _snap_index(G):
+    index = _SNAP_INDEXES.get(G)
+    if index is None or index.size != (G.number_of_nodes(), G.number_of_edges()):
+        index = _SNAP_INDEXES[G] = _SnapIndex(G)
+    return index
+
+
+def _nearest_edge(G, index, lat, lon, extra=()):
+    """The edge (u, v, key, data) closest to (lat, lon), its distance in metres and the point on it.
+
+    Candidates are the streets of `index` still in G, plus the edges in `extra` (pieces of streets split
+    since the index was built). The index only narrows them down: each candidate is measured in metres
+    around the point's own latitude.
     """
     plane = _Plane(lat)
-    main = max(nx.weakly_connected_components(G), key=len)
-    edges = [e for e in G.edges(keys=True, data=True) if e[0] in main and e[1] in main]
-    lines = [plane.to_m(_edge_line(G, u, v, d)) for u, v, _, d in edges]
     point = Point(plane.to_m_point(lon, lat))
-    i = int(STRtree(lines).query_nearest(point)[0])
-    u, v, key, data = edges[i]
+    near = Point(_Plane(index.lat0).to_m_point(lon, lat))
+    nearest_m = index.tree.query_nearest(near, return_distance=True)[1][0]  # several on a tie (a two-way street)
+    # The two projections differ by well under 1% within 50 km, so 5% plus a metre keeps the nearest street.
+    # A point that far from every street will be refused anyway: then the index's nearest is enough.
+    found = (index.tree.query(near, predicate="dwithin", distance=nearest_m * 1.05 + 1)
+             if nearest_m <= 2 * MAX_SNAP_M else index.tree.query_nearest(near))
+    edges = [index.edges[i] for i in sorted(found) if G.has_edge(*index.edges[i])] + list(extra)
+    lines = [plane.to_m(_edge_line(G, u, v, G.edges[u, v, k])) for u, v, k in edges]
+    i = min(range(len(lines)), key=lambda i: lines[i].distance(point))
+    u, v, key = edges[i]
     on_street = lines[i].interpolate(lines[i].project(point))
-    return (u, v, key, data), point.distance(on_street), plane.to_lonlat_point(on_street.x, on_street.y)
+    return (u, v, key, G.edges[u, v, key]), point.distance(on_street), plane.to_lonlat_point(on_street.x, on_street.y)
 
 
 def _metres_apart(G, node, point_lonlat, plane):
@@ -91,8 +129,11 @@ def _snapped_ends(G, origin, destination):
     ends = []
     try:
         with _GRAPH_LOCK:
+            index = _snap_index(G)  # before the first split changes G
             for label, (lat, lon) in (("start", origin), ("end", destination)):
-                (u, v, key, data), dist, point_lonlat = _nearest_edge(G, lat, lon)
+                # The end may lie on a piece of the street the start split.
+                pieces = [e for node, _ in undo for e in (*G.in_edges(node, keys=True), *G.out_edges(node, keys=True))]
+                (u, v, key, data), dist, point_lonlat = _nearest_edge(G, index, lat, lon, pieces)
                 if dist > MAX_SNAP_M:
                     raise RouteError(f"{label} point is {dist:.0f} m from the nearest Heilbronn street")
                 plane = _Plane(lat)
@@ -108,7 +149,8 @@ def _snapped_ends(G, origin, destination):
                 # reached and left either way.
                 for a, b in ((u, v), (v, u)):
                     for k, d in list((G.get_edge_data(a, b) or {}).items()):
-                        if d.get("osmid") != data.get("osmid"):
+                        # Merged ways list their ids in riding order, so the two directions list them reversed.
+                        if set(osm_way_ids(d.get("osmid"))) != set(osm_way_ids(data.get("osmid"))):
                             continue
                         # A way can have parallel edges between the same corners (a loop, a stub): split only
                         # the ones the point is on.
