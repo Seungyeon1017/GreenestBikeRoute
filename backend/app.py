@@ -2,7 +2,7 @@
 from contextlib import asynccontextmanager
 from datetime import datetime
 from functools import cache
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,7 +10,8 @@ from fastapi.responses import JSONResponse
 
 from backend.schemas import EXAMPLE_TRIP, AirCollection, DangerCollection, Error, FlowCollection, GradeCollection, \
     LightingCollection, RouteCollection, RouteComparison, RoughnessCollection, ScoreCollection, ShadeCollection, \
-    SpeedCollection
+    SpeedCollection, VehicleCollection, ZoneCollection
+from backend.sharing import Sharing, SharingUnavailable
 from download_data import load_features
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_PM_PENALTY, \
     DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, air_ranks, clean_overtaking
@@ -187,16 +188,33 @@ ROUTE_ERRORS = {400: {"description": "Start or end is outside Heilbronn, or no r
                           "detail": "start point is 812 m from the nearest Heilbronn street"}}}}}
 
 
-ROUTING, OVERLAYS = "Routing", "Map overlays"
+ROUTING, OVERLAYS, SHARING = "Routing", "Map overlays", "Sharing"
 TAGS_METADATA = [
     {"name": ROUTING, "description": "Plan a bike route from A to B, compare it with the shortest one, "
                                        "or show its grade."},
     {"name": OVERLAYS, "description": "Static GeoJSON layers of the measured data, to draw on a map."},
+    {"name": SHARING, "description": "Shared e-bikes and e-scooters free to rent right now and their parking zones, "
+                                       "live from MobiData BW (Heilbronn: Dott). Each vehicle links to the provider's app."},
 ]
 
 
-def create_app(graph=None):
-    """`graph` lets tests pass a small graph; by default the Heilbronn graph is loaded at startup."""
+def near_query(
+    near_lat: Optional[float] = Query(None, ge=-90, le=90, description="Latitude to sort by distance from, e.g. the route start"),
+    near_lon: Optional[float] = Query(None, ge=-180, le=180, description="Longitude to sort by distance from"),
+    limit: Optional[int] = Query(None, ge=1, le=500, description="Return at most this many (closest first if near_lat/near_lon is given)"),
+):
+    """The query parameters of /sharing and /sharing/zones."""
+    if (near_lat is None) != (near_lon is None):
+        raise HTTPException(status_code=422, detail="give both near_lat and near_lon, or neither")
+    return (None if near_lat is None else (near_lat, near_lon)), limit
+
+
+SHARING_ERRORS = {503: {"description": "The sharing feed can't be read right now", "model": Error}}
+
+
+def create_app(graph=None, sharing=None):
+    """`graph` and `sharing` let tests pass a small graph and a fake feed; by default the Heilbronn graph is
+    loaded at startup and bike and scooter sharing is read live from MobiData BW."""
 
     @asynccontextmanager
     async def lifespan(app):
@@ -208,6 +226,14 @@ def create_app(graph=None):
     app = FastAPI(title="Greenest Bike Route", description=API_DESCRIPTION, lifespan=lifespan,
                   openapi_tags=TAGS_METADATA)
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"])
+    sharing = sharing if sharing is not None else Sharing()
+
+    def shared(kind, query, vehicle="all"):
+        near, limit = query
+        try:
+            return sharing.collection(kind, near, limit, vehicle)
+        except SharingUnavailable as e:
+            raise HTTPException(status_code=503, detail=str(e))
 
     def routed(route_fn, query):
         origin, destination, penalties = query
@@ -298,6 +324,19 @@ def create_app(graph=None):
                 del scores[next(iter(scores))]  # the oldest
             scores[key] = street_scores(app.state.graph, *penalties)
         return GeoJSONResponse(scores[key])
+
+    @app.get("/sharing", tags=[SHARING], summary="Shared e-bikes and e-scooters free to rent right now, as GeoJSON points",
+             response_class=GeoJSONResponse, response_model=VehicleCollection, responses=SHARING_ERRORS,
+             response_description="Points with `vehicle` (bike/scooter), battery, range, price and a link to rent it in the provider's app")
+    def sharing_vehicles(query=Depends(near_query), vehicle: Literal["all", "bike", "scooter"] = Query(
+            "all", description="Only e-bikes (bike), only e-scooters (scooter), or both (all)")):
+        return GeoJSONResponse(shared("vehicles", query, vehicle))
+
+    @app.get("/sharing/zones", tags=[SHARING], summary="Sharing parking zones with how many bikes and scooters stand there",
+             response_class=GeoJSONResponse, response_model=ZoneCollection, responses=SHARING_ERRORS,
+             response_description="Points with the zone name, `bikes_available` and `scooters_available`")
+    def sharing_zones(query=Depends(near_query)):
+        return GeoJSONResponse(shared("zones", query))
 
     return app
 
