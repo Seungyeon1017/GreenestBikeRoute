@@ -80,10 +80,11 @@
   <div class="row"><span>0 = ignore</span><span>5 = strongly prefer lit</span></div>
 
   <table>
-    <tr><th></th><th>Length</th><th title="expected riding time from measured cyclist speeds">Time</th><th title="mean roughness of the measured part; hover a value for how much is measured / estimated">Rough</th><th title="close-overtaking spots passed">Overtakes</th><th title="mean air score, 0.5 = typical">PM</th><th title="mean stop-and-go, 0-1">Stops</th><th title="share in shade at the departure time (by day only)">Shade</th><th title="chance the streets are lit at night">Lit</th></tr>
-    <tr><td><span class="swatch" style="background:#7a8794"></span>Shortest</td><td id="sLen">–</td><td id="sTime">–</td><td id="sRough">–</td><td id="sDanger">–</td><td id="sPm">–</td><td id="sStop">–</td><td id="sShade">–</td><td id="sLit">–</td></tr>
-    <tr><td><span class="swatch" style="background:#1a7f37"></span>Your route</td><td id="rLen">–</td><td id="rTime">–</td><td id="rRough">–</td><td id="rDanger">–</td><td id="rPm">–</td><td id="rStop">–</td><td id="rShade">–</td><td id="rLit">–</td></tr>
+    <tr><th></th><th>Length</th><th title="expected riding time from measured cyclist speeds">Time</th><th title="mean roughness of the measured part; hover a value for how much is measured / estimated">Rough</th><th title="close-overtaking spots passed">Overtakes</th><th title="mean air score, 0.5 = typical">PM</th><th title="mean stop-and-go, 0-1">Stops</th><th title="share in shade at the departure time (by day only)">Shade</th><th title="chance the streets are lit at night">Lit</th><th title="rough energy use of the ride, for the default rider (70 kg, normal bike)">kcal</th></tr>
+    <tr><td><span class="swatch" style="background:#7a8794"></span>Shortest</td><td id="sLen">–</td><td id="sTime">–</td><td id="sRough">–</td><td id="sDanger">–</td><td id="sPm">–</td><td id="sStop">–</td><td id="sShade">–</td><td id="sLit">–</td><td id="sKcal">–</td></tr>
+    <tr><td><span class="swatch" style="background:#1a7f37"></span>Your route</td><td id="rLen">–</td><td id="rTime">–</td><td id="rRough">–</td><td id="rDanger">–</td><td id="rPm">–</td><td id="rStop">–</td><td id="rShade">–</td><td id="rLit">–</td><td id="rKcal">–</td></tr>
   </table>
+  <div class="row"><span>kcal is a rough estimate for the default rider: 70 kg on a normal bike (weight and e-bike can't be set here yet)</span></div>
   <div id="summary"></div>
   <div id="error"></div>
 
@@ -527,6 +528,9 @@ const setText = (id, t) => document.getElementById(id).textContent = t;
 function show(prefix, p) {
   setText(prefix + "Len", p ? (p.length_m / 1000).toFixed(2) + " km" : "–");
   setText(prefix + "Time", p ? Math.round(p.duration_s / 60) + " min" : "–");
+  setText(prefix + "Kcal", p ? "~" + Math.round(p.kcal) : "–");
+  document.getElementById(prefix + "Kcal").title = p ? (p.climb_m == null ? "no height data: climbs not counted, so at least this much"
+    : `includes ${Math.round(p.climb_m)} m of climbing`) : "";
   setText(prefix + "Rough", p && p.mean_roughness != null ? p.mean_roughness.toFixed(1) : "–");
   // Where the route's roughness comes from; streets that are neither get the median 10.
   const pct = x => Math.round(x * 100) + "%";

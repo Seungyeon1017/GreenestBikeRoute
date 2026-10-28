@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import pytest
 
 from routing import graph
+from routing.calories import DEFAULT_WEIGHT_KG, ride_kcal
 from routing.costs import AIR_HOTSPOT_OFFSET, AIR_PRIOR_RIDES
 from routing.graph import attach_bike_friendly, attach_danger, attach_lighting, attach_roughness, attach_shade, attach_speed, attach_stop_go
 from routing.route import RouteError, compare_routes, find_route, sky
@@ -112,6 +113,25 @@ def test_prefer_time_takes_the_faster_detour(toy_graph):
     # 100 m at 5 km/h takes longer than 140 m at 20 km/h
     p = find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 0, 0, prefer_time=True)["features"][0]["properties"]
     assert (p["length_m"], p["prefer_time"], p["duration_s"], p["speed_measured_share"]) == (140, True, 25, 1.0)
+
+
+def test_climb_m_is_null_without_elevation(toy_graph):
+    assert route(toy_graph, 0)["properties"]["climb_m"] is None
+
+
+def test_climb_m_and_kcal_count_the_ascent(hilly):
+    p = route(hilly, 10)["properties"]  # the detour A -> C -> B climbs 5 m
+    assert p["climb_m"] == 5
+    assert p["kcal"] == pytest.approx(ride_kcal(p["duration_s"], 5, DEFAULT_WEIGHT_KG), abs=0.2)
+
+
+def test_kcal_follows_the_rider_and_the_bike(toy_graph):
+    p = route(toy_graph, 0)["properties"]
+    # the toy graph has no elevation, so the climb counts as 0
+    assert p["kcal"] == pytest.approx(ride_kcal(p["duration_s"], 0, DEFAULT_WEIGHT_KG), abs=0.1)
+    heavy = find_route(toy_graph, COORDS[A], COORDS[B], 0, weight_kg=90)["features"][0]["properties"]
+    e_bike = find_route(toy_graph, COORDS[A], COORDS[B], 0, e_bike=True)["features"][0]["properties"]
+    assert heavy["kcal"] > p["kcal"] and e_bike["kcal"] < p["kcal"]
 
 
 def test_compare_routes_reports_extra_time(toy_graph):

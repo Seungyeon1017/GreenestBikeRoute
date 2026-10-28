@@ -17,7 +17,7 @@ ROUTE_EXAMPLE = {
     "properties": {
         "bump_penalty": 10.0, "danger_penalty": 25.0, "pm_penalty": 0.5, "stop_penalty": 0.5, "prefer_time": False,
         "shade_penalty": 0.5, "dark_penalty": 1.0, "prefer_bike_friendly": 0.0, "depart_time": None, "daylight": None, "shade_slot": None,
-        "length_m": 3088.2, "duration_s": 940, "speed_measured_share": 0.97, "mean_roughness": 12.3, "measured_share": 0.97, "estimated_share": 0.0,
+        "length_m": 3088.2, "duration_s": 940, "climb_m": 24.6, "kcal": 143.8, "speed_measured_share": 0.97, "mean_roughness": 12.3, "measured_share": 0.97, "estimated_share": 0.0,
         "danger_points": 21, "danger_risk": 17.12, "mean_pm_risk": 0.511, "pm_measured_share": 0.65,
         "mean_stop_go": 0.691, "stop_measured_share": 0.97,
         "mean_shade": None, "shade_known_share": 1.0, "mean_lit": 0.986, "lit_known_share": 0.97, "lifts": 0,
@@ -31,7 +31,7 @@ SHORTEST_EXAMPLE = {
     "properties": {
         "bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0, "prefer_time": False,
         "shade_penalty": 0, "dark_penalty": 0, "prefer_bike_friendly": 0, "depart_time": None, "daylight": None, "shade_slot": None,
-        "length_m": 3061.2, "duration_s": 940, "speed_measured_share": 0.97, "mean_roughness": 24.7, "measured_share": 0.97, "estimated_share": 0.02,
+        "length_m": 3061.2, "duration_s": 940, "climb_m": 30.7, "kcal": 148.8, "speed_measured_share": 0.97, "mean_roughness": 24.7, "measured_share": 0.97, "estimated_share": 0.02,
         "danger_points": 10, "danger_risk": 7.94, "mean_pm_risk": 0.524, "pm_measured_share": 0.75,
         "mean_stop_go": 0.665, "stop_measured_share": 0.97,
         "mean_shade": None, "shade_known_share": 1.0, "mean_lit": 0.93, "lit_known_share": 0.99, "lifts": 0,
@@ -59,6 +59,7 @@ GRADE_EXAMPLE = {
         "length_m": 3088.2, "climb_m": 24.6, "descent_m": 6.4, "start_elevation_m": 162.7, "end_elevation_m": 180.8,
         "max_grade_pct": 4.1, "max_descent_grade_pct": -3.0,
         "length_by_severity_m": {"flat": 2735.3, "gentle": 343.3, "noticeable": 9.6, "steep": 0.0, "very_steep": 0.0},
+        "kcal": 143.8,
     },
 }
 
@@ -96,6 +97,12 @@ class RouteProperties(BaseModel):
     length_m: float = Field(description="Route length in metres")
     duration_s: int = Field(
         description="Expected riding time in seconds from speed_map (measured cyclist speed, waits included; unmeasured streets at 15.7 km/h), lifts included")
+    climb_m: Optional[float] = Field(
+        description="Total height gained in metres, bridge humps included (same as `climb_m` of /route/grade); null without elevation data")
+    kcal: float = Field(description=(
+        "Rough energy use in kcal for riding this route (MET 6.8 for the riding time, plus the climbs), for the weight_kg "
+        "rider; e_bike gives a rough pedelec estimate. When `climb_m` is null the climbs count as 0, so it is a lower bound. "
+        "Show it rounded, e.g. \"about 120 kcal\". An estimate, not a measurement; see routing/calories.py"))
     speed_measured_share: float = Field(description="Share of the route length with speed_map measurements, 0-1")
     mean_roughness: Optional[float] = Field(
         description="Normalized Roughness 0-100, length-weighted over the measured part; null if none was measured")
@@ -176,6 +183,7 @@ class GradeSummary(BaseModel):
     max_grade_pct: float = Field(description="Steepest uphill street piece in % (0 if the route never climbs)")
     max_descent_grade_pct: float = Field(description="Steepest downhill street piece in %, negative (0 if it never descends)")
     length_by_severity_m: dict[Severity, float] = Field(description="Metres of the route in each severity")
+    kcal: float = Field(description="Rough energy use in kcal for riding the route, for the weight_kg rider (same as `kcal` of /route)")
 
 
 class GradeCollection(BaseModel):

@@ -17,6 +17,7 @@ from backend.schemas import EXAMPLE_TRIP, AirCollection, BikeFriendlyCollection,
 from backend.geocoding import Geocoder, GeocodingUnavailable, normalize
 from backend.sharing import Sharing, SharingUnavailable
 from download_data import DATA_DIR, load_features
+from routing.calories import DEFAULT_WEIGHT_KG
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_PM_PENALTY, \
     DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, air_scores, clean_overtaking, osm_way_ids
 from routing.elevation import attach_elevation, load_crests, load_elevation
@@ -235,6 +236,16 @@ def route_query(
     return (from_lat, from_lon), (to_lat, to_lon), penalties
 
 
+def rider_query(
+    weight_kg: float = Query(DEFAULT_WEIGHT_KG, gt=0, le=250, description=(
+        "Rider weight in kg (with the bike's for climbs), for kcal. Does not change the route")),
+    e_bike: bool = Query(False, description=(
+        "Pedelec: kcal is a rough estimate, see routing/calories.py. Does not change the route")),
+):
+    """The rider's weight and bike, for the kcal estimate of /route."""
+    return {"weight_kg": weight_kg, "e_bike": e_bike}
+
+
 # /score collections kept for the most recent penalty settings; each is ~4 MB.
 SCORE_CACHE_SIZE = 8
 
@@ -300,34 +311,34 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None):
         except SharingUnavailable as e:
             raise HTTPException(status_code=503, detail=str(e))
 
-    def routed(route_fn, query):
+    def routed(route_fn, query, **rider):
         origin, destination, penalties = query
         set_closures(app.state.graph, reports.closures())
         try:
-            return route_fn(app.state.graph, origin, destination, *penalties)
+            return route_fn(app.state.graph, origin, destination, *penalties, **rider)
         except RouteError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
     @app.get("/route", tags=[ROUTING], summary="Bike route from A to B as GeoJSON", response_class=GeoJSONResponse,
-             response_model=RouteCollection, response_description="One LineString feature: the route",
+             response_model=RouteCollection, response_description="One LineString feature: the route, with its kcal estimate",
              responses=ROUTE_ERRORS)
-    def route(query=Depends(route_query)):
-        return GeoJSONResponse(routed(find_route, query))
+    def route(query=Depends(route_query), rider=Depends(rider_query)):
+        return GeoJSONResponse(routed(find_route, query, **rider))
 
     @app.get("/route/compare", tags=[ROUTING], summary="Bike route from A to B next to the shortest route",
              response_model=RouteComparison, responses=ROUTE_ERRORS,
              response_description="The route, the shortest route, and how much they differ")
-    def route_compare(query=Depends(route_query)):
-        return JSONResponse(routed(compare_routes, query))
+    def route_compare(query=Depends(route_query), rider=Depends(rider_query)):
+        return JSONResponse(routed(compare_routes, query, **rider))
 
     @app.get("/route/grade", tags=[ROUTING], summary="The route from /route split into pieces coloured by grade (display only)",
              response_class=GeoJSONResponse, response_model=GradeCollection,
              responses={**ROUTE_ERRORS, 503: {"description": "No elevation data: run python -m routing.elevation",
                                               "model": Error}},
              response_description="LineStrings with `grade_pct`, `severity` and `color`, plus route totals in `summary`")
-    def route_grade_pieces(query=Depends(route_query)):
+    def route_grade_pieces(query=Depends(route_query), rider=Depends(rider_query)):
         try:
-            return GeoJSONResponse(routed(route_grade, query))
+            return GeoJSONResponse(routed(route_grade, query, **rider))
         except NoElevationError as e:
             raise HTTPException(status_code=503, detail=str(e))
 

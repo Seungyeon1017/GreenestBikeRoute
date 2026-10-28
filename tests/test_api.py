@@ -16,6 +16,9 @@ def client(toy_graph):
         yield c
 
 
+RIDER = ("weight_kg", "e_bike")  # the routes take them for their kcal; /score has no single ride
+
+
 def params(bump_penalty=None, start=COORDS[A]):
     p = {"from_lat": start[0], "from_lon": start[1], "to_lat": COORDS[B][0], "to_lon": COORDS[B][1]}
     if bump_penalty is not None:
@@ -28,6 +31,13 @@ def test_route_returns_geojson(client):
     assert r.status_code == 200
     assert r.headers["content-type"] == "application/geo+json"
     assert r.json()["features"][0]["properties"]["length_m"] == 100
+
+
+def test_route_has_kcal_for_the_rider(client):
+    base = client.get("/route", params=params()).json()["features"][0]["properties"]["kcal"]
+    heavy = client.get("/route", params={**params(), "weight_kg": 90}).json()["features"][0]["properties"]["kcal"]
+    e_bike = client.get("/route", params={**params(), "e_bike": True}).json()["features"][0]["properties"]["kcal"]
+    assert heavy > base > e_bike
 
 
 def test_route_matches_the_documented_schema(client):
@@ -200,7 +210,7 @@ def test_score_overlay_follows_the_penalties(client):
     assert client.get("/score", params={"bump_penalty": -1}).status_code == 422
     spec = client.get("/openapi.json").json()["paths"]
     names = lambda path: [p["name"] for p in spec[path]["get"]["parameters"]]
-    assert names("/score") == names("/route")[4:]  # everything but the start and end
+    assert names("/score") == [n for n in names("/route") if n not in RIDER][4:]  # everything but the start and end
 
 
 def test_score_overlay_counts_unlit_streets_after_dark(toy_graph):

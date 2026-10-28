@@ -12,6 +12,7 @@ import shapely
 from shapely import LineString, Point, STRtree
 from shapely.ops import substring
 
+from routing.calories import DEFAULT_WEIGHT_KG, ride_kcal, route_climb
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_LIT, \
     DEFAULT_PM_PENALTY, DEFAULT_PM_RISK, DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_ROUGHNESS, DEFAULT_SHADE, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_GO, \
     DEFAULT_STOP_PENALTY, LIFT_WAIT_M, MEDIAN_SPEED_KMH, edge_cost, osm_way_ids
@@ -298,9 +299,19 @@ def street_scores(G, bump_penalty=DEFAULT_BUMP_PENALTY, danger_penalty=DEFAULT_D
     return {"type": "FeatureCollection", "features": features}
 
 
-def _route_feature(G, a, b, penalties):
+def route_duration(G, edges):
+    """Expected riding time in s of a route given as (u, v, data) edges: speed_map per street (unmeasured streets at
+    the median speed), plus waiting for each lift at the median speed."""
+    lifts = sum(1 for _, n, _ in edges[:-1] if "elevator" in str(G.nodes[n].get("highway")))
+    duration = lifts * LIFT_WAIT_M / (MEDIAN_SPEED_KMH / 3.6)
+    for _, _, d in edges:
+        duration += float(d["length"]) / (_speed_kmh(d) / 3.6)
+    return duration
+
+
+def _route_feature(G, a, b, penalties, weight_kg=DEFAULT_WEIGHT_KG, e_bike=False):
     """The cheapest route between graph nodes a and b for `penalties` (the six penalties, prefer_time,
-    prefer_bike_friendly and depart_time), as one GeoJSON Feature."""
+    prefer_bike_friendly and depart_time), as one GeoJSON Feature. kcal is for a rider of weight_kg."""
     bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty, prefer_bike_friendly, \
         depart_time = penalties
     plan = _plan(G, penalties)
@@ -312,11 +323,11 @@ def _route_feature(G, a, b, penalties):
     danger, danger_points, pm_len, pm_measured_len = 0.0, 0, 0.0, 0.0
     stop_len, stop_measured_len = 0.0, 0.0
     shade_len, shade_known_len, lit_len, lit_known_len = 0.0, 0.0, 0.0, 0.0
-    # Riding time from speed_map, plus waiting for each lift at the median speed.
-    duration, speed_measured_len = lifts * LIFT_WAIT_M / (MEDIAN_SPEED_KMH / 3.6), 0.0
-    closures = set()
+    speed_measured_len = 0.0
+    closures, edges = set(), []
     for u, v in zip(path[:-1], path[1:]):
         d = _edge(G, u, v, plan)
+        edges.append((u, v, d))
         if d.get("closure"):
             closures.add(str(d["osmid"]))
         pts = edge_coords(G, u, v, d)
@@ -343,9 +354,9 @@ def _route_feature(G, a, b, penalties):
         if d.get("lit") is not None:
             lit_known_len += edge_len
             lit_len += d["lit"] * edge_len
-        duration += edge_len / (_speed_kmh(d) / 3.6)
         if d.get("speed_kmh") is not None:
             speed_measured_len += edge_len
+    duration, climb = route_duration(G, edges), route_climb(G, edges)
 
     properties = {
         "bump_penalty": bump_penalty,
@@ -363,6 +374,10 @@ def _route_feature(G, a, b, penalties):
         "length_m": round(length, 1),
         # Expected riding time from speed_map (unmeasured streets at the median speed), lifts included.
         "duration_s": round(duration),
+        # Total ascent, bridge humps included (null without elevation data), and the rough energy use for it
+        # and the riding time, see routing/calories.py.
+        "climb_m": None if climb is None else round(climb, 1),
+        "kcal": round(ride_kcal(duration, climb or 0.0, weight_kg, e_bike), 1),
         "speed_measured_share": round(speed_measured_len / length, 2),
         # Length-weighted over the measured part of the route only.
         "mean_roughness": round(rough_len / measured_len, 1) if measured_len else None,
@@ -471,7 +486,8 @@ def route_edges(G, origin, destination, penalties):
 def find_route(G, origin, destination, bump_penalty=DEFAULT_BUMP_PENALTY,
                danger_penalty=DEFAULT_DANGER_PENALTY, pm_penalty=DEFAULT_PM_PENALTY,
                stop_penalty=DEFAULT_STOP_PENALTY, prefer_time=False, shade_penalty=DEFAULT_SHADE_PENALTY,
-               dark_penalty=DEFAULT_DARK_PENALTY, prefer_bike_friendly=DEFAULT_PREFER_BIKE_FRIENDLY, depart_time=None):
+               dark_penalty=DEFAULT_DARK_PENALTY, prefer_bike_friendly=DEFAULT_PREFER_BIKE_FRIENDLY, depart_time=None,
+               weight_kg=DEFAULT_WEIGHT_KG, e_bike=False):
     """Cheapest route from origin to destination, both (lat, lon), as a GeoJSON FeatureCollection.
 
     All penalties 0 give the shortest route; higher values take longer detours to avoid rough
@@ -484,20 +500,21 @@ def find_route(G, origin, destination, bump_penalty=DEFAULT_BUMP_PENALTY,
     penalties = (bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty,
                  prefer_bike_friendly, depart_time)
     with _snapped_ends(G, origin, destination) as (a, b):
-        feature = _route_feature(G, a, b, penalties)
+        feature = _route_feature(G, a, b, penalties, weight_kg, e_bike)
     return {"type": "FeatureCollection", "features": [feature]}
 
 
 def compare_routes(G, origin, destination, bump_penalty=DEFAULT_BUMP_PENALTY,
                    danger_penalty=DEFAULT_DANGER_PENALTY, pm_penalty=DEFAULT_PM_PENALTY,
                    stop_penalty=DEFAULT_STOP_PENALTY, prefer_time=False, shade_penalty=DEFAULT_SHADE_PENALTY,
-                   dark_penalty=DEFAULT_DARK_PENALTY, prefer_bike_friendly=DEFAULT_PREFER_BIKE_FRIENDLY, depart_time=None):
+                   dark_penalty=DEFAULT_DARK_PENALTY, prefer_bike_friendly=DEFAULT_PREFER_BIKE_FRIENDLY, depart_time=None,
+                   weight_kg=DEFAULT_WEIGHT_KG, e_bike=False):
     """The route from find_route next to the shortest route (by distance) at the same depart_time, with how much they differ."""
     penalties = (bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty,
                  prefer_bike_friendly, depart_time)
     with _snapped_ends(G, origin, destination) as (a, b):
-        route = _route_feature(G, a, b, penalties)
-        shortest = _route_feature(G, a, b, (0, 0, 0, 0, False, 0, 0, 0, depart_time))
+        route = _route_feature(G, a, b, penalties, weight_kg, e_bike)
+        shortest = _route_feature(G, a, b, (0, 0, 0, 0, False, 0, 0, 0, depart_time), weight_kg, e_bike)
     return {
         "route": route,
         "shortest": shortest,

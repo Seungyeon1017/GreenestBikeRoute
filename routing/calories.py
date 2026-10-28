@@ -48,14 +48,19 @@ def total_climb(rises_m):
     return sum(r for r in rises_m if r > 0)
 
 
+def route_climb(G, edges):
+    """Total ascent in m of a route given as (u, v, data) edges (routing.route.route_edges), the humps of bridges
+    included: the climb_m of /route/grade. None when the graph has no elevation data."""
+    from routing.grade import NoElevationError, edge_parts  # needs the graph stack (osmnx)
+    try:
+        return total_climb(rise for u, v, d in edges for _, rise, _ in edge_parts(G, u, v, d))
+    except NoElevationError:
+        return None
+
+
 def route_kcal(G, edges, duration_s, weight_kg=DEFAULT_WEIGHT_KG, e_bike=False):
     """kcal for a route given as (u, v, data) edges (routing.route.route_edges) and its duration_s.
 
     Without elevation data in the graph the climb counts as 0, so the value is a lower bound.
     """
-    from routing.grade import NoElevationError, edge_rise  # needs the graph stack (osmnx)
-    try:
-        climb = total_climb(edge_rise(G, u, v) for u, v, _ in edges)
-    except NoElevationError:
-        climb = 0.0
-    return ride_kcal(duration_s, climb, weight_kg, e_bike)
+    return ride_kcal(duration_s, route_climb(G, edges) or 0.0, weight_kg, e_bike)
