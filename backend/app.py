@@ -12,8 +12,9 @@ from fastapi.responses import JSONResponse
 from backend.reports import SNAP_M, ReportError, Reports
 from backend.schemas import EXAMPLE_TRIP, AirCollection, BikeFriendlyCollection, ClosureAnswer, ClosureCollection, ClosureFeature, ClosureReport, \
     DangerCollection, Error, FlowCollection, GradeCollection, LightingCollection, MappingCollection, MappingFeature, \
-    MappingReport, RouteCollection, RouteComparison, RoughnessCollection, ScoreCollection, ShadeCollection, \
+    MappingReport, PlaceCollection, RouteCollection, RouteComparison, RoughnessCollection, ScoreCollection, ShadeCollection, \
     SpeedCollection, VehicleCollection, ZoneCollection
+from backend.geocoding import Geocoder, GeocodingUnavailable, normalize
 from backend.sharing import Sharing, SharingUnavailable
 from download_data import DATA_DIR, load_features
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_PM_PENALTY, \
@@ -141,6 +142,9 @@ grade doesn't change which route is picked).
 
 - **Coordinate order:** the query takes `lat` and `lon` separately, but every GeoJSON response is in
   **[lon, lat]** order (Leaflet's `L.geoJSON` handles this; raw `L.polyline` needs `[lat, lon]`).
+- **Place names:** routes take coordinates only. For a landmark, address or street, search it with `/geocode`,
+  let the rider pick one of the candidates ("did you mean …") and route with its coordinates. Search on Enter, not
+  while typing: Nominatim allows 1 search a second for everyone, so results are cached and searches queue.
 - **Penalties:** 0 ignores a factor; all four at 0 give the shortest route. Higher values accept longer detours.
 - **prefer_time:** weighs each street by its riding time at the speed bikes were measured at (`speed_map`) instead
   of its length. Every route reports its expected `duration_s` either way.
@@ -240,10 +244,12 @@ ROUTE_ERRORS = {400: {"description": "Start or end is outside Heilbronn, or no r
                           "detail": "start point is 812 m from the nearest Heilbronn street"}}}}}
 
 
-ROUTING, OVERLAYS, SHARING, REPORTS = "Routing", "Map overlays", "Sharing", "Reports"
+ROUTING, PLACES, OVERLAYS, SHARING, REPORTS = "Routing", "Places", "Map overlays", "Sharing", "Reports"
 TAGS_METADATA = [
     {"name": ROUTING, "description": "Plan a bike route from A to B, compare it with the shortest one, "
                                        "or show its grade."},
+    {"name": PLACES, "description": "Find a landmark, address or street in Heilbronn, to route to its coordinates "
+                                     "(OpenStreetMap via Nominatim)."},
     {"name": OVERLAYS, "description": "Static GeoJSON layers of the measured data, to draw on a map."},
     {"name": SHARING, "description": "Shared e-bikes and e-scooters free to rent right now and their parking zones, "
                                        "live from MobiData BW (Heilbronn: Dott). Each vehicle links to the provider's app."},
@@ -264,12 +270,13 @@ def near_query(
 
 
 SHARING_ERRORS = {503: {"description": "The sharing feed can't be read right now", "model": Error}}
+GEOCODE_ERRORS = {503: {"description": "The place search (Nominatim) can't be reached right now", "model": Error}}
 
 
-def create_app(graph=None, sharing=None, reports=None):
-    """`graph`, `sharing` and `reports` let tests pass a small graph, a fake feed and an in-memory report store; by
-    default the Heilbronn graph is loaded at startup, bike and scooter sharing is read live from MobiData BW and
-    reports are kept in data/reports.sqlite3."""
+def create_app(graph=None, sharing=None, reports=None, geocoder=None):
+    """`graph`, `sharing`, `reports` and `geocoder` let tests pass a small graph, a fake feed, an in-memory report store
+    and a fake place search; by default the Heilbronn graph is loaded at startup, bike and scooter sharing is read live
+    from MobiData BW, reports are kept in data/reports.sqlite3 and places are searched with Nominatim."""
 
     @asynccontextmanager
     async def lifespan(app):
@@ -284,6 +291,7 @@ def create_app(graph=None, sharing=None, reports=None):
                        allow_headers=["Content-Type"])
     sharing = sharing if sharing is not None else Sharing()
     reports = reports if reports is not None else Reports()
+    geocoder = geocoder if geocoder is not None else Geocoder()
 
     def shared(kind, query, vehicle="all"):
         near, limit = query
@@ -402,6 +410,21 @@ def create_app(graph=None, sharing=None, reports=None):
              response_description="Points with the zone name, `bikes_available` and `scooters_available`")
     def sharing_zones(query=Depends(near_query)):
         return GeoJSONResponse(shared("zones", query))
+
+    @app.get("/geocode", tags=[PLACES], summary="Places in Heilbronn matching a landmark, address or street, as GeoJSON points",
+             response_class=GeoJSONResponse, response_model=PlaceCollection, responses=GEOCODE_ERRORS,
+             response_description="Points with a `label` to show, best match first; empty if nothing matches")
+    def geocode(q: str = Query(..., max_length=200, description=(
+            "What the rider typed, e.g. Rathaus, Allee 40 or Kaiserstraße. Case and extra spaces don't matter"),
+            openapi_examples={"landmark": {"summary": "Landmark", "value": "Rathaus"},
+                              "address": {"summary": "Address", "value": "Allee 40"}}),
+                limit: int = Query(5, ge=1, le=10, description="Return at most this many candidates")):
+        if len(normalize(q)) < 3:
+            raise HTTPException(status_code=422, detail="type at least 3 characters to search")
+        try:
+            return GeoJSONResponse(geocoder.collection(q, limit))
+        except GeocodingUnavailable as e:
+            raise HTTPException(status_code=503, detail=str(e))
 
     def client(request):
         return request.client.host if request.client else ""
