@@ -4,11 +4,27 @@ import type { Feature, FeatureCollection, LineString } from 'geojson'
 export type LngLat = [number, number]
 
 export type EnvironmentLayerId =
+  | 'environmental-score'
   | 'air-quality'
+  | 'cycling-infrastructure'
+  | 'bike-friendly'
+  | 'overtaking'
+  | 'stop-and-go'
+  | 'speed'
+  | 'shade'
+  | 'lighting'
   | 'noise'
   | 'green-spaces'
-  | 'cycling-infrastructure'
-  | 'environmental-score'
+
+/** Map overlays served by the backend, by their endpoint name (GET /<name>). */
+export type OverlayName =
+  | 'score'
+  | 'bike-friendly-streets'
+  | 'danger'
+  | 'flow'
+  | 'speed'
+  | 'shade'
+  | 'lighting'
 
 /** Where the values shown for a layer come from. */
 export type DataAvailability =
@@ -23,6 +39,8 @@ export type EnvironmentLayer = {
   /** Planned or connected data source, shown next to the values. */
   source?: string
   availability: DataAvailability
+  /** Backend endpoint the layer is loaded from (when first switched on); static layers have none. */
+  overlay?: OverlayName
   /** Legend entries from best to worst environmental condition. */
   legend: Array<{ color: string; label: string }>
 }
@@ -41,25 +59,42 @@ export type AreaProperties = {
   roughness_measured_m: number
 }
 
-/** Properties of the route feature returned by the FastAPI `/route` endpoint. */
+/** Properties of each route feature returned by `/route` and `/route/compare` (see backend/schemas.py). */
 export type RouteProperties = {
+  // The settings the route was planned with (all 0 / false for the shortest route).
   bump_penalty: number
   danger_penalty: number
   pm_penalty: number
   stop_penalty: number
+  prefer_time: boolean
+  shade_penalty: number
+  dark_penalty: number
+  prefer_bike_friendly: number
+  /** The requested departure time (Heilbronn local time, ISO 8601), or null. */
+  depart_time: string | null
+  /** True if the sun is up at depart_time (shade counted), false after dark (lighting counted), null without depart_time. */
+  daylight: boolean | null
 
-  /** Length-weighted over the measured part of the route; null if nothing was measured. */
+  // What the route is like.
   length_m: number
+  /** Expected riding time in seconds, from measured cyclist speeds. */
+  duration_s: number
+  /** Roughness 0–100 over the measured part; null if nothing was measured. */
   mean_roughness: number | null
   measured_share: number
   danger_points: number
   danger_risk: number
+  /** Air rank 0–1 (0.5 = typical); null if nothing was measured. */
   mean_pm_risk: number | null
-  /** Share of the route length with a roughness measurement, 0..1. */
   pm_measured_share: number
+  /** Stop-and-go 0–1 (higher = more stopping); null if nothing was measured. */
   mean_stop_go: number | null
   stop_measured_share: number
-  
+  /** Share in shade 0–1, only by day with depart_time. */
+  mean_shade: number | null
+  /** Chance the streets are lit 0–1. */
+  mean_lit: number | null
+  lifts: number
 }
 
 export type RouteFeature = Feature<LineString, RouteProperties>
@@ -68,25 +103,39 @@ export type RouteCollection = FeatureCollection<LineString, RouteProperties>
 export type RouteComparison = {
   route: RouteFeature
   shortest: RouteFeature
+  /** How much longer the route is than the shortest one, in %. */
   detour_pct: number
+  /** How much more time the route takes than the shortest one, in %; negative if faster. */
+  extra_time_pct: number
   same_path: boolean
 }
 
-/** The three sliders. Values match the backend limits: 0–50, 0–100, 0–5. */
-export type Penalties = { bump: number; danger: number; pm: number }
+/** Everything the rider can set in the Plan a Trip form. Limits match the backend. */
+export type RouteOptions = {
+  /** 0–50: avoid bumpy streets. */
+  bump: number
+  /** 0–100: metres of detour per close-overtaking spot avoided. */
+  danger: number
+  /** 0–5: avoid bad air. */
+  pm: number
+  /** 0–5: avoid traffic lights and stop-and-go. */
+  stop: number
+  /** 0–5: prefer bike paths, bike lanes and bike routes. */
+  bikeFriendly: number
+  /** Plan by riding time (fastest) instead of length (shortest). */
+  preferTime: boolean
+  /** Departure as "YYYY-MM-DDTHH:mm" in Heilbronn time, or "" for none. */
+  departTime: string
+  /** 0–5, by day (needs departTime): prefer shaded streets. */
+  shade: number
+  /** 0–5, after dark (needs departTime): prefer lit streets. */
+  dark: number
+}
 
 export type RouteRequest = {
   from: LngLat
   to: LngLat
-  penalties?: Partial<Penalties>
-}
-
-export type RoutePreferences = {
-  preferGreener: boolean
-  preferQuieter: boolean
-  preferCycleLanes: boolean
-  /** Extra minutes the user accepts compared with the fastest route. */
-  maxExtraMinutes: number
+  options: RouteOptions
 }
 
 export type RouteKind = 'shortest' | 'greenest'
@@ -101,4 +150,31 @@ export type HighlightPlace = {
   location?: LngLat
   /** True while the card text is placeholder content. */
   demo: boolean
+}
+
+/** One piece of the route from `/route/grade`, all with the same steepness class. */
+export type GradeProperties = {
+  /** Rise / length in %, positive uphill in the travel direction. */
+  grade_pct: number
+  severity: 'flat' | 'gentle' | 'noticeable' | 'steep' | 'very_steep'
+  /** Suggested line colour for the severity (#rrggbb). */
+  color: string
+  length_m: number
+  rise_m: number
+  start_m: number
+}
+
+export type GradeSummary = {
+  length_m: number
+  climb_m: number
+  descent_m: number
+  start_elevation_m: number
+  end_elevation_m: number
+  max_grade_pct: number
+  max_descent_grade_pct: number
+}
+
+/** `/route/grade`: the same path as `/route`, cut into pieces by steepness, plus totals. */
+export type GradeCollection = FeatureCollection<LineString, GradeProperties> & {
+  summary: GradeSummary
 }

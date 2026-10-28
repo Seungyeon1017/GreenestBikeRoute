@@ -113,9 +113,9 @@
     "now": "jetzt",
     "temperature": "Temperatur",
     "precipitation": "Niederschlag",
-    "cloudcover": "Wolken\u00adbedeckung",
+    "cloudcover": "Wolken­bedeckung",
     "cloudcoverShort": "Wolkenbed.",
-    "windspeed": "Wind\u00adgeschwindigkeit",
+    "windspeed": "Wind­geschwindigkeit",
     "windspeedShort": "Windgeschw.",
     "sunhours": "Sonnenstunden",
     "no2": "Stickstoffdioxid (NO<sub>2</sub>)",
@@ -148,17 +148,27 @@
     "climate": {
       "climateIndices": {
         "title": "Klimakenntage",
-        "subtitle": "H\u00e4ufigkeit von Temperaturkenntagen"
+        "subtitle": "Häufigkeit von Temperaturkenntagen"
       },
-      "pm": { "title": "Feinstaub" },
-      "openSenseMap": { "title": "Unsere Messstationen" },
-      "birdStations": { "title": "Unsere Vogelstationen" },
-      "bird": { "title": "Vogelbeobachtung" },
+      "pm": {
+        "title": "Feinstaub"
+      },
+      "openSenseMap": {
+        "title": "Unsere Messstationen"
+      },
+      "birdStations": {
+        "title": "Unsere Vogelstationen"
+      },
+      "bird": {
+        "title": "Vogelbeobachtung"
+      },
       "development": {
         "title": "Klima",
-        "subtitle": "Temperaturabweichungen von den langj\u00e4hrigen Monatsmitteln vor 1900"
+        "subtitle": "Temperaturabweichungen von den langjährigen Monatsmitteln vor 1900"
       },
-      "weather": { "title": "Wetter aktuell" }
+      "weather": {
+        "title": "Wetter aktuell"
+      }
     },
     "mobility": {
       "bicycle": {
@@ -166,7 +176,7 @@
         "subtitle": "im Stadtgebiet"
       },
       "overtaking": {
-        "title": "\u00dcberholabst\u00e4nde und Unfallstatistiken",
+        "title": "Überholabstände und Unfallstatistiken",
         "subtitle": "im Blick"
       },
       "bicycleCampaign": {
@@ -175,7 +185,7 @@
       },
       "trafficFlow": {
         "title": "Wo haben wir schon Daten gesammelt?",
-        "subtitle": "Stra\u00dfensegmente in Heilbronn, eingef\u00e4rbt nach Anzahl der Messpunkte auf der Strecke."
+        "subtitle": "Straßensegmente in Heilbronn, eingefärbt nach Anzahl der Messpunkte auf der Strecke."
       },
       "trafficStats": {
         "title": "Fahrradstatistiken"
@@ -190,7 +200,7 @@
       "planTrip": "Route planen",
       "highlights": "Highlights"
     },
-      "language": {
+    "language": {
       "label": "Sprache",
       "de": "Deutsch",
       "en": "English"
@@ -223,8 +233,32 @@
         "description": "Noch kein Grünflächendatensatz angebunden."
       },
       "environmental-score": {
-        "label": "Umweltwert",
-        "description": "Kombinierter Wert pro Gebiet, sobald Lärm- und Grünflächendaten vorliegen."
+        "label": "Gesamtwert",
+        "description": "Jede Straße bewertet von 0 bis 100 aus allen gemessenen Faktoren: Unebenheit, enges Überholen, Luft, Stop-and-go. Höher ist besser."
+      },
+      "bike-friendly": {
+        "label": "Radwege & Radspuren",
+        "description": "Radwege, Radspuren und ausgeschilderte Radrouten aus OpenStreetMap."
+      },
+      "overtaking": {
+        "label": "Enges Überholen",
+        "description": "Stellen, an denen Autos Räder eng überholt haben, gemessen mit Sensor-Rädern."
+      },
+      "stop-and-go": {
+        "label": "Stop-and-go",
+        "description": "Wie oft Räder bremsen oder anhalten müssen, z. B. an Ampeln."
+      },
+      "speed": {
+        "label": "Radgeschwindigkeit",
+        "description": "Gemessene Durchschnittsgeschwindigkeit von Rädern, Wartezeiten eingerechnet."
+      },
+      "shade": {
+        "label": "Schatten",
+        "description": "Anteil jeder Straße im Schatten von Gebäuden oder Bäumen an einem Sommernachmittag."
+      },
+      "lighting": {
+        "label": "Straßenbeleuchtung",
+        "description": "Wie wahrscheinlich jede Straße nachts beleuchtet ist."
       }
     },
     "overview": {
@@ -255,11 +289,13 @@
         "length": "{{km}} km gemessene Straßen",
         "manoeuvres": "aus {{count}} gemessenen Überholvorgängen"
       },
-      "eyebrow": "Heilbronn · Umwelt"
+      "eyebrow": "Heilbronn · Umwelt",
+      "loadingLayer": "Ebene wird geladen…",
+      "layerError": "Diese Ebene konnte nicht geladen werden."
     },
     "planTrip": {
       "title": "Finde deine grünste Route",
-      "subtitle": "Vergleiche die schnellste Route mit einer Route, die Grün, ruhige Straßen und gute Radinfrastruktur bevorzugt.",
+      "subtitle": "Vergleiche die kürzeste Route mit einer Route nach deinen Wünschen: glatte Straßen, sicheres Überholen, saubere Luft und weniger Stopps.",
       "formTitle": "Deine Fahrt",
       "clickHint": "Klicke auf die Karte, um zuerst den Start und dann das Ziel festzulegen.",
       "startPoint": "Start",
@@ -268,29 +304,34 @@
       "penalties": {
         "bump": "Unebenheiten meiden",
         "danger": "Enges Überholen meiden",
-        "pm": "Schlechte Luft meiden"
+        "pm": "Schlechte Luft meiden",
+        "stop": "Stop-and-go meiden",
+        "bikeFriendly": "Radwege und Radspuren bevorzugen",
+        "shade": "Schatten bevorzugen (tagsüber)",
+        "dark": "Beleuchtete Straßen bevorzugen (nachts)"
       },
+      "moreOptions": "Weitere Optionen",
+      "preferTime": "Schnellste statt kürzeste Route",
+      "preferTimeHint": "Plant nach Fahrzeit, mit den gemessenen Geschwindigkeiten von Radfahrenden.",
+      "departTime": "Abfahrtszeit",
+      "departTimeHint": "Nötig für Schatten und Beleuchtung: Schatten zählt tagsüber, Beleuchtung nach Einbruch der Dunkelheit.",
+      "now": "Jetzt",
+      "clearTime": "Löschen",
       "loading": "Route wird berechnet…",
       "reset": "Zurücksetzen",
       "start": "Start",
       "startPlaceholder": "z. B. Heilbronn Hbf",
       "destination": "Ziel",
       "destinationPlaceholder": "z. B. Pfühlpark",
-      "preferences": "Vorlieben (optional)",
-      "preferGreener": "Grünere Straßen bevorzugen",
-      "preferQuieter": "Ruhigere Straßen bevorzugen",
-      "preferCycleLanes": "Eigene Radwege bevorzugen",
-      "maxExtraMinutes": "Bis zu {{minutes}} Minuten Umweg akzeptieren",
-      "findRoute": "Route finden",
-      "notConnected": "Die Routensuche ist noch nicht angebunden. Adresssuche und Routing-Dienst folgen im nächsten Schritt.",
       "comparisonTitle": "Routenvergleich",
       "routes": {
         "shortest": "Kürzeste Route",
         "shortestHint": "Der direkteste Weg, ohne Rücksicht auf Komfort.",
         "greenest": "Deine Route",
-        "greenestHint": "Geplant mit deinen Schieberegler-Einstellungen."
+        "greenestHint": "Geplant mit deinen Einstellungen."
       },
       "metrics": {
+        "duration": "Fahrzeit",
         "distance": "Distanz",
         "roughness": "Unebenheit (0–100)",
         "overtaking": "Enge Überholungen",
@@ -298,10 +339,29 @@
         "stopGo": "Stop-and-go (0–1)"
       },
       "sameAsShortest": "Deine Route ist identisch mit der kürzesten Route.",
-      "detour": "{{pct}} % länger als die kürzeste Route.",
-      "emptyState": "Gib Start und Ziel ein, um Routen zu vergleichen. Werte erscheinen nur, wenn sie aus echten Daten stammen.",
+      "difference": "Im Vergleich zur kürzesten Route: Distanz {{distance}}, Fahrzeit {{time}}.",
+      "appliedShade": "Abfahrt bei Tag: schattige Straßen wurden bevorzugt.",
+      "appliedDark": "Abfahrt nach Einbruch der Dunkelheit: beleuchtete Straßen wurden bevorzugt.",
+      "emptyState": "Lege Start und Ziel fest, um Routen zu vergleichen. Werte erscheinen nur, wenn sie aus echten Daten stammen.",
       "mapLabel": "Routenkarte",
-      "eyebrow": "Heilbronn · Routenplaner"
+      "eyebrow": "Heilbronn · Routenplaner",
+      "hills": {
+        "title": "Steigungen",
+        "show": "Steigungen auf der Route zeigen",
+        "needRoute": "Lege zuerst Start und Ziel fest.",
+        "climb": "Anstieg",
+        "descent": "Abstieg",
+        "steepest": "Steilste Stelle",
+        "severity": {
+          "flat": "flach (< 2 %)",
+          "gentle": "leicht (2–4 %)",
+          "noticeable": "spürbar (4–6 %)",
+          "steep": "steil (6–10 %)",
+          "very_steep": "sehr steil (10 %+)"
+        },
+        "unavailable": "Steigungen sind nicht verfügbar: Dieser Server hat keine Höhendaten.",
+        "credit": "Höhen: LGL, www.lgl-bw.de, dl-de/by-2-0 (DGM1)"
+      }
     },
     "highlights": {
       "title": "Entdecke die grüne Seite Heilbronns",

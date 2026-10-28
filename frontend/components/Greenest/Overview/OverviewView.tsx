@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Spinner } from '@/components/Elements/Spinner'
 import PageIntro from '@/components/Greenest/ui/PageIntro'
+import useOverlays from '@/hooks/useOverlays'
 import useOverviewData from '@/hooks/useOverviewData'
 import type { EnvironmentLayerId } from '@/types/greenest'
 import AreaDetailsPanel from './AreaDetailsPanel'
@@ -21,6 +22,8 @@ export default function OverviewView() {
     () =>
       new Set<EnvironmentLayerId>(['air-quality', 'cycling-infrastructure']),
   )
+  // Backend layers, each downloaded the first time it's switched on.
+  const overlays = useOverlays(ENVIRONMENT_LAYERS, enabled)
   const [detailsOpen, setDetailsOpen] = useState(true)
   const [selectedCell, setSelectedCell] = useState<string | null>(null)
 
@@ -60,6 +63,7 @@ export default function OverviewView() {
             enabled={enabled}
             layers={ENVIRONMENT_LAYERS}
             onToggle={toggleLayer}
+            overlays={overlays}
           />
         </aside>
         <section className="relative order-1 h-[60vh] min-h-[420px] overflow-hidden rounded-3xl border border-leaf-sand shadow-soft lg:order-2 lg:h-auto">
@@ -68,6 +72,7 @@ export default function OverviewView() {
             data={data}
             enabled={enabled}
             onSelectCell={selectCell}
+            overlays={overlays}
             selectedCell={selectedCell}
           />
           {overview.status === 'loading' && (

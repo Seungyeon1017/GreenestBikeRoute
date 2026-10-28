@@ -32,7 +32,7 @@ export default function AppHeader() {
           </span>
         </Link>
 
-        <div>
+        <div className="flex items-center gap-3">
                   <nav aria-label={t('greenest.nav.label')}>
           <ul className="grid grid-cols-3 gap-1 rounded-full border border-leaf-sand bg-white/70 p-1 shadow-soft">
             {NAV_TABS.map(({ href, key, icon: Icon }) => {

@@ -113,9 +113,9 @@
     "now": "now",
     "temperature": "Temperature",
     "precipitation": "Precipitation",
-    "cloudcover": "Cloud\u00adcover",
+    "cloudcover": "Cloud­cover",
     "cloudcoverShort": "Cloud cov.",
-    "windspeed": "Wind\u00adspeed",
+    "windspeed": "Wind­speed",
     "windspeedShort": "Wind spd.",
     "sunhours": "Sunshine hours",
     "no2": "Nitrogen dioxide (NO<sub>2</sub>)",
@@ -150,15 +150,25 @@
         "title": "Climate Key Days",
         "subtitle": "Frequency of temperature key days"
       },
-      "pm": { "title": "Particulate Matter" },
-      "openSenseMap": { "title": "Our Measuring Stations" },
-      "birdStations": { "title": "Our Bird Stations" },
-      "bird": { "title": "Bird Observation" },
+      "pm": {
+        "title": "Particulate Matter"
+      },
+      "openSenseMap": {
+        "title": "Our Measuring Stations"
+      },
+      "birdStations": {
+        "title": "Our Bird Stations"
+      },
+      "bird": {
+        "title": "Bird Observation"
+      },
       "development": {
         "title": "Climate",
         "subtitle": "Temperature deviations from the long-term monthly averages before 1900"
       },
-      "weather": { "title": "Current Weather" }
+      "weather": {
+        "title": "Current Weather"
+      }
     },
     "mobility": {
       "bicycle": {
@@ -190,11 +200,11 @@
       "planTrip": "Plan a Trip",
       "highlights": "Highlights"
     },
-  "language": {
-  "label": "Language",
-  "de": "Deutsch",
-  "en": "English"
-},
+    "language": {
+      "label": "Language",
+      "de": "Deutsch",
+      "en": "English"
+    },
     "footer": {
       "basedOn": "Based on",
       "mapData": "Map data"
@@ -223,8 +233,32 @@
         "description": "No green-space dataset connected yet."
       },
       "environmental-score": {
-        "label": "Environmental score",
-        "description": "Combined score per area, once noise and greenery data exist."
+        "label": "Overall score",
+        "description": "Every street rated 0–100 by all measured factors together: roughness, close overtakes, air, stop-and-go. Higher is better."
+      },
+      "bike-friendly": {
+        "label": "Bike paths & lanes",
+        "description": "Bike paths, bike lanes and signposted bike routes from OpenStreetMap."
+      },
+      "overtaking": {
+        "label": "Close overtaking",
+        "description": "Spots where cars overtook bikes closely, measured by sensor bikes."
+      },
+      "stop-and-go": {
+        "label": "Stop-and-go",
+        "description": "How often bikes have to slow down or stop, e.g. at traffic lights."
+      },
+      "speed": {
+        "label": "Cycling speed",
+        "description": "Average speed bikes were measured at, waits included."
+      },
+      "shade": {
+        "label": "Shade",
+        "description": "Share of each street in building or tree shade on a summer afternoon."
+      },
+      "lighting": {
+        "label": "Street lighting",
+        "description": "How likely each street is to be lit at night."
       }
     },
     "overview": {
@@ -255,11 +289,13 @@
         "length": "{{km}} km of measured streets",
         "manoeuvres": "based on {{count}} measured overtaking manoeuvres"
       },
-      "eyebrow": "Heilbronn · Environment"
+      "eyebrow": "Heilbronn · Environment",
+      "loadingLayer": "Loading layer…",
+      "layerError": "Could not load this layer."
     },
     "planTrip": {
       "title": "Find your greenest route",
-      "subtitle": "Compare the fastest route with a route that favours greenery, quiet streets and good cycling infrastructure.",
+      "subtitle": "Compare the shortest route with a route planned around what you care about: smooth streets, safe overtaking, clean air and fewer stops.",
       "formTitle": "Your trip",
       "clickHint": "Click the map to set the start, then the destination.",
       "startPoint": "Start",
@@ -268,29 +304,34 @@
       "penalties": {
         "bump": "Dislike bumps",
         "danger": "Dislike close overtaking",
-        "pm": "Dislike bad air"
+        "pm": "Dislike bad air",
+        "stop": "Dislike stop-and-go",
+        "bikeFriendly": "Prefer bike paths and lanes",
+        "shade": "Prefer shade (by day)",
+        "dark": "Prefer lit streets (after dark)"
       },
+      "moreOptions": "More options",
+      "preferTime": "Fastest instead of shortest",
+      "preferTimeHint": "Plans by riding time, using the speeds cyclists were measured at.",
+      "departTime": "Departure time",
+      "departTimeHint": "Needed for the shade and lighting sliders: shade counts by day, lighting after dark.",
+      "now": "Now",
+      "clearTime": "Clear",
       "loading": "Calculating route…",
       "reset": "Reset",
       "start": "Start",
       "startPlaceholder": "e.g. Heilbronn Hbf",
       "destination": "Destination",
       "destinationPlaceholder": "e.g. Pfühlpark",
-      "preferences": "Preferences (optional)",
-      "preferGreener": "Prefer greener streets",
-      "preferQuieter": "Prefer quieter streets",
-      "preferCycleLanes": "Prefer dedicated cycling lanes",
-      "maxExtraMinutes": "Accept up to {{minutes}} extra minutes",
-      "findRoute": "Find My Route",
-      "notConnected": "Route search is not connected yet. Address search and the routing service follow in the next step.",
       "comparisonTitle": "Route comparison",
       "routes": {
         "shortest": "Shortest route",
         "shortestHint": "The most direct path, ignoring comfort.",
         "greenest": "Your route",
-        "greenestHint": "Planned with your slider settings."
+        "greenestHint": "Planned with your settings."
       },
       "metrics": {
+        "duration": "Riding time",
         "distance": "Distance",
         "roughness": "Roughness (0–100)",
         "overtaking": "Close overtakes",
@@ -298,10 +339,29 @@
         "stopGo": "Stop-and-go (0–1)"
       },
       "sameAsShortest": "Your route is the same as the shortest route.",
-      "detour": "{{pct}}% longer than the shortest route.",
-      "emptyState": "Enter a start and destination to compare routes. Values only appear when they come from real data.",
+      "difference": "Compared with the shortest route: distance {{distance}}, riding time {{time}}.",
+      "appliedShade": "Departure by day: shaded streets were preferred.",
+      "appliedDark": "Departure after dark: lit streets were preferred.",
+      "emptyState": "Set a start and destination to compare routes. Values only appear when they come from real data.",
       "mapLabel": "Route map",
-      "eyebrow": "Heilbronn · Route planner"
+      "eyebrow": "Heilbronn · Route planner",
+      "hills": {
+        "title": "Hills",
+        "show": "Show hills on the route",
+        "needRoute": "Set a start and destination first.",
+        "climb": "Climb",
+        "descent": "Descent",
+        "steepest": "Steepest",
+        "severity": {
+          "flat": "flat (< 2 %)",
+          "gentle": "gentle (2–4 %)",
+          "noticeable": "noticeable (4–6 %)",
+          "steep": "steep (6–10 %)",
+          "very_steep": "very steep (10 %+)"
+        },
+        "unavailable": "Hills are not available: this server has no elevation data.",
+        "credit": "Heights: LGL, www.lgl-bw.de, dl-de/by-2-0 (DGM1)"
+      }
     },
     "highlights": {
       "title": "Discover the greener side of Heilbronn",

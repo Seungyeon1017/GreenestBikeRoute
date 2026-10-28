@@ -4,18 +4,22 @@ import { cx } from 'class-variance-authority'
 import { useTranslation } from 'react-i18next'
 import AvailabilityBadge from '@/components/Greenest/ui/AvailabilityBadge'
 import Card, { CardTitle } from '@/components/Greenest/ui/Card'
+import type { OverlayState } from '@/hooks/useOverlays'
 import type { EnvironmentLayer, EnvironmentLayerId } from '@/types/greenest'
 
 type LayerPanelProps = {
   layers: EnvironmentLayer[]
   enabled: Set<EnvironmentLayerId>
   onToggle: (_id: EnvironmentLayerId) => void
+  /** Download state of the backend layers, to show "loading" or an error. */
+  overlays: OverlayState
 }
 
 export default function LayerPanel({
   layers,
   enabled,
   onToggle,
+  overlays,
 }: LayerPanelProps) {
   const { t } = useTranslation()
 
@@ -27,6 +31,7 @@ export default function LayerPanel({
           const inputId = `layer-${layer.id}`
           const available = layer.availability !== 'unavailable'
           const on = available && enabled.has(layer.id)
+          const overlay = overlays[layer.id]
           return (
             <li
               className={cx(
@@ -64,6 +69,16 @@ export default function LayerPanel({
                   <p className="text-xs text-leaf-muted">
                     {t(`greenest.layers.${layer.id}.description`)}
                   </p>
+                  {on && overlay?.status === 'loading' && (
+                    <p className="text-[11px] text-leaf-muted" role="status">
+                      {t('greenest.overview.loadingLayer')}
+                    </p>
+                  )}
+                  {overlay?.status === 'error' && (
+                    <p className="text-[11px] text-red-700" role="alert">
+                      {t('greenest.overview.layerError')} {overlay.message}
+                    </p>
+                  )}
                   {on && layer.legend.length > 0 && (
                     <ul className="flex flex-col gap-1 pt-1">
                       {layer.legend.map(({ color, label }) => (
@@ -83,7 +98,7 @@ export default function LayerPanel({
                   )}
                   {on && (
                     <p className="text-[11px] text-leaf-muted/70">
-                      {layer.unit} · {layer.source}
+                      {[layer.unit, layer.source].filter(Boolean).join(' · ')}
                     </p>
                   )}
                 </div>

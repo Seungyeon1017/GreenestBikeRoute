@@ -3,13 +3,21 @@
 import type { Map as MapLibreMap } from 'maplibre-gl'
 import { useEffect, useState } from 'react'
 import BaseMap from '@/components/Greenest/Map'
+import type { OverlayState } from '@/hooks/useOverlays'
 import type { OverviewData } from '@/services/mapData'
 import type { EnvironmentLayerId } from '@/types/greenest'
-import { CYCLE_LANE_COLOR, PM_RISK_STEPS, ROUGHNESS_STEPS } from './layers'
+import {
+  CYCLE_LANE_COLOR,
+  OVERLAY_STYLES,
+  PM_RISK_STEPS,
+  ROUGHNESS_STEPS,
+} from './layers'
 
 type OverviewMapProps = {
   ariaLabel: string
   data: OverviewData | null
+  /** Backend overlays loaded so far (see hooks/useOverlays.ts). */
+  overlays: OverlayState
   enabled: Set<EnvironmentLayerId>
   selectedCell: string | null
   onSelectCell: (_cell: string | null) => void
@@ -88,6 +96,7 @@ function addLayers(map: MapLibreMap, data: OverviewData) {
 export default function OverviewMap({
   ariaLabel,
   data,
+  overlays,
   enabled,
   selectedCell,
   onSelectCell,
@@ -126,6 +135,31 @@ export default function OverviewMap({
       }
     }
   }, [map, layersAdded, enabled])
+
+  // Backend overlays: add each one once its data has arrived, then show or hide it.
+  useEffect(() => {
+    if (!map) {
+      return
+    }
+    for (const [key, overlay] of Object.entries(overlays)) {
+      const id = key as EnvironmentLayerId
+      const style = OVERLAY_STYLES[id]
+      if (!style || overlay?.status !== 'ready') {
+        continue
+      }
+      if (!map.getSource(id)) {
+        map.addSource(id, { type: 'geojson', data: overlay.data })
+        // Below the invisible click layer, so areas stay clickable and the selection stays on top.
+        const before = map.getLayer('areas-hit') ? 'areas-hit' : undefined
+        map.addLayer({ id, source: id, ...style } as never, before)
+      }
+      map.setLayoutProperty(
+        id,
+        'visibility',
+        enabled.has(id) ? 'visible' : 'none',
+      )
+    }
+  }, [map, overlays, enabled])
 
   useEffect(() => {
     if (map && layersAdded) {
