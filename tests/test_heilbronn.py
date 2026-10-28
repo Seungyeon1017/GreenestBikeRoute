@@ -141,3 +141,10 @@ def test_route_from_next_to_a_cut_off_service_road_snaps_to_the_main_network(cli
     r = client.get("/route", params={"from_lat": 49.13584495682357, "from_lon": 9.204933623254533,
                                      "to_lat": 49.14384658453482, "to_lon": 9.220619201660158})
     assert r.status_code == 200
+
+
+def test_route_can_end_next_to_a_way_with_parallel_edges(client):
+    """Way 32927311 has a 2 m stub parallel to its long edge; splitting the stub at the point made a 500."""
+    r = client.get("/route/compare", params={"from_lat": 49.13980383591573, "from_lon": 9.208045005798342,
+                                             "to_lat": 49.13531584034481, "to_lon": 9.202290567660226})
+    assert r.status_code == 200

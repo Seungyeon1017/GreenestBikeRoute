@@ -110,6 +110,10 @@ def _snapped_ends(G, origin, destination):
                     for k, d in list((G.get_edge_data(a, b) or {}).items()):
                         if d.get("osmid") != data.get("osmid"):
                             continue
+                        # A way can have parallel edges between the same corners (a loop, a stub): split only
+                        # the ones the point is on.
+                        if plane.to_m(_edge_line(G, a, b, d)).distance(Point(plane.to_m_point(*point_lonlat))) > 1:
+                            continue
                         _split_edge(G, a, b, d, node, point_lonlat, plane)
                         removed.append((a, b, k, d))
                         G.remove_edge(a, b, k)
