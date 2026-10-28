@@ -125,3 +125,20 @@ def test_pm_penalty_detours_around_polluted_streets(toy_graph):
     assert f["properties"]["length_m"] == 140
     assert f["properties"]["mean_pm_risk"] == 0.1  # A->C is unmeasured
     assert f["properties"]["pm_measured_share"] == 0.5
+
+
+def test_attach_roughness_marks_measured_estimated_and_unknown(toy_graph):
+    attach_roughness(toy_graph, {11: 80.0, 14: 0.0}, {12: 12.5})
+    got = [(d["roughness"], d["roughness_source"]) for *_, d in toy_graph.edges(data=True)]
+    assert got == [(80.0, "measured"), (12.5, "estimated"), (0.0, "measured")]
+
+    attach_roughness(toy_graph, {11: 80.0, 14: 0.0})
+    assert [d["roughness_source"] for *_, d in toy_graph.edges(data=True)] == ["measured", "unknown", "measured"]
+
+
+def test_route_reports_estimated_share_apart_from_measured(toy_graph):
+    attach_roughness(toy_graph, {11: 80.0, 14: 0.0}, {12: 12.5})
+    p = find_route(toy_graph, COORDS[A], COORDS[B], 10, 0, 0, 0)["features"][0]["properties"]
+    assert p["length_m"] == 140  # A -> C (estimated) -> B (measured)
+    assert (p["measured_share"], p["estimated_share"]) == (0.5, 0.5)
+    assert p["mean_roughness"] == 0  # over the measured part only

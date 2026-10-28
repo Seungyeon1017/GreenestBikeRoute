@@ -59,7 +59,7 @@
   <div class="row"><span>0 = ignore</span><span>5 = strongly avoid</span></div>
 
   <table>
-    <tr><th></th><th>Length</th><th>Rough</th><th title="close-overtaking spots passed">Overtakes</th><th title="mean air rank, 0.5 = typical">PM</th><th title="mean stop-and-go, 0-1">Stops</th></tr>
+    <tr><th></th><th>Length</th><th title="mean roughness of the measured part; hover a value for how much is measured / estimated">Rough</th><th title="close-overtaking spots passed">Overtakes</th><th title="mean air rank, 0.5 = typical">PM</th><th title="mean stop-and-go, 0-1">Stops</th></tr>
     <tr><td><span class="swatch" style="background:#7a8794"></span>Shortest</td><td id="sLen">–</td><td id="sRough">–</td><td id="sDanger">–</td><td id="sPm">–</td><td id="sStop">–</td></tr>
     <tr><td><span class="swatch" style="background:#1a7f37"></span>Your route</td><td id="rLen">–</td><td id="rRough">–</td><td id="rDanger">–</td><td id="rPm">–</td><td id="rStop">–</td></tr>
   </table>
@@ -175,6 +175,10 @@ const setText = (id, t) => document.getElementById(id).textContent = t;
 function show(prefix, p) {
   setText(prefix + "Len", p ? (p.length_m / 1000).toFixed(2) + " km" : "–");
   setText(prefix + "Rough", p && p.mean_roughness != null ? p.mean_roughness.toFixed(1) : "–");
+  // Where the route's roughness comes from; streets that are neither get the median 10.
+  const pct = x => Math.round(x * 100) + "%";
+  document.getElementById(prefix + "Rough").title = p ? `measured ${pct(p.measured_share)}, ` +
+    `estimated ${pct(p.estimated_share)}, unknown ${pct(1 - p.measured_share - p.estimated_share)}` : "";
   setText(prefix + "Danger", p ? p.danger_points : "–");
   setText(prefix + "Pm", p && p.mean_pm_risk != null ? p.mean_pm_risk.toFixed(2) : "–");
   setText(prefix + "Stop", p && p.mean_stop_go != null ? p.mean_stop_go.toFixed(2) : "–");

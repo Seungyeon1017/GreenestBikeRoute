@@ -152,7 +152,7 @@ def _route_feature(G, a, b, penalties):
         raise RouteError("no bike route between these points") from None
 
     lifts = sum(1 for n in path[1:-1] if "elevator" in str(G.nodes[n].get("highway")))
-    coords, length, rough_len, measured_len = [], 0.0, 0.0, 0.0
+    coords, length, rough_len, measured_len, estimated_len = [], 0.0, 0.0, 0.0, 0.0
     danger, danger_points, pm_len, pm_measured_len = 0.0, 0, 0.0, 0.0
     stop_len, stop_measured_len = 0.0, 0.0
     for u, v in zip(path[:-1], path[1:]):
@@ -164,7 +164,9 @@ def _route_feature(G, a, b, penalties):
         coords.extend(pts if not coords else pts[1:])
         edge_len = float(d["length"])  # numpy float when loaded from GraphML
         length += edge_len
-        if d["roughness"] is not None:
+        if d.get("roughness_source") == "estimated":
+            estimated_len += edge_len
+        elif d["roughness"] is not None:
             measured_len += edge_len
             rough_len += d["roughness"] * edge_len
         danger += d.get("danger", 0.0)
@@ -185,6 +187,8 @@ def _route_feature(G, a, b, penalties):
         # Length-weighted over the measured part of the route only.
         "mean_roughness": round(rough_len / measured_len, 1) if measured_len else None,
         "measured_share": round(measured_len / length, 2),
+        # Roughness estimated from nearby measured streets (estimation/README.md); the rest of the route is unknown.
+        "estimated_share": round(estimated_len / length, 2),
         # Overtaking spots (danger_zones) on the route and their summed Risk Index Overtaking.
         "danger_points": danger_points,
         "danger_risk": round(danger, 2),

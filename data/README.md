@@ -14,5 +14,6 @@ Built by us from raw `osem_bike_data`, used by routing
 - `air_quality_heilbronn`: fine dust (PM1–PM10), outliers removed
 - `shade_heilbronn`: street-tree canopy per OSM way (`routing.shade`)
 - `shadow_heilbronn`: building and tree shadow per OSM way and time slot (`routing.shadow`)
+- `roughness_estimates_heilbronn.json`: roughness for unmeasured OSM ways near measured streets, from `bumpy_roads` by `estimation/estimate_roughness.py` (see [estimation/README.md](../estimation/README.md))
 
 Details: [routing/README.md](../routing/README.md)

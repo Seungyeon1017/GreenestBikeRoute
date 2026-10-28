@@ -1,0 +1,50 @@
+{
+  "median": 10.0,
+  "cv_unseen_streets": {
+    "n": 9599,
+    "median": {
+      "mae": 6.1309,
+      "r2": -0.1545
+    },
+    "estimate": {
+      "mae": 5.6361,
+      "r2": 0.1524,
+      "spearman": 0.3764
+    }
+  },
+  "cv_unseen_1km_areas": {
+    "n": 9599,
+    "median": {
+      "mae": 6.1515,
+      "r2": -0.1512
+    },
+    "estimate": {
+      "mae": 6.1107,
+      "r2": -0.0817,
+      "spearman": 0.0331
+    }
+  },
+  "cv_random_segments": {
+    "n": 9599,
+    "median": {
+      "mae": 6.1309,
+      "r2": -0.1545
+    },
+    "estimate": {
+      "mae": 4.9723,
+      "r2": 0.3659,
+      "spearman": 0.538
+    }
+  },
+  "coverage": {
+    "segments_measured": 9599,
+    "segments_estimated": 11748,
+    "segments_unknown": 12896,
+    "segments_estimated_by_weight": {
+      "1.0": 3136,
+      "0.7": 3274,
+      "0.5": 5338
+    },
+    "ways_estimated": 3466
+  }
+}

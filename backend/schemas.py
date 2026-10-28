@@ -10,14 +10,14 @@ LonLat = tuple[float, float]  # GeoJSON order: [longitude, latitude]
 EXAMPLE_TRIP = {"from_lat": 49.14838, "from_lon": 9.22687, "to_lat": 49.1262, "to_lon": 9.22439}
 ROUTE_EXAMPLE = {
     "type": "Feature",
-    # Shortened: the real line has 156 points.
+    # Shortened: the real line has 157 points.
     "geometry": {"type": "LineString",
                  "coordinates": [[9.2268683, 49.148385], [9.2228294, 49.1386103], [9.2243909, 49.1262013]]},
     "properties": {
         "bump_penalty": 10.0, "danger_penalty": 25.0, "pm_penalty": 0.5, "stop_penalty": 0.5,
-        "length_m": 3117.2, "mean_roughness": 12.2, "measured_share": 0.91,
-        "danger_points": 21, "danger_risk": 17.12, "mean_pm_risk": 0.533, "pm_measured_share": 0.66,
-        "mean_stop_go": 0.693, "stop_measured_share": 0.92, "lifts": 0,
+        "length_m": 3088.2, "mean_roughness": 12.3, "measured_share": 0.97, "estimated_share": 0.0,
+        "danger_points": 21, "danger_risk": 17.12, "mean_pm_risk": 0.544, "pm_measured_share": 0.71,
+        "mean_stop_go": 0.691, "stop_measured_share": 0.97, "lifts": 0,
     },
 }
 SHORTEST_EXAMPLE = {
@@ -26,7 +26,7 @@ SHORTEST_EXAMPLE = {
                  "coordinates": [[9.2268683, 49.148385], [9.2294832, 49.1399564], [9.2243909, 49.1262013]]},
     "properties": {
         "bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0,
-        "length_m": 3061.2, "mean_roughness": 24.7, "measured_share": 0.97,
+        "length_m": 3061.2, "mean_roughness": 24.7, "measured_share": 0.97, "estimated_share": 0.02,
         "danger_points": 10, "danger_risk": 7.94, "mean_pm_risk": 0.604, "pm_measured_share": 0.77,
         "mean_stop_go": 0.665, "stop_measured_share": 0.97, "lifts": 0,
     },
@@ -59,6 +59,8 @@ class RouteProperties(BaseModel):
     mean_roughness: Optional[float] = Field(
         description="Normalized Roughness 0-100, length-weighted over the measured part; null if none was measured")
     measured_share: float = Field(description="Share of the route length with bumpy_roads measurements, 0-1")
+    estimated_share: float = Field(
+        description="Share of the route length whose roughness is estimated from nearby measured streets (estimation/README.md), 0-1")
     danger_points: int = Field(description="Close-overtaking spots (danger_zones) on the route")
     danger_risk: float = Field(description="Summed Risk Index Overtaking of those spots")
     mean_pm_risk: Optional[float] = Field(
@@ -92,7 +94,7 @@ class RouteComparison(BaseModel):
     same_path: bool = Field(description="True if the route follows the same streets as the shortest route")
 
     model_config = {"json_schema_extra": {"example": {
-        "route": ROUTE_EXAMPLE, "shortest": SHORTEST_EXAMPLE, "detour_pct": 1.8, "same_path": False}}}
+        "route": ROUTE_EXAMPLE, "shortest": SHORTEST_EXAMPLE, "detour_pct": 0.9, "same_path": False}}}
 
 
 class RoughnessFeature(BaseModel):

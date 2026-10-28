@@ -1,4 +1,5 @@
 """The Heilbronn bike graph from OSM (via OSMnx), with ATRAI roughness, stop-and-go and danger on every edge."""
+import json
 import math
 from pathlib import Path
 
@@ -13,6 +14,8 @@ from routing.rideable_ways import RIDEABLE_WAYS
 CACHE_DIR = Path(__file__).resolve().parent.parent / "cache"
 # Renamed when the filter below changes, so an old cached graph isn't reused.
 GRAPH_PATH = CACHE_DIR / "heilbronn_bike_rideable.graphml"
+# Written by estimation/estimate_roughness.py: roughness of unmeasured OSM ways close to measured streets.
+ESTIMATED_ROUGHNESS_PATH = CACHE_DIR.parent / "data" / "custom" / "roughness_estimates_heilbronn.json"
 PLACE = "Heilbronn, Germany"
 
 # OSMnx's network_type="bike" filter, with three changes:
@@ -116,7 +119,7 @@ def load_graph(path=GRAPH_PATH):
         keep_rideable_footways(G)
         ox.save_graphml(G, path)
     attach_lifts(G)
-    attach_roughness(G, way_roughness(load_features("bumpy_roads_heilbronn")))
+    attach_roughness(G, way_roughness(load_features("bumpy_roads_heilbronn")), load_estimates())
     attach_stop_go(G, way_stop_go(load_features("traffic_flow_heilbronn")))
     attach_danger(G, point_risks(clean_overtaking(load_features("danger_zones_raw_heilbronn")), "Risk Index Overtaking"),
                   air_ranks(load_features("air_quality_heilbronn")))
@@ -132,10 +135,22 @@ def attach_lifts(G):
         d["lift_end"] = v in lifts
 
 
-def attach_roughness(G, way_rough):
-    """Set edge attribute `roughness` (0-100, or None where no bike has measured it)."""
+def load_estimates(path=ESTIMATED_ROUGHNESS_PATH):
+    """{OSM way id: estimated roughness} from estimation/estimate_roughness.py, or {} if the file is missing."""
+    path = Path(path)
+    return {int(k): v for k, v in json.loads(path.read_text()).items()} if path.exists() else {}
+
+
+def attach_roughness(G, way_rough, estimated=None):
+    """Set edge attributes `roughness` (0-100, or None where unknown) and `roughness_source`:
+    "measured", "estimated" (from nearby measured streets, see estimation/README.md) or "unknown".
+    """
     for _, _, d in G.edges(data=True):
         d["roughness"] = edge_roughness(d["osmid"], way_rough)
+        d["roughness_source"] = "measured"
+        if d["roughness"] is None:
+            d["roughness"] = edge_roughness(d["osmid"], estimated or {})
+            d["roughness_source"] = "unknown" if d["roughness"] is None else "estimated"
 
 
 def attach_stop_go(G, way_stop):

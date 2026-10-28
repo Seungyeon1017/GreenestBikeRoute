@@ -27,8 +27,9 @@ OSMnx's bike network, with these changes:
 ### `bumpy_roads_heilbronn`: roughness per street
 
 - Matched by OSM way id. Values are 0–100, even though the docs say 0–1.
-- A street without data gets **10**, the median. With 0, unknown streets would look perfectly smooth and attract every route.
-- About 31% of streets are measured. `bump_penalty` default: 10.
+- A street without data but with measured streets close by gets an **estimate** from them (`data/custom/roughness_estimates_heilbronn.json`, see [estimation/README.md](../estimation/README.md)). Responses report it as `estimated_share`; `mean_roughness` stays over the measured part.
+- Any other street gets **10**, the median. With 0, unknown streets would look perfectly smooth and attract every route.
+- Graph edges: 38% measured, 28% estimated, 34% unknown. `bump_penalty` default: 10.
 
 ### `danger_zones_raw_heilbronn`: close overtakes, **summed** per street
 
