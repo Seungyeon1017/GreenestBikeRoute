@@ -16,7 +16,8 @@ from backend.sharing import ATTRIBUTION, Sharing, SharingUnavailable
 from download_data import DATA_DIR, load_features
 from routing.calories import DEFAULT_WEIGHT_KG
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_PM_PENALTY, \
-    DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, air_scores, clean_overtaking, osm_way_ids
+    DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, MAX_POINTS, air_scores, clean_overtaking, \
+    osm_way_ids
 from routing.elevation import attach_elevation, load_crests, load_elevation
 from routing.grade import NoElevationError, route_grade
 from routing.graph import load_graph
@@ -189,29 +190,31 @@ def trip_example(name):
 
 
 def penalty_query(
-    bump_penalty: float = Query(DEFAULT_BUMP_PENALTY, ge=0, le=5, description=(
-        "How much do you hate bumps: a street among the bumpiest tenth costs 1 + this times as much as a typical one, "
-        "smoother than typical costs nothing extra. 0 = ignore, 5 = strongly avoid")),
+    bump_penalty: float = Query(DEFAULT_BUMP_PENALTY, ge=0, le=MAX_POINTS, description=(
+        "How much do you hate bumps, in points 0-10: each point makes a street among the bumpiest tenth cost 25% more "
+        "than a typical one (2 = 1.5x, 10 = 3.5x), smoother than typical costs nothing extra. 0 = ignore")),
     danger_penalty: float = Query(DEFAULT_DANGER_PENALTY, ge=0, le=100, description=(
         "How much do you hate close overtaking: metres of detour you'd ride to pass one fewer close-overtaking spot")),
-    pm_penalty: float = Query(DEFAULT_PM_PENALTY, ge=0, le=5, description=(
-        "How much do you hate bad air (fine dust), as bump_penalty: a street among the worst tenth costs 1 + this "
-        "times as much as a typical one. 0 = ignore, 5 = strongly avoid")),
-    stop_penalty: float = Query(DEFAULT_STOP_PENALTY, ge=0, le=5, description=(
-        "How much do you hate stop-and-go (traffic lights, congestion, waiting for a lift), as bump_penalty. 0 = ignore, "
-        "5 = strongly avoid. Each lift costs this x 100 m")),
+    pm_penalty: float = Query(DEFAULT_PM_PENALTY, ge=0, le=MAX_POINTS, description=(
+        "How much do you hate bad air (fine dust), in points 0-10 as bump_penalty: each point makes a street among the "
+        "worst tenth cost 25% more than a typical one. 0 = ignore")),
+    stop_penalty: float = Query(DEFAULT_STOP_PENALTY, ge=0, le=MAX_POINTS, description=(
+        "How much do you hate stop-and-go (traffic lights, congestion, waiting for a lift), in points 0-10 as "
+        "bump_penalty. 0 = ignore. Each lift costs this x 25 m")),
     prefer_time: bool = Query(False, description=(
         "Time matters, not distance: weigh each street by its riding time at the measured cyclist speed "
         "(unmeasured streets at the median, 15.7 km/h) instead of its length. The penalties still apply")),
-    shade_penalty: float = Query(DEFAULT_SHADE_PENALTY, ge=0, le=5, description=(
-        "By day: how much do you hate riding in the sun. 0 = ignore, 5 = strongly prefer shaded streets. "
+    shade_penalty: float = Query(DEFAULT_SHADE_PENALTY, ge=0, le=MAX_POINTS, description=(
+        "By day: how much do you hate riding in the sun, in points 0-10: each point makes a fully sunny street cost 25% "
+        "more. 0 = ignore. "
         "Only applies with a depart_time when the sun is up")),
-    dark_penalty: float = Query(DEFAULT_DARK_PENALTY, ge=0, le=5, description=(
-        "After dark: how much do you hate unlit streets. 0 = ignore, 5 = strongly prefer lit streets. "
+    dark_penalty: float = Query(DEFAULT_DARK_PENALTY, ge=0, le=MAX_POINTS, description=(
+        "After dark: how much do you hate unlit streets, in points 0-10: each point makes a surely unlit street cost "
+        "25% more. 0 = ignore. "
         "Only applies with a depart_time between sunset and sunrise")),
-    prefer_bike_friendly: float = Query(DEFAULT_PREFER_BIKE_FRIENDLY, ge=0, le=5, description=(
+    prefer_bike_friendly: float = Query(DEFAULT_PREFER_BIKE_FRIENDLY, ge=0, le=MAX_POINTS, description=(
         "How much do you prefer bike-friendly streets (bike paths, bike lanes, bike routes; see /bike-friendly-streets). "
-        "0 = ignore; 1 makes other streets feel twice as long. Multiplies with the other dislikes, so it doesn't drown them")),
+        "In points 0-10: each point makes other streets cost 25% more (4 = they feel twice as long). 0 = ignore. Multiplies with the other dislikes, so it doesn't drown them")),
     depart_time: Optional[datetime] = Query(None, description=(
         "When the trip starts, e.g. 2026-07-21T15:00 (Heilbronn local time) or with a time zone. Sun up: "
         "shade_penalty applies; sun down: dark_penalty applies. Leave out to ignore both"),

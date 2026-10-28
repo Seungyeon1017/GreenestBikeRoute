@@ -283,26 +283,26 @@ def route_props(G, **kw):
 
 def test_shade_penalty_detours_into_the_shade_by_day_only(sunny_unlit_shortcut):
     G = sunny_unlit_shortcut
-    p = route_props(G, shade_penalty=1, dark_penalty=0, depart_time=SUMMER_AFTERNOON)  # 100 x 2 > 140
+    p = route_props(G, shade_penalty=4, dark_penalty=0, depart_time=SUMMER_AFTERNOON)  # 100 x 2 > 140
     assert (p["length_m"], p["daylight"], p["shade_slot"], p["mean_shade"]) == (140, True, SLOTS[2], 1.0)
-    p = route_props(G, shade_penalty=1, dark_penalty=0, depart_time=SUMMER_NIGHT)
+    p = route_props(G, shade_penalty=4, dark_penalty=0, depart_time=SUMMER_NIGHT)
     assert (p["length_m"], p["daylight"], p["shade_slot"], p["mean_shade"]) == (100, False, None, None)
 
 
 def test_dark_penalty_detours_onto_lit_streets_after_dark_only(sunny_unlit_shortcut):
     G = sunny_unlit_shortcut
-    p = route_props(G, shade_penalty=0, dark_penalty=1, depart_time=SUMMER_NIGHT)
+    p = route_props(G, shade_penalty=0, dark_penalty=4, depart_time=SUMMER_NIGHT)
     assert (p["length_m"], p["mean_lit"], p["lit_known_share"]) == (140, 1.0, 1.0)
-    assert route_props(G, shade_penalty=0, dark_penalty=1, depart_time=SUMMER_AFTERNOON)["length_m"] == 100
+    assert route_props(G, shade_penalty=0, dark_penalty=4, depart_time=SUMMER_AFTERNOON)["length_m"] == 100
 
 
 def test_without_depart_time_shade_and_lighting_change_nothing(sunny_unlit_shortcut):
-    p = route_props(sunny_unlit_shortcut, shade_penalty=5, dark_penalty=5)
+    p = route_props(sunny_unlit_shortcut, shade_penalty=10, dark_penalty=10)
     assert (p["length_m"], p["depart_time"], p["daylight"], p["mean_shade"], p["mean_lit"]) == (100, None, None, None, 0.0)
 
 
 def test_compare_routes_plans_the_shortest_route_for_the_same_time(sunny_unlit_shortcut):
-    r = compare_routes(sunny_unlit_shortcut, COORDS[A], COORDS[B], 0, 0, 0, 0, shade_penalty=1, depart_time=SUMMER_AFTERNOON)
+    r = compare_routes(sunny_unlit_shortcut, COORDS[A], COORDS[B], 0, 0, 0, 0, shade_penalty=4, depart_time=SUMMER_AFTERNOON)
     assert r["shortest"]["properties"]["depart_time"] == "2026-07-21T15:00+02:00"
     assert (r["shortest"]["properties"]["mean_shade"], r["route"]["properties"]["mean_shade"]) == (0.0, 1.0)
 
@@ -311,9 +311,9 @@ def test_prefer_bike_friendly_detours_onto_bike_friendly_streets(toy_graph):
     attach_bike_friendly(toy_graph, {12, 13})  # A->C and C->B (osmid [13, 14]) are bike lanes, A->B is not
     zero = {"bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0}
     assert find_route(toy_graph, COORDS[A], COORDS[B], **zero)["features"][0]["properties"]["length_m"] == 100
-    f = find_route(toy_graph, COORDS[A], COORDS[B], **zero, prefer_bike_friendly=1)["features"][0]
+    f = find_route(toy_graph, COORDS[A], COORDS[B], **zero, prefer_bike_friendly=4)["features"][0]
     assert f["properties"]["length_m"] == 140
-    assert f["properties"]["prefer_bike_friendly"] == 1
+    assert f["properties"]["prefer_bike_friendly"] == 4
 
 
 def test_route_reports_metres_on_bad_streets(toy_graph):
@@ -353,7 +353,7 @@ def test_scooter_is_pushed_on_footways_not_signed_for_bikes(toy_graph):
 
 
 def test_day_routes_split_the_day_by_sky(sunny_unlit_shortcut):
-    day = day_routes(sunny_unlit_shortcut, COORDS[A], COORDS[B], 0, 0, 0, 0, shade_penalty=1, dark_penalty=0,
+    day = day_routes(sunny_unlit_shortcut, COORDS[A], COORDS[B], 0, 0, 0, 0, shade_penalty=4, dark_penalty=0,
                      depart_time=SUMMER_AFTERNOON)
     periods = day["periods"]
     assert day["date"] == "2026-07-21"

@@ -430,7 +430,7 @@ def _route_feature(G, a, b, penalties, weight_kg=DEFAULT_WEIGHT_KG, e_bike=False
         # Length-weighted chance the streets are lit at night, over the part of the route with lighting data.
         "mean_lit": round(lit_len / lit_known_len, 3) if lit_known_len else None,
         "lit_known_share": round(lit_known_len / length, 2),
-        # Lifts the route rides through; each costs stop_penalty * LIFT_WAIT_M metres.
+        # Lifts the route rides through; each costs stop_penalty x 25 m.
         "lifts": lifts,
         # Streets on the route that users reported closed (backend/reports.py) and that it still rides.
         "reported_closures": len(closures),

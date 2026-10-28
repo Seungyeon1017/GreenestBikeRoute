@@ -15,8 +15,8 @@ ROUTE_EXAMPLE = {
     "geometry": {"type": "LineString",
                  "coordinates": [[9.2268683, 49.148385], [9.2227619, 49.139049], [9.2243909, 49.1262013]]},
     "properties": {
-        "bump_penalty": 0.5, "danger_penalty": 10.0, "pm_penalty": 0.25, "stop_penalty": 0.25, "prefer_time": False,
-        "shade_penalty": 0.5, "dark_penalty": 1.0, "prefer_bike_friendly": 0.0, "depart_time": None, "daylight": None, "shade_slot": None,
+        "bump_penalty": 2, "danger_penalty": 10.0, "pm_penalty": 1, "stop_penalty": 1, "prefer_time": False,
+        "shade_penalty": 2, "dark_penalty": 4, "prefer_bike_friendly": 0, "depart_time": None, "daylight": None, "shade_slot": None,
         "length_m": 3257.1, "duration_s": 959, "climb_m": 26.2, "kcal": 147.6, "speed_measured_share": 0.89, "mean_roughness": 12.4, "measured_share": 0.88, "estimated_share": 0.0,
         "danger_points": 11, "danger_risk": 9.0, "mean_pm_risk": 0.506, "pm_measured_share": 0.63,
         "mean_stop_go": 0.68, "stop_measured_share": 0.89,
@@ -126,7 +126,7 @@ class RouteProperties(BaseModel):
     mean_lit: Optional[float] = Field(
         description="Chance the streets are lit at night, 0-1, length-weighted over the part with lighting data; null if none")
     lit_known_share: float = Field(description="Share of the route length with lighting data, 0-1")
-    lifts: int = Field(description="Lifts (elevators) the route rides through, e.g. onto the Campusbrücke; each one costs stop_penalty x 100 m")
+    lifts: int = Field(description="Lifts (elevators) the route rides through, e.g. onto the Campusbrücke; each one costs stop_penalty x 25 m")
     reported_closures: int = Field(description=(
         "Streets on the route that riders reported closed, by too few to close them or without a recent report "
         "(status reported or unconfirmed in `/reports/closures`); the route still rides them, as there was no sensible "

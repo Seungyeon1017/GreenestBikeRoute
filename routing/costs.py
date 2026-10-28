@@ -17,9 +17,15 @@ BUMPY_ROUGHNESS = 20.0  # roughness (measured or estimated) at least this
 BAD_AIR_RISK = 0.555  # pm_risk at least this
 STOP_GO_HEAVY = 0.77  # stop_go at least this
 
+# The dislike penalties (all but danger_penalty) count in whole points, 0 to MAX_POINTS: each point makes a street
+# 25% dearer per metre when it is on the bad line (bumps, air, stop-and-go), fully sunny (by day), unlit (after dark)
+# or not bike-friendly (see edge_cost). 10 points = 3.5x.
+POINT = 0.25
+MAX_POINTS = 10
+
 # "How much do you hate bumps", and the same for air and stop-and-go below: a street on the bad line costs
-# 1 + penalty times as much per metre as a typical one (see edge_cost).
-DEFAULT_BUMP_PENALTY = 0.5
+# 1 + penalty x POINT times as much per metre as a typical one. 2 = 1.5x.
+DEFAULT_BUMP_PENALTY = 2
 
 # A danger point counts for its nearest street when within this distance (GPS noise).
 # Catches ~90% of the points inside the city; the rest are mostly rides outside Heilbronn.
@@ -41,7 +47,7 @@ MIN_OVERTAKING_CM = 25.0
 # reading. Streets agree only weakly between bikes (rank correlation ~0.24 between halves of the bike sensors,
 # ~0.39 between halves of the days), so the default penalty is kept mild.
 DEFAULT_PM_RISK = 0.5
-DEFAULT_PM_PENALTY = 0.25
+DEFAULT_PM_PENALTY = 1
 
 # air_scores: a reading this far above its ride's median (in weighted log ratio to the senseBox:home
 # background) scores 1, as far below scores 0. 0.3 is about 1.35x the ride's usual air; ~10% of rows reach it.
@@ -73,8 +79,9 @@ PM_WEIGHTS = {"Finedust PM1": 0.4, "Finedust PM2.5": 0.3, "Finedust PM4": 0.2, "
 MEDIAN_FLOW = 0.37
 FLOW_PRIOR_POINTS = 5
 DEFAULT_STOP_GO = 1 - MEDIAN_FLOW
-DEFAULT_STOP_PENALTY = 0.25
-# Waiting for a lift and getting in and out, as metres of riding at stop_penalty 1 (about 25 s at 15 km/h).
+DEFAULT_STOP_PENALTY = 1
+# Waiting for a lift and getting in and out, as metres of riding (about 25 s at 15 km/h). Each stop_penalty point
+# costs a quarter of it per lift: 4 points = the full wait.
 LIFT_WAIT_M = 100
 
 # speed_map: avg_speed[km/h] per segment, the speed bikes were measured at, waits included (5-95%: 4.5-26 km/h).
@@ -91,19 +98,19 @@ MIN_SPEED_KMH = 5.0
 # Used only by day (sun above the horizon at the departure time): routing uses sun = 1 - shade, length-scaled
 # like roughness. Most streets get little shade (median ~0.05 at noon, ~0.16 at 09 and 18), so unknown streets get 0.1.
 DEFAULT_SHADE = 0.1
-# Over 30 random trips of 1.5 km or more at 15:00, shade_penalty 0.5 changes 23 routes for a 0.5% mean detour
-# (mean shade 0.18 -> 0.21); 2 gives a 3% detour for 0.26.
-DEFAULT_SHADE_PENALTY = 0.5
+# Over 30 random trips of 1.5 km or more at 15:00, shade_penalty 2 changes 23 routes for a 0.5% mean detour
+# (mean shade 0.18 -> 0.21); 8 gives a 3% detour for 0.26.
+DEFAULT_SHADE_PENALTY = 2
 # Street lighting (routing.lighting): chance a street is lit at night, 0-1. Used only after dark (sun below the
 # horizon at the departure time): routing uses dark = 1 - lit, length-scaled. Unknown streets get 0.5.
 DEFAULT_LIT = 0.5
-# Over the same trips at 21:00, dark_penalty 1 changes 26 of 30 routes for a 3% mean detour, raising the
-# length-weighted chance of being lit from 0.80 to 0.91; 2 adds little more (0.92 for a 4% detour).
-DEFAULT_DARK_PENALTY = 1.0
+# Over the same trips at 21:00, dark_penalty 4 changes 26 of 30 routes for a 3% mean detour, raising the
+# length-weighted chance of being lit from 0.80 to 0.91; 8 adds little more (0.92 for a 4% detour).
+DEFAULT_DARK_PENALTY = 4
 # bike_friendly (OSM bike paths, bike lanes and bike routes, data/custom/bike_friendly_streets_heilbronn.*): streets
-# NOT on that list cost 1 + this times as much, so routes prefer the ones on it. 0 leaves routes as they were;
-# 1 makes other streets feel twice as long.
-DEFAULT_PREFER_BIKE_FRIENDLY = 0.0
+# NOT on that list cost 1 + this x POINT times as much, so routes prefer the ones on it. 0 leaves routes as they were;
+# 4 makes other streets feel twice as long.
+DEFAULT_PREFER_BIKE_FRIENDLY = 0
 
 
 def osm_way_ids(osmid):
@@ -217,10 +224,10 @@ def edge_cost(length_m, normalized_roughness=DEFAULT_ROUGHNESS, bump_penalty=DEF
               sun=0.0, shade_penalty=DEFAULT_SHADE_PENALTY, dark=0.0, dark_penalty=DEFAULT_DARK_PENALTY,
               bike_friendly=False, prefer_bike_friendly=DEFAULT_PREFER_BIKE_FRIENDLY):
     """Routing cost: plain length plus `danger_penalty` metres per unit of overtaking risk (`danger` = summed risk on
-    the edge), times one factor per dislike: 1 + penalty x badness for roughness, air and stop-and-go (0 on a
-    typical street, 1 on the bad-street line), 1 + penalty x share for sun (`sun`, by day) and unlit (`dark`, at
-    night), 1 + prefer_bike_friendly on streets that are not bike-friendly. Plus a fixed `stop_penalty *
-    LIFT_WAIT_M` metres per lift ridden through. A lift sits where two edges meet, so each edge ending at one
+    the edge), times one factor per dislike: 1 + penalty x POINT x badness for roughness, air and stop-and-go (0 on
+    a typical street, 1 on the bad-street line), 1 + penalty x POINT x share for sun (`sun`, by day) and unlit
+    (`dark`, at night), 1 + prefer_bike_friendly x POINT on streets that are not bike-friendly. Plus a fixed
+    `stop_penalty * POINT * LIFT_WAIT_M` metres per lift ridden through. A lift sits where two edges meet, so each edge ending at one
     (`lift_ends` = 0, 1 or 2) carries half of it.
 
     The factors multiply, so raising one penalty never drowns the others: two streets that differ only in roughness
@@ -234,9 +241,9 @@ def edge_cost(length_m, normalized_roughness=DEFAULT_ROUGHNESS, bump_penalty=DEF
     Normalized Roughness is 0-100, in the live data and the ATRAI docs.
     """
     base = length_m * (MEDIAN_SPEED_KMH / speed_kmh)
-    factor = ((1 + bump_penalty * badness(normalized_roughness, DEFAULT_ROUGHNESS, BUMPY_ROUGHNESS))
-              * (1 + pm_penalty * badness(pm_risk, DEFAULT_PM_RISK, BAD_AIR_RISK))
-              * (1 + stop_penalty * badness(stop_go, DEFAULT_STOP_GO, STOP_GO_HEAVY))
-              * (1 + shade_penalty * sun) * (1 + dark_penalty * dark)
-              * (1 + (0 if bike_friendly else prefer_bike_friendly)))
-    return (base + danger_penalty * danger) * factor + stop_penalty * LIFT_WAIT_M * lift_ends / 2
+    factor = ((1 + bump_penalty * POINT * badness(normalized_roughness, DEFAULT_ROUGHNESS, BUMPY_ROUGHNESS))
+              * (1 + pm_penalty * POINT * badness(pm_risk, DEFAULT_PM_RISK, BAD_AIR_RISK))
+              * (1 + stop_penalty * POINT * badness(stop_go, DEFAULT_STOP_GO, STOP_GO_HEAVY))
+              * (1 + shade_penalty * POINT * sun) * (1 + dark_penalty * POINT * dark)
+              * (1 + (0 if bike_friendly else prefer_bike_friendly * POINT)))
+    return (base + danger_penalty * danger) * factor + stop_penalty * POINT * LIFT_WAIT_M * lift_ends / 2

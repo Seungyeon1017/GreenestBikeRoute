@@ -45,7 +45,7 @@ def test_route_matches_the_documented_schema(client):
 
 
 def test_compare_returns_route_and_shortest(client):
-    r = client.get("/route/compare", params=params(bump_penalty=5))
+    r = client.get("/route/compare", params=params(bump_penalty=10))
     assert r.status_code == 200
     body = RouteComparison.model_validate(r.json())
     assert (body.route.properties.length_m, body.shortest.properties.length_m, body.detour_pct) == (140, 100, 40.0)
@@ -66,7 +66,7 @@ def test_docs_show_a_geojson_linestring(client):
 
 
 def test_penalty_changes_the_route(client):
-    assert client.get("/route", params=params(bump_penalty=5)).json()["features"][0]["properties"]["length_m"] == 140
+    assert client.get("/route", params=params(bump_penalty=10)).json()["features"][0]["properties"]["length_m"] == 140
 
 
 def test_default_penalty_is_used(client):
@@ -75,6 +75,7 @@ def test_default_penalty_is_used(client):
 
 def test_negative_penalty_is_invalid(client):
     assert client.get("/route", params=params(bump_penalty=-1)).status_code == 422
+    assert client.get("/route", params=params(bump_penalty=11)).status_code == 422  # points go up to 10
 
 
 def test_unroutable_point_is_400(client):
@@ -86,7 +87,7 @@ def test_unroutable_point_is_400(client):
 def test_penalty_is_documented(client):
     spec = client.get("/openapi.json").json()
     bump_penalty = next(p for p in spec["paths"]["/route"]["get"]["parameters"] if p["name"] == "bump_penalty")
-    assert bump_penalty["description"].startswith("How much do you hate bumps: a street among the bumpiest tenth")
+    assert bump_penalty["description"].startswith("How much do you hate bumps, in points 0-10")
 
 
 def test_danger_penalties_are_passed_through(client):
@@ -160,7 +161,7 @@ def lit_client(toy_graph):
 
 def test_depart_time_is_passed_through_and_off_by_default(lit_client):
     p = lit_client.get("/route", params=params()).json()["features"][0]["properties"]
-    assert (p["depart_time"], p["daylight"], p["shade_penalty"], p["dark_penalty"]) == (None, None, 0.5, 1.0)
+    assert (p["depart_time"], p["daylight"], p["shade_penalty"], p["dark_penalty"]) == (None, None, 2, 4)
     p = lit_client.get("/route", params={**params(), "depart_time": "2026-07-21T14:00", "shade_penalty": 2}).json()["features"][0]["properties"]
     assert (p["depart_time"], p["daylight"], p["shade_slot"], p["shade_penalty"]) == ("2026-07-21T14:00+02:00", True, SLOTS[1], 2)
     p = lit_client.get("/route", params={**params(), "depart_time": "2026-10-28T19:30"}).json()["features"][0]["properties"]
@@ -206,7 +207,7 @@ def test_score_overlay_follows_the_penalties(client):
     # Without the bump penalty, the bumpy A -> B costs what the others do: all three tie in the middle.
     assert scores(bump_penalty=0) == [50.0, 50.0, 50.0]
     assert scores(bump_penalty=0, danger_penalty=0, pm_penalty=0, stop_penalty=0) == [50.0, 50.0, 50.0]
-    assert scores(bump_penalty=5) == scores()  # same order: A -> B is the bumpiest either way
+    assert scores(bump_penalty=10) == scores()  # same order: A -> B is the bumpiest either way
     assert client.get("/score", params={"bump_penalty": -1}).status_code == 422
     spec = client.get("/openapi.json").json()["paths"]
     names = lambda path: [p["name"] for p in spec[path]["get"]["parameters"]]
@@ -230,13 +231,13 @@ def hilly_client(hilly):
 
 
 def test_grade_returns_the_route_in_coloured_pieces(hilly_client):
-    r = hilly_client.get("/route/grade", params=params(bump_penalty=5))
+    r = hilly_client.get("/route/grade", params=params(bump_penalty=10))
     assert r.status_code == 200
     assert r.headers["content-type"] == "application/geo+json"
     body = GradeCollection.model_validate(r.json())
     assert [(f.properties.severity, f.properties.grade_pct) for f in body.features] == [("steep", 7.1), ("gentle", -2.9)]
     assert (body.summary.climb_m, body.summary.descent_m, body.summary.max_grade_pct) == (5, 2, 7.1)
-    route = hilly_client.get("/route", params=params(bump_penalty=5)).json()["features"][0]
+    route = hilly_client.get("/route", params=params(bump_penalty=10)).json()["features"][0]
     assert joined(r.json()["features"]) == route["geometry"]["coordinates"]
     assert body.summary.length_m == route["properties"]["length_m"]
 

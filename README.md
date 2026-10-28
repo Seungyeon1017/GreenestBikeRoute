@@ -4,14 +4,14 @@
 ## Route Planning API
 Serves bike routes that avoid bumpy streets, close-overtaking spots, streets with bad air and stop-and-go streets as GeoJSON. The first start downloads the Heilbronn street graph from OpenStreetMap into `cache/` (about 2 minutes); later starts take a few seconds. See [Backend Setup and Usage](#backend-setup-and-usage) for how to start it.
 
-Example request: `/route?from_lat=49.14838&from_lon=9.22687&to_lat=49.1262&to_lon=9.22439&bump_penalty=2`. Four penalties steer the route, and setting all of them to 0 gives the shortest route. A street only costs extra where it is worse than a typical Heilbronn street, and the dislikes multiply, so raising one never drowns the others (see [routing/README.md](routing/README.md)):
+Example request: `/route?from_lat=49.14838&from_lon=9.22687&to_lat=49.1262&to_lon=9.22439&bump_penalty=2`. Four penalties steer the route, and setting all of them to 0 gives the shortest route. All penalties but `danger_penalty` count in whole points, 0-10: each point makes a bad street 25% dearer. A street only costs extra where it is worse than a typical Heilbronn street, and the dislikes multiply, so raising one never drowns the others (see [routing/README.md](routing/README.md)):
 
-- `bump_penalty` (default 0.5, 0-5): how much you hate bumps (`bumpy_roads`).
-- `danger_penalty` (default 10): metres of detour you'd ride to pass one fewer close-overtaking spot (`danger_zones_raw`, summed Risk Index Overtaking; readings of 25 cm or less ignored).
-- `pm_penalty` (default 0.25, 0-5): how much you hate bad air (`air_quality`, bike fine dust compared with the senseBox:home stations at the same hour and with the rest of the ride, so weather and sensor offsets drop out, averaged per street by ride so a street needs several rides to count; streets along the NO₂ hotspots of Heilbronn's Luftreinhalteplan start slightly worse).
-- `stop_penalty` (default 0.25, 0-5): how much you hate slowing down and stopping at traffic lights, in congestion (`traffic_flow`) or at a lift (each costs 100 m × this).
+- `bump_penalty` (default 2, 0-10): how much you hate bumps (`bumpy_roads`).
+- `danger_penalty` (default 10, 0-100): metres of detour you'd ride to pass one fewer close-overtaking spot (`danger_zones_raw`, summed Risk Index Overtaking; readings of 25 cm or less ignored).
+- `pm_penalty` (default 1, 0-10): how much you hate bad air (`air_quality`, bike fine dust compared with the senseBox:home stations at the same hour and with the rest of the ride, so weather and sensor offsets drop out, averaged per street by ride so a street needs several rides to count; streets along the NO₂ hotspots of Heilbronn's Luftreinhalteplan start slightly worse).
+- `stop_penalty` (default 1, 0-10): how much you hate slowing down and stopping at traffic lights, in congestion (`traffic_flow`) or at a lift (each costs 25 m × this).
 
-`depart_time` (e.g. `2026-07-21T15:00`, Heilbronn local time) brings in two more penalties, chosen by the sun at that time: while it is up, `shade_penalty` (default 0.5) avoids sunny streets (building and tree shade, `routing.shadow`); after sunset or before sunrise, `dark_penalty` (default 1) avoids streets that are probably unlit (`routing.lighting`). Without `depart_time` neither applies.
+`depart_time` (e.g. `2026-07-21T15:00`, Heilbronn local time) brings in two more penalties, chosen by the sun at that time: while it is up, `shade_penalty` (default 2) avoids sunny streets (building and tree shade, `routing.shadow`); after sunset or before sunrise, `dark_penalty` (default 4) avoids streets that are probably unlit (`routing.lighting`). Without `depart_time` neither applies.
 
 `prefer_time=true` plans by riding time instead of distance, using the speed bikes were measured at on each street (`speed_map`); the penalties still apply. Every route reports its expected `duration_s`.
 

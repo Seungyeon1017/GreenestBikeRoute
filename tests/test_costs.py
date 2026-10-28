@@ -39,8 +39,8 @@ def test_badness_is_0_up_to_typical_1_on_the_bad_line_and_more_beyond():
 
 def test_edge_cost_bumps_cost_only_above_typical():
     assert edge_cost(100, 50, **ZERO) == 100
-    assert edge_cost(100, DEFAULT_ROUGHNESS, **{**ZERO, "bump_penalty": 5}) == 100  # typical: no extra
-    assert edge_cost(100, BUMPY_ROUGHNESS, **{**ZERO, "bump_penalty": 2}) == 300  # bad line: 1 + penalty
+    assert edge_cost(100, DEFAULT_ROUGHNESS, **{**ZERO, "bump_penalty": 10}) == 100  # typical: no extra
+    assert edge_cost(100, BUMPY_ROUGHNESS, **{**ZERO, "bump_penalty": 8}) == 300  # bad line: 1 + penalty / 4
 
 
 def test_edge_cost_danger_adds_metres_per_risk():
@@ -49,17 +49,17 @@ def test_edge_cost_danger_adds_metres_per_risk():
 
 
 def test_edge_cost_air_and_stop_go_cost_only_above_typical():
-    assert edge_cost(100, 0, **{**ZERO, "pm_penalty": 5}, pm_risk=DEFAULT_PM_RISK) == 100
-    assert edge_cost(100, 0, **{**ZERO, "pm_penalty": 2}, pm_risk=BAD_AIR_RISK) == pytest.approx(300)
-    assert edge_cost(100, 0, **{**ZERO, "stop_penalty": 5}, stop_go=DEFAULT_STOP_GO) == 100
-    assert edge_cost(100, 0, **{**ZERO, "stop_penalty": 2}, stop_go=STOP_GO_HEAVY) == pytest.approx(300)
+    assert edge_cost(100, 0, **{**ZERO, "pm_penalty": 10}, pm_risk=DEFAULT_PM_RISK) == 100
+    assert edge_cost(100, 0, **{**ZERO, "pm_penalty": 8}, pm_risk=BAD_AIR_RISK) == pytest.approx(300)
+    assert edge_cost(100, 0, **{**ZERO, "stop_penalty": 10}, stop_go=DEFAULT_STOP_GO) == 100
+    assert edge_cost(100, 0, **{**ZERO, "stop_penalty": 8}, stop_go=STOP_GO_HEAVY) == pytest.approx(300)
 
 
 def test_edge_cost_sun_and_dark_scale_length():
-    assert edge_cost(100, 0, **ZERO, sun=0.5, shade_penalty=2) == 200
-    assert edge_cost(100, 0, **ZERO, dark=0.25, dark_penalty=4) == 200
+    assert edge_cost(100, 0, **ZERO, sun=0.5, shade_penalty=8) == 200
+    assert edge_cost(100, 0, **ZERO, dark=0.5, dark_penalty=8) == 200
     # Without a departure time the router passes sun = dark = 0: the penalties change nothing.
-    assert edge_cost(100, 0, **ZERO, shade_penalty=5, dark_penalty=5) == 100
+    assert edge_cost(100, 0, **ZERO, shade_penalty=10, dark_penalty=10) == 100
 
 
 def test_edge_cost_factors_multiply_so_one_penalty_does_not_drown_another():
@@ -67,16 +67,16 @@ def test_edge_cost_factors_multiply_so_one_penalty_does_not_drown_another():
     tells a bumpy street from a smooth one as much as without it (with a sum it would barely)."""
     def ratio(**kw):
         return edge_cost(100, BUMPY_ROUGHNESS, **kw) / edge_cost(100, DEFAULT_ROUGHNESS, **kw)
-    assert ratio(**{**ZERO, "bump_penalty": 1}) == pytest.approx(2)
-    assert ratio(**{**ZERO, "bump_penalty": 1}, prefer_bike_friendly=5) == pytest.approx(2)
-    assert ratio(**{**ZERO, "bump_penalty": 1, "stop_penalty": 5}, stop_go=STOP_GO_HEAVY) == pytest.approx(2)
+    assert ratio(**{**ZERO, "bump_penalty": 4}) == pytest.approx(2)
+    assert ratio(**{**ZERO, "bump_penalty": 4}, prefer_bike_friendly=10) == pytest.approx(2)
+    assert ratio(**{**ZERO, "bump_penalty": 4, "stop_penalty": 10}, stop_go=STOP_GO_HEAVY) == pytest.approx(2)
 
 
 def test_edge_cost_danger_keeps_its_weight_under_other_penalties():
     """The overtaking metres are scaled by the street's factor too, so they count as much next to its length."""
     plain = edge_cost(100, 0, danger=1, danger_penalty=50, pm_penalty=0, stop_penalty=0)
-    disliked = edge_cost(100, 0, danger=1, danger_penalty=50, pm_penalty=0, stop_penalty=0, prefer_bike_friendly=3)
-    assert disliked / plain == pytest.approx(4)
+    disliked = edge_cost(100, 0, danger=1, danger_penalty=50, pm_penalty=0, stop_penalty=0, prefer_bike_friendly=8)
+    assert disliked / plain == pytest.approx(3)
 
 
 def flow(osmid, value, n):
@@ -148,11 +148,11 @@ def test_air_scores_skip_short_rides_and_hours_without_a_background():
     assert air_scores([], bg) == ([], [], [])
 
 
-def test_lift_costs_stop_penalty_times_100_m_per_ride_through():
+def test_lift_costs_stop_penalty_times_25_m_per_ride_through():
     """Each of the two edges meeting at a lift carries half."""
     assert edge_cost(10, **ZERO, lift_ends=1) == 10
-    one_edge = edge_cost(10, **{**ZERO, "stop_penalty": 2}, stop_go=0, lift_ends=1)
-    assert one_edge == 10 + 2 * 100 / 2
+    one_edge = edge_cost(10, **{**ZERO, "stop_penalty": 8}, stop_go=0, lift_ends=1)
+    assert one_edge == 10 + 8 * 25 / 2
 
 
 def test_edge_cost_speed_turns_length_into_time():

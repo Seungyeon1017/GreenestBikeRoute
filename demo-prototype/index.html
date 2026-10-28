@@ -56,25 +56,25 @@
   <h1>Greenest Bike Route</h1>
   <p class="hint" id="hint">Click the map to set the start.</p>
 
-  <label for="bumpPenalty">How much do you hate bumps: <span id="bumpPenaltyValue">0.5</span></label>
-  <input id="bumpPenalty" type="range" min="0" max="5" step="0.25" value="0.5">
-  <div class="row"><span>0 = ignore</span><span>5 = strongly avoid</span></div>
+  <label for="bumpPenalty">How much do you hate bumps: <span id="bumpPenaltyValue">2</span></label>
+  <input id="bumpPenalty" type="range" min="0" max="10" step="1" value="2">
+  <div class="row"><span>0 = ignore</span><span>10 = bumpy streets cost 3.5×</span></div>
 
   <label for="dangerPenalty">How much do you hate close overtaking: <span id="dangerPenaltyValue">10</span></label>
-  <input id="dangerPenalty" type="range" min="0" max="100" step="5" value="10">
-  <div class="row"><span>0 = ignore</span><span>100 m detour per spot</span></div>
+  <input id="dangerPenalty" type="range" min="0" max="100" step="1" value="10">
+  <div class="row"><span>0 = ignore</span><span>100 = 100 m detour per spot</span></div>
 
-  <label for="pmPenalty">How much do you hate bad air: <span id="pmPenaltyValue">0.25</span></label>
-  <input id="pmPenalty" type="range" min="0" max="5" step="0.25" value="0.25">
-  <div class="row"><span>0 = ignore</span><span>5 = strongly avoid</span></div>
+  <label for="pmPenalty">How much do you hate bad air: <span id="pmPenaltyValue">1</span></label>
+  <input id="pmPenalty" type="range" min="0" max="10" step="1" value="1">
+  <div class="row"><span>0 = ignore</span><span>10 = bad-air streets cost 3.5×</span></div>
 
-  <label for="stopPenalty">How much do you hate stop-and-go: <span id="stopPenaltyValue">0.25</span></label>
-  <input id="stopPenalty" type="range" min="0" max="5" step="0.25" value="0.25">
-  <div class="row"><span>0 = ignore</span><span>5 = strongly avoid</span></div>
+  <label for="stopPenalty">How much do you hate stop-and-go: <span id="stopPenaltyValue">1</span></label>
+  <input id="stopPenalty" type="range" min="0" max="10" step="1" value="1">
+  <div class="row"><span>0 = ignore</span><span>10 = stop-and-go streets cost 3.5×</span></div>
 
   <label for="bikeFriendly">How much do you prefer bike paths and lanes: <span id="bikeFriendlyValue">0</span></label>
-  <input id="bikeFriendly" type="range" min="0" max="5" step="0.25" value="0">
-  <div class="row"><span>0 = ignore</span><span>1 = other streets feel twice as long</span></div>
+  <input id="bikeFriendly" type="range" min="0" max="10" step="1" value="0">
+  <div class="row"><span>0 = ignore</span><span>4 = other streets feel twice as long</span></div>
 
   <label><input type="checkbox" id="preferTime"> Time matters, not distance</label>
   <div class="row"><span>Weigh streets by how fast bikes were measured riding them</span></div>
@@ -95,13 +95,13 @@
     <div class="row"><span id="dayPeriod">Set start and end to see how the route changes over the day</span></div>
   </div>
 
-  <label for="shadePenalty">By day, how much do you hate the sun: <span id="shadePenaltyValue">0.5</span></label>
-  <input id="shadePenalty" type="range" min="0" max="5" step="0.25" value="0.5">
-  <div class="row"><span>0 = ignore</span><span>5 = strongly prefer shade</span></div>
+  <label for="shadePenalty">By day, how much do you hate the sun: <span id="shadePenaltyValue">2</span></label>
+  <input id="shadePenalty" type="range" min="0" max="10" step="1" value="2">
+  <div class="row"><span>0 = ignore</span><span>10 = sunny streets cost 3.5×</span></div>
 
-  <label for="darkPenalty">After dark, how much do you hate unlit streets: <span id="darkPenaltyValue">1</span></label>
-  <input id="darkPenalty" type="range" min="0" max="5" step="0.25" value="1">
-  <div class="row"><span>0 = ignore</span><span>5 = strongly prefer lit</span></div>
+  <label for="darkPenalty">After dark, how much do you hate unlit streets: <span id="darkPenaltyValue">4</span></label>
+  <input id="darkPenalty" type="range" min="0" max="10" step="1" value="4">
+  <div class="row"><span>0 = ignore</span><span>10 = unlit streets cost 3.5×</span></div>
 
   <table>
     <tr><th></th><th>Length</th><th title="expected riding time from measured cyclist speeds">Time</th><th title="mean roughness of the measured part; hover a value for how much is measured / estimated">Rough</th><th title="close-overtaking spots passed">Overtakes</th><th title="mean air score, 0.5 = typical">PM</th><th title="mean stop-and-go, 0-1">Stops</th><th title="share in shade at the departure time (by day only)">Shade</th><th title="chance the streets are lit at night">Lit</th><th title="rough energy use of the ride, for the default rider (70 kg, normal bike)">kcal</th></tr>
