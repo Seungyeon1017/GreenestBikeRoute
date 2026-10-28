@@ -19,7 +19,8 @@ OSMnx's bike network, with these changes:
 
 - **Left out:** roads tagged `bicycle=use_sidepath` (~23 km, mostly the B 39 around Europaplatz). Those have a mandatory bike path beside them (StVO §2 Abs. 4, signs 237/240/241), so cycling on the road is illegal; the path itself is mapped as its own way and stays in. Roads with an optional bike path beside them stay in too: riding on the road is legal there, so smoothness or overtaking data may pick either. Ways tagged `bicycle=dismount` are left out as well.
 - **Added:** footways and paths tagged `bicycle=yes|designated|permissive`, which OSMnx drops. Untagged footways stay out (no bikes in Germany), except `bridge=yes` ones and ones touching a lift (`highway=elevator` node): bikes reach the Campusbrücke and BUGA-Brücke by lift. Street crossings (`footway=crossing`) are in even when tagged `bicycle=no`: cyclists push their bike across the lights. Footways tagged `bicycle=no` or without a tag stay out, with two exceptions where cyclists push their bike a short way: a footway up to 30 m long that links two places the graph already reaches (a crossing to a bike path), and an untagged footway up to 150 m long that fills a gap between two `bicycle=yes` ways (path 694954948 next to the Hauptbahnhof). Steps stay out.
-- **Graph file:** `cache/heilbronn_bike_footways.graphml`, built from OSM on first start (~2 min). Delete it to pick up newer OSM edits.
+- **Hand-picked ways:** footways without a bicycle tag that cyclists use anyway are listed in [rideable_ways.py](rideable_ways.py) and count as `bicycle=yes` (e.g. the Allee footway 286359672, beside the bus and car lanes). Add a way id and a reason there, then delete the graph file. Planned: users report streets and, once checked, they are added to this list.
+- **Graph file:** `cache/heilbronn_bike_rideable.graphml`, built from OSM on first start (~2 min). Delete it to pick up newer OSM edits.
 
 ## Datasets
 

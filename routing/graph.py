@@ -7,11 +7,12 @@ import osmnx as ox
 from shapely import LineString, STRtree, points
 
 from download_data import load_features
-from routing.costs import SNAP_M, air_ranks, clean_overtaking, edge_roughness, point_risks, way_roughness, way_stop_go
+from routing.costs import SNAP_M, air_ranks, clean_overtaking, edge_roughness, osm_way_ids, point_risks, way_roughness, way_stop_go
+from routing.rideable_ways import RIDEABLE_WAYS
 
 CACHE_DIR = Path(__file__).resolve().parent.parent / "cache"
 # Renamed when the filter below changes, so an old cached graph isn't reused.
-GRAPH_PATH = CACHE_DIR / "heilbronn_bike_footways.graphml"
+GRAPH_PATH = CACHE_DIR / "heilbronn_bike_rideable.graphml"
 PLACE = "Heilbronn, Germany"
 
 # OSMnx's network_type="bike" filter, with three changes:
@@ -39,6 +40,11 @@ LINK_M = 30  # longest footway without a bicycle tag that may link two rideable 
 GAP_M = 150  # longest footway without a bicycle tag that may fill a gap between two ways tagged bicycle=yes
 
 
+def _allowed(d):
+    """Whether bikes may use the edge: tagged bicycle=yes|designated|permissive, or listed in RIDEABLE_WAYS."""
+    return bool(set(_tags(d.get("bicycle"))) & BIKE_ALLOWED) or bool(set(osm_way_ids(d["osmid"])) & RIDEABLE_WAYS.keys())
+
+
 def _tags(value):
     """OSMnx merges tags of joined ways into lists; always a list."""
     return value if isinstance(value, list) else [value]
@@ -47,7 +53,7 @@ def _tags(value):
 def keep_rideable_footways(G):
     """Remove footway/path edges that bikes may not use, from the graph.
 
-    A footway or path stays if tagged bicycle=yes|designated|permissive. Untagged ones stay only if they
+    A footway or path stays if tagged bicycle=yes|designated|permissive, or listed in RIDEABLE_WAYS. Untagged ones stay only if they
     are bridge=yes ways or touch an elevator (highway=elevator node): bikes reach those bridges by lift
     (Campusbrücke) and the lift is marked on the map. Crossings (footway=crossing) always stay, as cyclists push across
     them. So do short links: footways up to LINK_M long whose both ends already touch a rideable edge, such as
@@ -60,7 +66,7 @@ def keep_rideable_footways(G):
     for u, v, k, d in G.edges(keys=True, data=True):
         if not set(_tags(d["highway"])) <= FOOTWAY_TYPES:
             continue
-        if set(_tags(d.get("bicycle"))) & BIKE_ALLOWED:
+        if _allowed(d):
             continue
         if "crossing" in _tags(d.get("footway")) or "yes" in _tags(d.get("bridge")) or u in lifts or v in lifts:
             continue
@@ -68,7 +74,7 @@ def keep_rideable_footways(G):
     # A dropped edge comes back if it is a short link between two places that are still connected to rideable edges.
     dropped = set(drop)
     rideable = {n for u, v, k in G.edges(keys=True) if (u, v, k) not in dropped for n in (u, v)}
-    signed = {n for u, v, d in G.edges(data=True) if set(_tags(d.get("bicycle"))) & BIKE_ALLOWED for n in (u, v)}
+    signed = {n for u, v, d in G.edges(data=True) if _allowed(d) for n in (u, v)}
 
     # An untagged way up to GAP_M long that touches ways tagged bicycle=yes at two or more nodes is a gap in the
     # tagging of one path; the way may be split into several graph edges, so decide per OSM way.

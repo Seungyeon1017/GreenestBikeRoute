@@ -1,4 +1,4 @@
-"""End-to-end on the real Heilbronn graph. Skipped until cache/heilbronn_bike_footways.graphml exists
+"""End-to-end on the real Heilbronn graph. Skipped until cache/heilbronn_bike_rideable.graphml exists
 (start the API once, or run `python -c "from routing.graph import load_graph; load_graph()"`)."""
 import json
 
@@ -113,3 +113,11 @@ def test_route_can_end_on_a_one_way_street(client):
     r = client.get("/route", params={"from_lat": 49.14838, "from_lon": 9.22687, "to_lat": lat, "to_lon": lon})
     assert r.status_code == 200
     assert G.number_of_edges() == n_edges
+
+
+def test_hand_picked_footways_are_in_the_graph(client):
+    """Footways without a bicycle tag that routing/rideable_ways.py lists, e.g. the Allee footway."""
+    from routing.rideable_ways import RIDEABLE_WAYS
+    G = client.app.state.graph
+    in_graph = {w for *_, d in G.edges(data=True) for w in osm_way_ids(d["osmid"])}
+    assert set(RIDEABLE_WAYS) <= in_graph
