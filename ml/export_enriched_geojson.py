@@ -1,9 +1,11 @@
-"""Export an enriched road network GeoJSON with roughness, traffic flow, highway, and surface attached.
+"""Write data/road_network_enriched_heilbronn.geojson: every road segment with the roughness and
+stop-and-go the router uses and where each value comes from, for Kepler.gl or QGIS.
 
-Outputs:
-  data/road_network_enriched_heilbronn.geojson
+    uv run python ml/export_enriched_geojson.py
+
+roughness_source: measured / estimated (ml/estimate_roughness.py) / unknown (router uses the median, 10)
+stop_go_source:   measured / unknown (router uses 0.63, see routing/README.md)
 """
-import ast
 import json
 import sys
 from collections import Counter
@@ -11,17 +13,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-DATA = ROOT / "data"
 
-from ml.train_imputer import HIGHWAY_TO_SURFACE
-from routing.costs import way_means
+from download_data import load_features
+from routing.costs import DEFAULT_ROUGHNESS, DEFAULT_STOP_GO, osm_way_ids, way_roughness, way_stop_go
+from routing.graph import load_estimates
 
-def parse_ways(osmid_val):
-    s = str(osmid_val).strip()
-    try:
-        return [int(x) for x in ast.literal_eval(s)] if s.startswith("[") else [int(s)]
-    except Exception:
-        return []
+OUT = ROOT / "data" / "road_network_enriched_heilbronn.geojson"
+
 
 def value_and_source(idx, ways, by_idx, measured_by_way, estimated_by_way, default):
     """Same priority as routing/graph.py: measured segment or OSM way, then the estimate, then the default."""
@@ -33,87 +31,30 @@ def value_and_source(idx, ways, by_idx, measured_by_way, estimated_by_way, defau
             return sum(vals) / len(vals), source
     return default, "unknown"
 
-def export_enriched():
-    print("Loading datasets...")
-    with open(DATA / "road_network_heilbronn.geojson") as f:
-        roads = json.load(f)
-    with open(DATA / "bumpy_roads_heilbronn.geojson") as f:
-        bumpy = json.load(f)
-    with open(DATA / "traffic_flow_heilbronn.geojson") as f:
-        tf = json.load(f)
 
-    # OSM tags cache
-    osm_tags = {}
-    if (DATA / "osm_tags_cache.json").exists():
-        with open(DATA / "osm_tags_cache.json") as f:
-            osm_tags = json.load(f)
+def main():
+    roads = load_features("road_network_heilbronn")
+    bumpy = load_features("bumpy_roads_heilbronn")
+    rough_by_idx = {f["properties"]["id"]: f["properties"]["Normalized Roughness"]
+                    for f in bumpy if f["properties"].get("Normalized Roughness") is not None}
+    rough_by_way, estimated = way_roughness(bumpy), load_estimates()
+    stop_by_way = way_stop_go(load_features("traffic_flow_heilbronn"))
 
-    # ML lookup
-    ml_rough = {}
-    if (DATA / "ml_predicted_roughness.json").exists():
-        with open(DATA / "ml_predicted_roughness.json") as f:
-            ml_rough = {int(k): float(v) for k, v in json.load(f).items()}
+    counts = {"roughness": Counter(), "stop_go": Counter()}
+    for idx, f in enumerate(roads):
+        p = f["properties"]
+        ways = osm_way_ids(p["osmid"])
+        rough, rough_src = value_and_source(idx, ways, rough_by_idx, rough_by_way, estimated, DEFAULT_ROUGHNESS)
+        stop, stop_src = value_and_source(idx, ways, {}, stop_by_way, {}, DEFAULT_STOP_GO)
+        p.update(roughness=round(rough, 2), roughness_source=rough_src, stop_go=round(stop, 3), stop_go_source=stop_src)
+        counts["roughness"][rough_src] += 1
+        counts["stop_go"][stop_src] += 1
 
-    ml_tf = {}
-    if (DATA / "ml_predicted_traffic_flow.json").exists():
-        with open(DATA / "ml_predicted_traffic_flow.json") as f:
-            ml_tf = {int(k): float(v) for k, v in json.load(f).items()}
+    OUT.write_text(json.dumps({"type": "FeatureCollection", "features": roads}))
+    print(f"Wrote {len(roads)} road segments to {OUT.relative_to(ROOT)}")
+    for name, c in counts.items():
+        print(f"  {name:9} {dict(c)}")
 
-    # Index maps from bumpy and tf
-    bumpy_by_idx = {
-        b["properties"]["id"]: b["properties"]["Normalized Roughness"]
-        for b in bumpy["features"]
-        if b["properties"].get("Normalized Roughness") is not None
-    }
-    tf_by_idx = {
-        t["properties"]["road_segment"]: t["properties"]["avg_traffic_flow"]
-        for t in tf["features"]
-        if t["properties"].get("avg_traffic_flow") is not None
-    }
-
-    rough_by_way = way_means(bumpy["features"], "Normalized Roughness")
-    tf_by_way = way_means(tf["features"], "avg_traffic_flow")
-
-    features = roads["features"]
-    r_counts, t_counts = Counter(), Counter()
-
-    for idx, feat in enumerate(features):
-        p = feat["properties"]
-        ways = parse_ways(p.get("osmid"))
-
-        # Highway & surface
-        hw = "unknown"
-        surf = p.get("surface")
-        for w in ways:
-            t = osm_tags.get(str(w), {})
-            if t.get("highway"):
-                hw = t["highway"]
-                if not surf and t.get("surface"):
-                    surf = t["surface"]
-                break
-        if not surf or str(surf).strip().lower() in ("none", "unknown"):
-            surf = HIGHWAY_TO_SURFACE.get(hw, "unknown")
-
-        r_val, r_src = value_and_source(idx, ways, bumpy_by_idx, rough_by_way, ml_rough, 10.0)
-        t_val, t_src = value_and_source(idx, ways, tf_by_idx, tf_by_way, ml_tf, 0.374)
-        r_counts[r_src] += 1
-        t_counts[t_src] += 1
-
-        p["highway"] = hw
-        p["surface"] = surf
-        p["roughness"] = round(r_val, 2)
-        p["roughness_source"] = r_src
-        p["traffic_flow"] = round(t_val, 3)
-        p["traffic_source"] = t_src
-
-    out_file = DATA / "road_network_enriched_heilbronn.geojson"
-    print(f"Saving {len(features)} enriched road segments to {out_file}...")
-    with open(out_file, "w", encoding="utf-8") as f:
-        json.dump(roads, f)
-
-    print("Export Complete!")
-    print(f"Roughness:    {dict(r_counts)}")
-    print(f"Traffic Flow: {dict(t_counts)}")
 
 if __name__ == "__main__":
-    export_enriched()
+    main()

@@ -2,17 +2,16 @@
 
 The bike router needs a **roughness** value (0–100, higher = bumpier) on every street, but the ATRAI bike sensors only measured part of Heilbronn. This folder estimates the rest.
 
-| Dataset | Measured segments | Share of all 34,243 segments |
-| :--- | :---: | :---: |
-| Roughness (`bumpy_roads_heilbronn`) | 9,599 | 28.0% |
-| Traffic flow (`traffic_flow_heilbronn`) | 7,153 | 20.9% |
+Roughness (`bumpy_roads_heilbronn`) is measured on 9,599 of the 34,243 road segments (28.0%).
+
+How the router uses roughness together with overtaking danger, air quality and stop-and-go is in [routing/README.md](../routing/README.md).
 
 ## In one minute
 
 * **Roughness is estimated from nearby measured streets, not from a machine learning model.** We tested a Random Forest with 36 features and it did slightly *worse* than simply averaging the neighbours.
 * The closer the measurements, the more we trust them. **When nothing measured is within 150 m, the street is marked `unknown`** and the router uses the city median (10.0).
 * Of the 24,644 unmeasured segments, **47.7% get an estimate, 52.3% stay unknown**. That is on purpose: beyond ~150 m the neighbours predict no better than the median.
-* Traffic flow still uses a Random Forest and is **not used in route costs yet**.
+* Only roughness is estimated here. Stop-and-go (`traffic_flow`) uses measured values only; see [below](#why-traffic-flow-is-not-estimated).
 
 ---
 
@@ -91,7 +90,7 @@ estimate = m + λ · (mean − m)
 | Only other streets; nearest measurement 50–150 m | 0.5 | `estimated` |
 | Nothing measured within 150 m | — | `unknown` |
 
-The settings are `SAME_STREET_RADIUS_M = 100` and `SHRINK_BY_NEAREST_M = ((50, 0.7), (150, 0.5))` in `train_imputer.py`; the logic is in `neighbour_estimates`.
+The settings are `SAME_STREET_RADIUS_M = 100` and `SHRINK_BY_NEAREST_M = ((50, 0.7), (150, 0.5))` in `estimate_roughness.py`; the logic is in `neighbour_estimates`.
 
 ### Worked example
 
@@ -121,7 +120,9 @@ The router works on OpenStreetMap ways (one way = several segments). For every e
 2. otherwise the mean of the estimates on that way → `estimated`
 3. otherwise the median 10.0 (`DEFAULT_ROUGHNESS` in `routing/costs.py`) → `unknown`
 
-The route cost of an edge is `length × (1 + penalty × roughness / 100)` (`edge_cost` in `routing/costs.py`).
+The estimates live in `data/custom/roughness_estimates_heilbronn.json` and are loaded by `load_estimates` in `routing/graph.py`; each edge gets a `roughness_source`. Every `/route` response has `measured_share` and `estimated_share`; the rest of the route is unknown. `mean_roughness` still covers the measured part only.
+
+In the route cost (`edge_cost` in `routing/costs.py`) roughness adds `length × bump_penalty × roughness / 100`.
 
 ---
 
@@ -172,14 +173,15 @@ For comparison, the previous Random Forest scored 5.909 on whole streets and 6.7
 
 ## Effect on routes
 
-40 random trips over 1.5 km. Share of route length on each kind of street, compared with the plain shortest route (1.00× = no preference):
+40 random trips over 1.5 km. Share of route length on each kind of street, compared with the plain shortest route (1.00× = no preference). In the routing graph, 12,911 edges are measured, 9,647 estimated and 11,692 unknown.
 
-| Penalty | Measured | Estimated | Unknown | Extra distance |
+| Penalties (bump / danger / PM / stop) | Measured | Estimated | Unknown | Extra distance |
 | :---: | :---: | :---: | :---: | :---: |
-| 10 | 1.00× | 0.93× | 1.02× | +1.6% |
-| 30 | 1.01× | 0.94× | 1.00× | +4.0% |
+| 10 / 0 / 0 / 0 | 1.01× | 0.92× | 1.02× | +1.6% |
+| 30 / 0 / 0 / 0 | 1.01× | 0.94× | 1.00× | +4.0% |
+| 10 / 25 / 0.5 / 0.5 (defaults) | 0.97× | 1.06× | 1.02× | +2.2% |
 
-The router neither prefers nor avoids unknown streets. Estimated streets are slightly avoided because their typical value (median 11.4) is a bit above the 10.0 used for unknown streets.
+The router neither prefers nor avoids unknown streets. With roughness alone, estimated streets are slightly avoided because their typical value (median 11.4) is a bit above the 10.0 used for unknown streets. The example trip in routing/README.md takes the same route as before the estimates were added.
 
 ## Known limits
 
@@ -189,16 +191,20 @@ The router neither prefers nor avoids unknown streets. Estimated streets are sli
 
 ---
 
-## Traffic flow (Random Forest, not used for routing yet)
+## Why traffic flow is not estimated
 
-Features: OpenStreetMap highway and surface tags (`data/osm_tags_cache.json`, fetched by `fetch_osm_highways.py`; a missing surface is filled in from the highway type), segment geometry and neighbour values.
+An earlier version also filled in `traffic_flow` with a Random Forest (OpenStreetMap highway and surface tags, geometry, neighbour values). It was removed when routing started using stop-and-go from measured streets only (routing/README.md). What we learned, in case someone picks it up again (per-segment `avg_traffic_flow`, not weighted by `points_in_segment` like routing does):
 
-| Held out | Average error, median | Average error, Random Forest | R² | Spearman |
-| :--- | :---: | :---: | :---: | :---: |
-| Whole streets | 0.127 | **0.105** | 0.315 | 0.531 |
-| Whole 1 km blocks | 0.128 | 0.130 | −0.067 | 0.215 |
+| Estimate | Held-out streets: average error | Held-out 1 km blocks: average error |
+| :--- | :---: | :---: |
+| Median | 0.127 | 0.128 |
+| Random Forest | **0.105** | 0.130 (worse than the median) |
+| Neighbour mean | 0.106 | 0.129 |
+| Median per highway + surface type | 0.123 | **0.124** |
 
-**Check before adding it to route costs:** measured values are highest on `track` (0.45) and lowest on `pedestrian` (0.19). That looks more like *cyclist* traffic than car traffic; if so, high traffic flow is good, not something to avoid.
+* Near measured streets, the Random Forest is no better than the neighbour mean.
+* More than 250 m from any measurement, the Random Forest is worse than the median.
+* Unlike roughness, road type does carry some signal for traffic flow (Spearman 0.219 vs 0.061), and it is the only estimate that beats the median far from the data.
 
 ---
 
@@ -206,28 +212,28 @@ Features: OpenStreetMap highway and surface tags (`data/osm_tags_cache.json`, fe
 
 | File | What it is |
 | :--- | :--- |
-| `train_imputer.py` | Builds both estimates, runs the validation, writes the outputs below |
-| `fetch_osm_highways.py` | Downloads highway / surface tags for all 11,011 OpenStreetMap ways (used by traffic flow) |
+| `estimate_roughness.py` | Computes the estimates, runs the validation, writes the outputs below |
 | `export_enriched_geojson.py` | Writes one GeoJSON with every segment's values and sources, for Kepler.gl / QGIS |
-| `../data/ml_predicted_roughness.json` | Roughness estimates for 3,466 unmeasured OpenStreetMap ways |
-| `../data/ml_predicted_traffic_flow.json` | Traffic flow estimates for 6,784 unmeasured ways |
-| `../data/road_network_enriched_heilbronn.geojson` | All 34,243 segments with `roughness`, `traffic_flow`, `highway`, `surface` and their source (`measured` / `estimated` / `unknown`). **Not in git** (16 MB, nothing reads it): run `export_enriched_geojson.py` to create it |
+| `../data/custom/roughness_estimates_heilbronn.json` | Roughness estimates for 3,466 unmeasured OpenStreetMap ways; read by the router |
+| `../data/road_network_enriched_heilbronn.geojson` | All 34,243 segments with `roughness`, `stop_go` and their source (`measured` / `estimated` / `unknown`). **Not in git** (16 MB, nothing reads it): run `export_enriched_geojson.py` to create it |
 | `metrics.json` | Validation numbers and coverage |
-| `roughness_performance.png`, `traffic_flow_performance.png` | Measured vs estimated on held-out streets |
+| `roughness_performance.png` | Measured vs estimated on held-out streets |
 
 ## Rerun
 
+The `ml` dependency group (scikit-learn, matplotlib) is only needed here; the API just reads the estimates file.
+
 ```bash
-.venv/bin/python ml/train_imputer.py
-.venv/bin/python ml/export_enriched_geojson.py
-.venv/bin/python -m pytest tests/
+uv run --group ml python ml/estimate_roughness.py
+uv run python ml/export_enriched_geojson.py
+uv run --group ml pytest   # without --group ml, tests/test_estimate_roughness.py is skipped
 ```
 
 ## Glossary
 
 | Term | Meaning |
 | :--- | :--- |
-| Segment | One piece of road between two points in `road_network_heilbronn.geojson` (34,243 in total) |
+| Segment | One piece of road in `data/ready-made/road_network_heilbronn.geojson` (34,243 in total) |
 | OpenStreetMap way | A named road object in OpenStreetMap; usually several segments |
 | Inverse distance weighting | Average of nearby values where closer values count more (Step 1) |
 | Median | Middle value of all measured roughness values (10.0) |

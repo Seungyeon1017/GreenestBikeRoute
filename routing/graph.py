@@ -1,39 +1,23 @@
-"""The Heilbronn bike graph from OSM (via OSMnx), with ATRAI roughness and traffic flow on every edge."""
+"""The Heilbronn bike graph from OSM (via OSMnx), with ATRAI roughness, stop-and-go and danger on every edge."""
 import json
+import math
 from pathlib import Path
 
+import numpy as np
 import osmnx as ox
+from shapely import LineString, STRtree, points
 
 from download_data import load_features
-from routing.costs import edge_roughness, way_means, way_roughness
+from routing.costs import SNAP_M, air_ranks, clean_overtaking, edge_roughness, point_risks, way_roughness, way_stop_go
 
 CACHE_DIR = Path(__file__).resolve().parent.parent / "cache"
 GRAPH_PATH = CACHE_DIR / "heilbronn_bike.graphml"
+# Written by ml/estimate_roughness.py: roughness of unmeasured OSM ways close to measured streets.
+ESTIMATED_ROUGHNESS_PATH = CACHE_DIR.parent / "data" / "custom" / "roughness_estimates_heilbronn.json"
 PLACE = "Heilbronn, Germany"
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-# Written by ml/train_imputer.py: estimates for unmeasured ways close to measured streets only.
-ML_ROUGHNESS_PATH = DATA_DIR / "ml_predicted_roughness.json"
-ML_TRAFFIC_FLOW_PATH = DATA_DIR / "ml_predicted_traffic_flow.json"
 
 
-def load_ml_values(path):
-    """{osm way id: estimate} from an ml/train_imputer.py output, or None if missing or unreadable."""
-    p = Path(path)
-    if p.exists():
-        try:
-            with open(p, "r", encoding="utf-8") as f:
-                return {int(k): float(v) for k, v in json.load(f).items()}
-        except Exception:
-            return None
-    return None
-
-
-def load_ml_roughness(path=ML_ROUGHNESS_PATH):
-    """Load precomputed ML way roughness predictions if available."""
-    return load_ml_values(path)
-
-
-def load_graph(path=GRAPH_PATH, use_ml=True):
+def load_graph(path=GRAPH_PATH):
     """Load the bike graph from cache/, downloading it from OSM the first time (~2 min).
 
     Delete the .graphml file to pick up newer OSM data.
@@ -45,36 +29,90 @@ def load_graph(path=GRAPH_PATH, use_ml=True):
         ox.settings.cache_folder = CACHE_DIR
         G = ox.graph_from_place(PLACE, network_type="bike")
         ox.save_graphml(G, path)
-    attach_roughness(G, way_roughness(load_features("bumpy_roads_heilbronn")),
-                     ml_way_rough=load_ml_roughness() if use_ml else None)
-    attach_traffic_flow(G, way_means(load_features("traffic_flow_heilbronn"), "avg_traffic_flow"),
-                        ml_way_flow=load_ml_values(ML_TRAFFIC_FLOW_PATH) if use_ml else None)
+    attach_roughness(G, way_roughness(load_features("bumpy_roads_heilbronn")), load_estimates())
+    attach_stop_go(G, way_stop_go(load_features("traffic_flow_heilbronn")))
+    attach_danger(G, point_risks(clean_overtaking(load_features("danger_zones_raw_heilbronn")), "Risk Index Overtaking"),
+                  air_ranks(load_features("air_quality_heilbronn")))
     return G
 
 
-def _attach(G, attr, measured_by_way, estimated_by_way):
-    """Set edge `attr` (None if unknown) and `<attr>_source`: "measured", "ml_predicted" or "default"."""
-    for _, _, d in G.edges(data=True):
-        measured = edge_roughness(d["osmid"], measured_by_way)
-        if measured is not None:
-            d[attr] = measured
-            d[f"{attr}_source"] = "measured"
-        elif estimated_by_way and (estimate := edge_roughness(d["osmid"], estimated_by_way)) is not None:
-            d[attr] = estimate
-            d[f"{attr}_source"] = "ml_predicted"
-        else:
-            d[attr] = None
-            d[f"{attr}_source"] = "default"
+def load_estimates(path=ESTIMATED_ROUGHNESS_PATH):
+    """{OSM way id: estimated roughness} from ml/estimate_roughness.py, or {} if the file is missing."""
+    path = Path(path)
+    return {int(k): v for k, v in json.loads(path.read_text()).items()} if path.exists() else {}
 
 
-def attach_roughness(G, way_rough, ml_way_rough=None):
-    """Set edge attribute `roughness` (0-100, or None where no bike has measured it).
-
-    If `ml_way_rough` is provided, unmeasured streets use the ML predicted roughness.
+def attach_roughness(G, way_rough, estimated=None):
+    """Set edge attributes `roughness` (0-100, or None where unknown) and `roughness_source`:
+    "measured", "estimated" (from nearby measured streets, see ml/README.md) or "unknown".
     """
-    _attach(G, "roughness", way_rough, ml_way_rough)
+    for _, _, d in G.edges(data=True):
+        d["roughness"] = edge_roughness(d["osmid"], way_rough)
+        d["roughness_source"] = "measured"
+        if d["roughness"] is None:
+            d["roughness"] = edge_roughness(d["osmid"], estimated or {})
+            d["roughness_source"] = "unknown" if d["roughness"] is None else "estimated"
 
 
-def attach_traffic_flow(G, way_flow, ml_way_flow=None):
-    """Set edge attribute `traffic_flow` (0-1, or None where unknown), like attach_roughness."""
-    _attach(G, "traffic_flow", way_flow, ml_way_flow)
+def attach_stop_go(G, way_stop):
+    """Set edge attribute `stop_go` (0-1, or None where no bike has measured it)."""
+    for _, _, d in G.edges(data=True):
+        d["stop_go"] = edge_roughness(d["osmid"], way_stop)
+
+
+def _to_metres(lonlat, lat0):
+    """Equirectangular projection around latitude lat0; good to well under 1% across a city."""
+    xy = np.asarray(lonlat, dtype=float).reshape(-1, 2)
+    return np.column_stack([xy[:, 0] * math.cos(math.radians(lat0)), xy[:, 1]]) * 111_320
+
+
+def _streets(G, lat0):
+    """Each street once, as a line in metres, with the directed edges (u, v, key) that run along it.
+
+    A two-way street is two edges with the same geometry, one per direction.
+    """
+    streets = {}
+    for u, v, k, d in G.edges(keys=True, data=True):
+        street = (min(u, v), max(u, v), round(float(d["length"]), 1))
+        if street not in streets:
+            coords = d["geometry"].coords if "geometry" in d else [(G.nodes[n]["x"], G.nodes[n]["y"]) for n in (u, v)]
+            streets[street] = (LineString(_to_metres(list(coords), lat0)), [])
+        streets[street][1].append((u, v, k))
+    return list(streets.values())
+
+
+def snap_to_streets(lines, lonlat, lat0, max_m=SNAP_M):
+    """For each point, the index of the nearest line within max_m metres, or -1."""
+    snapped = np.full(len(lonlat), -1)
+    if len(lonlat):
+        point_idx, line_idx = STRtree(lines).query_nearest(points(_to_metres(lonlat, lat0)), max_distance=max_m)
+        snapped[point_idx] = line_idx
+    return snapped
+
+
+def attach_danger(G, overtaking, pm):
+    """Snap the overtaking and PM points to their nearest street and set edge attributes:
+    `danger` (summed Risk Index Overtaking), `danger_points` (how many) and
+    `pm_risk` (mean air rank of the PM points, or None where none was measured).
+
+    `overtaking` and `pm` are (lon/lat list, risk list) pairs from point_risks.
+    """
+    lat0 = float(np.mean([y for _, y in G.nodes(data="y")]))
+    streets = _streets(G, lat0)
+    lines = [line for line, _ in streets]
+
+    def per_street(lonlat, risks):
+        snapped = snap_to_streets(lines, lonlat, lat0)
+        hit = snapped >= 0
+        n = np.bincount(snapped[hit], minlength=len(lines))
+        total = np.bincount(snapped[hit], weights=np.asarray(risks, dtype=float)[hit], minlength=len(lines))
+        return n, total
+
+    danger_n, danger_sum = per_street(*overtaking)
+    pm_n, pm_sum = per_street(*pm)
+    for i, (_, edges) in enumerate(streets):
+        for u, v, k in edges:
+            d = G.edges[u, v, k]
+            d["danger"] = float(danger_sum[i])
+            d["danger_points"] = int(danger_n[i])
+            d["pm_risk"] = float(pm_sum[i] / pm_n[i]) if pm_n[i] else None
