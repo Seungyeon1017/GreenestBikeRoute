@@ -9,9 +9,17 @@ import pandas as pd
 # 10 is the median of the measured Heilbronn segments.
 DEFAULT_ROUGHNESS = 10.0
 
-# "How much do you hate bumps". Roughness clusters around 10, so a bump_penalty of 2
-# barely changes routes; around 10 trades a ~1-2% detour for smoother streets.
-DEFAULT_BUMP_PENALTY = 10.0
+# Bad streets: the worst tenth of the measured Heilbronn bike graph's street length for roughness, air and
+# stop-and-go. Routing counts each of them by how much worse a street is than a typical one (badness): 0 at the
+# typical value (also what unmeasured streets get) or better, 1 at this line, more beyond. Routes report the metres
+# past it (bumpy_m, bad_air_m, stop_go_m).
+BUMPY_ROUGHNESS = 20.0  # roughness (measured or estimated) at least this
+BAD_AIR_RISK = 0.555  # pm_risk at least this
+STOP_GO_HEAVY = 0.77  # stop_go at least this
+
+# "How much do you hate bumps", and the same for air and stop-and-go below: a street on the bad line costs
+# 1 + penalty times as much per metre as a typical one (see edge_cost).
+DEFAULT_BUMP_PENALTY = 0.5
 
 # A danger point counts for its nearest street when within this distance (GPS noise).
 # Catches ~90% of the points inside the city; the rest are mostly rides outside Heilbronn.
@@ -19,8 +27,10 @@ SNAP_M = 25.0
 
 # danger_zones_raw: points where a car overtook a bike, Risk Index Overtaking 0-1. They add up,
 # so this is the detour in metres you'd ride to pass one fewer full-risk overtaking spot.
-# Spots cluster on a few main roads: 25 already avoids most of them for a few % detour.
-DEFAULT_DANGER_PENALTY = 25.0
+# The metres are scaled by the street's other dislikes like its length. Spots cluster on a few main roads: over 40
+# random trips, 10 rides past a third of the shortest route's spots (25 did about the same while every street
+# still cost ~2.5x its length).
+DEFAULT_DANGER_PENALTY = 10.0
 
 # Readings of 25 cm or less are ignored (see "Which overtaking readings count" in routing/README.md).
 # 25 cm is also where the overtaking_distance dataset starts counting.
@@ -31,7 +41,7 @@ MIN_OVERTAKING_CM = 25.0
 # reading. Streets agree only weakly between bikes (rank correlation ~0.24 between halves of the bike sensors,
 # ~0.39 between halves of the days), so the default penalty is kept mild.
 DEFAULT_PM_RISK = 0.5
-DEFAULT_PM_PENALTY = 0.5
+DEFAULT_PM_PENALTY = 0.25
 
 # air_scores: a reading this far above its ride's median (in weighted log ratio to the senseBox:home
 # background) scores 1, as far below scores 0. 0.3 is about 1.35x the ride's usual air; ~10% of rows reach it.
@@ -63,9 +73,7 @@ PM_WEIGHTS = {"Finedust PM1": 0.4, "Finedust PM2.5": 0.3, "Finedust PM4": 0.2, "
 MEDIAN_FLOW = 0.37
 FLOW_PRIOR_POINTS = 5
 DEFAULT_STOP_GO = 1 - MEDIAN_FLOW
-# Way means span ~0.5-0.85 stop_go (5-95%), narrower than air ranks, so a mild default still
-# trades a short detour for streets where bikes don't keep stopping.
-DEFAULT_STOP_PENALTY = 0.5
+DEFAULT_STOP_PENALTY = 0.25
 # Waiting for a lift and getting in and out, as metres of riding at stop_penalty 1 (about 25 s at 15 km/h).
 LIFT_WAIT_M = 100
 
@@ -93,7 +101,7 @@ DEFAULT_LIT = 0.5
 # length-weighted chance of being lit from 0.80 to 0.91; 2 adds little more (0.92 for a 4% detour).
 DEFAULT_DARK_PENALTY = 1.0
 # bike_friendly (OSM bike paths, bike lanes and bike routes, data/custom/bike_friendly_streets_heilbronn.*): streets
-# NOT on that list cost this much more per metre, so routes prefer the ones on it. 0 leaves routes as they were;
+# NOT on that list cost 1 + this times as much, so routes prefer the ones on it. 0 leaves routes as they were;
 # 1 makes other streets feel twice as long.
 DEFAULT_PREFER_BIKE_FRIENDLY = 0.0
 
@@ -197,17 +205,28 @@ def point_risks(features, risk_key):
     return [tuple(f["geometry"]["coordinates"]) for f in keep], [f["properties"][risk_key] for f in keep]
 
 
+def badness(value, typical, bad):
+    """How much worse than a typical street: 0 at `typical` or better, 1 at `bad` (the bad-street line), more beyond."""
+    return max(0.0, (value - typical) / (bad - typical))
+
+
 def edge_cost(length_m, normalized_roughness=DEFAULT_ROUGHNESS, bump_penalty=DEFAULT_BUMP_PENALTY,
               danger=0.0, danger_penalty=DEFAULT_DANGER_PENALTY,
               pm_risk=DEFAULT_PM_RISK, pm_penalty=DEFAULT_PM_PENALTY,
               stop_go=DEFAULT_STOP_GO, stop_penalty=DEFAULT_STOP_PENALTY, lift_ends=0, speed_kmh=MEDIAN_SPEED_KMH,
               sun=0.0, shade_penalty=DEFAULT_SHADE_PENALTY, dark=0.0, dark_penalty=DEFAULT_DARK_PENALTY,
               bike_friendly=False, prefer_bike_friendly=DEFAULT_PREFER_BIKE_FRIENDLY):
-    """Routing cost: plain length, inflated on rough, polluted, stop-and-go, sunny (`sun`, by day), unlit
-    (`dark`, at night) and not bike-friendly streets, plus a fixed
-    `danger_penalty` metres per unit of overtaking risk (`danger` = summed risk on the edge) and a fixed
-    `stop_penalty * LIFT_WAIT_M` metres per lift ridden through. A lift sits where two edges meet, so each
-    edge ending at one (`lift_ends` = 0, 1 or 2) carries half of it.
+    """Routing cost: plain length plus `danger_penalty` metres per unit of overtaking risk (`danger` = summed risk on
+    the edge), times one factor per dislike: 1 + penalty x badness for roughness, air and stop-and-go (0 on a
+    typical street, 1 on the bad-street line), 1 + penalty x share for sun (`sun`, by day) and unlit (`dark`, at
+    night), 1 + prefer_bike_friendly on streets that are not bike-friendly. Plus a fixed `stop_penalty *
+    LIFT_WAIT_M` metres per lift ridden through. A lift sits where two edges meet, so each edge ending at one
+    (`lift_ends` = 0, 1 or 2) carries half of it.
+
+    The factors multiply, so raising one penalty never drowns the others: two streets that differ only in roughness
+    keep their cost ratio however much you dislike, say, non-bike paths. And only worse-than-typical streets cost
+    extra, so a dislike that is about the same everywhere (most streets have typical stop-and-go) doesn't inflate
+    every street alike, which would leave length to decide and send routes back to the shortest one.
 
     `speed_kmh` turns length into riding time, as metres at MEDIAN_SPEED_KMH: a street ridden at half the
     median speed costs twice its length. The default (the median) leaves the length as it is.
@@ -215,6 +234,9 @@ def edge_cost(length_m, normalized_roughness=DEFAULT_ROUGHNESS, bump_penalty=DEF
     Normalized Roughness is 0-100, in the live data and the ATRAI docs.
     """
     base = length_m * (MEDIAN_SPEED_KMH / speed_kmh)
-    return (base * (1 + bump_penalty * normalized_roughness / 100 + pm_penalty * pm_risk + stop_penalty * stop_go
-                    + shade_penalty * sun + dark_penalty * dark + (0 if bike_friendly else prefer_bike_friendly))
-            + danger_penalty * danger + stop_penalty * LIFT_WAIT_M * lift_ends / 2)
+    factor = ((1 + bump_penalty * badness(normalized_roughness, DEFAULT_ROUGHNESS, BUMPY_ROUGHNESS))
+              * (1 + pm_penalty * badness(pm_risk, DEFAULT_PM_RISK, BAD_AIR_RISK))
+              * (1 + stop_penalty * badness(stop_go, DEFAULT_STOP_GO, STOP_GO_HEAVY))
+              * (1 + shade_penalty * sun) * (1 + dark_penalty * dark)
+              * (1 + (0 if bike_friendly else prefer_bike_friendly)))
+    return (base + danger_penalty * danger) * factor + stop_penalty * LIFT_WAIT_M * lift_ends / 2

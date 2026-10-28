@@ -11,18 +11,18 @@ LonLat = tuple[float, float]  # GeoJSON order: [longitude, latitude]
 EXAMPLE_TRIP = {"from_lat": 49.14838, "from_lon": 9.22687, "to_lat": 49.1262, "to_lon": 9.22439}
 ROUTE_EXAMPLE = {
     "type": "Feature",
-    # Shortened: the real line has 157 points.
+    # Shortened: the real line has 160 points.
     "geometry": {"type": "LineString",
-                 "coordinates": [[9.2268683, 49.148385], [9.2228294, 49.1386103], [9.2243909, 49.1262013]]},
+                 "coordinates": [[9.2268683, 49.148385], [9.2227619, 49.139049], [9.2243909, 49.1262013]]},
     "properties": {
-        "bump_penalty": 10.0, "danger_penalty": 25.0, "pm_penalty": 0.5, "stop_penalty": 0.5, "prefer_time": False,
+        "bump_penalty": 0.5, "danger_penalty": 10.0, "pm_penalty": 0.25, "stop_penalty": 0.25, "prefer_time": False,
         "shade_penalty": 0.5, "dark_penalty": 1.0, "prefer_bike_friendly": 0.0, "depart_time": None, "daylight": None, "shade_slot": None,
-        "length_m": 3088.2, "duration_s": 940, "climb_m": 24.6, "kcal": 143.8, "speed_measured_share": 0.97, "mean_roughness": 12.3, "measured_share": 0.97, "estimated_share": 0.0,
-        "danger_points": 21, "danger_risk": 17.12, "mean_pm_risk": 0.511, "pm_measured_share": 0.65,
-        "mean_stop_go": 0.691, "stop_measured_share": 0.97,
-        "mean_shade": None, "shade_known_share": 1.0, "mean_lit": 0.986, "lit_known_share": 0.97, "lifts": 0,
+        "length_m": 3257.1, "duration_s": 959, "climb_m": 26.2, "kcal": 147.6, "speed_measured_share": 0.89, "mean_roughness": 12.4, "measured_share": 0.88, "estimated_share": 0.0,
+        "danger_points": 11, "danger_risk": 9.0, "mean_pm_risk": 0.506, "pm_measured_share": 0.63,
+        "mean_stop_go": 0.68, "stop_measured_share": 0.89,
+        "mean_shade": None, "shade_known_share": 0.95, "mean_lit": 0.986, "lit_known_share": 0.89, "lifts": 0,
         "reported_closures": 0,
-        "bumpy_m": 97, "bad_air_m": 369, "stop_go_m": 414, "sunny_m": None, "unlit_m": None, "bike_friendly_m": 1266, "pushed_m": 0,
+        "bumpy_m": 202, "bad_air_m": 292, "stop_go_m": 379, "sunny_m": None, "unlit_m": None, "bike_friendly_m": 1160, "pushed_m": 0,
     },
 }
 SHORTEST_EXAMPLE = {
@@ -41,7 +41,7 @@ SHORTEST_EXAMPLE = {
     },
 }
 
-# /route/grade for the example trip, shortened to its first 2 of 12 pieces; tests/test_heilbronn.py checks them and the summary.
+# /route/grade for the example trip, shortened to its first 2 of 14 pieces; tests/test_heilbronn.py checks them and the summary.
 GRADE_EXAMPLE = {
     "type": "FeatureCollection",
     "features": [
@@ -58,10 +58,10 @@ GRADE_EXAMPLE = {
                         "start_m": 110.4}},
     ],
     "summary": {
-        "length_m": 3088.2, "climb_m": 24.6, "descent_m": 6.4, "start_elevation_m": 162.7, "end_elevation_m": 180.8,
+        "length_m": 3257.1, "climb_m": 26.2, "descent_m": 8.0, "start_elevation_m": 162.7, "end_elevation_m": 180.8,
         "max_grade_pct": 4.1, "max_descent_grade_pct": -3.0,
-        "length_by_severity_m": {"flat": 2735.3, "gentle": 343.3, "noticeable": 9.6, "steep": 0.0, "very_steep": 0.0},
-        "kcal": 143.8,
+        "length_by_severity_m": {"flat": 2851.5, "gentle": 396.0, "noticeable": 9.6, "steep": 0.0, "very_steep": 0.0},
+        "kcal": 147.6,
     },
 }
 
@@ -162,7 +162,7 @@ class RouteComparison(BaseModel):
     same_path: bool = Field(description="True if the route follows the same streets as the shortest route")
 
     model_config = {"json_schema_extra": {"example": {
-        "route": ROUTE_EXAMPLE, "shortest": SHORTEST_EXAMPLE, "detour_pct": 0.9, "extra_time_pct": 0.0, "same_path": False}}}
+        "route": ROUTE_EXAMPLE, "shortest": SHORTEST_EXAMPLE, "detour_pct": 6.4, "extra_time_pct": 2.0, "same_path": False}}}
 
 
 class DayPeriod(RouteComparison):

@@ -13,9 +13,9 @@ from shapely import LineString, Point, STRtree
 from shapely.ops import substring
 
 from routing.calories import DEFAULT_WEIGHT_KG, ride_kcal, route_climb
-from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_LIT, \
+from routing.costs import BAD_AIR_RISK, BUMPY_ROUGHNESS, DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_LIT, \
     DEFAULT_PM_PENALTY, DEFAULT_PM_RISK, DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_ROUGHNESS, DEFAULT_SHADE, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_GO, \
-    DEFAULT_STOP_PENALTY, LIFT_WAIT_M, MEDIAN_SPEED_KMH, edge_cost, osm_way_ids
+    DEFAULT_STOP_PENALTY, LIFT_WAIT_M, MEDIAN_SPEED_KMH, STOP_GO_HEAVY, edge_cost, osm_way_ids
 from routing.shadow import sun_position
 
 # Start/end points further than this from any street are treated as outside Heilbronn.
@@ -36,11 +36,6 @@ SCOOTER_PUSH_HIGHWAYS = {"footway", "path", "pedestrian"}
 WALK_KMH = 4.8
 # day_routes tries departure times this many minutes apart.
 DAY_STEP_MIN = 15
-# A route reports how many metres it rides on bad streets, so two routes can be compared in metres (/route/compare).
-# Bad = the worst tenth of the measured Heilbronn bike graph's street length for that factor.
-BUMPY_ROUGHNESS = 20.0  # roughness (measured or estimated) at least this
-BAD_AIR_RISK = 0.555  # pm_risk at least this
-STOP_GO_HEAVY = 0.77  # stop_go at least this
 
 
 class RouteError(ValueError):
