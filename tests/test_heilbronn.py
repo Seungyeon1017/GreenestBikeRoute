@@ -6,12 +6,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
+from backend.schemas import EXAMPLE_TRIP, RouteComparison
 from routing.graph import GRAPH_PATH, load_graph
 
 pytestmark = pytest.mark.skipif(not GRAPH_PATH.exists(), reason="Heilbronn graph not cached yet")
 
 # A trip across the south-east of the city where the shortest route is rough.
-TRIP = {"from_lat": 49.14838, "from_lon": 9.22687, "to_lat": 49.1262, "to_lon": 9.22439}
+TRIP = EXAMPLE_TRIP
 
 
 @pytest.fixture(scope="module")
@@ -65,3 +66,14 @@ def test_route_starts_and_ends_near_the_requested_points(client):
 
 def test_response_is_plain_json(client):
     json.dumps(client.get("/route", params=TRIP).json())  # no numpy types leak out
+
+
+def test_docs_example_is_a_real_response(client):
+    """The /route and /route/compare examples in /docs are what the example trip returns."""
+    example = RouteComparison.model_config["json_schema_extra"]["example"]
+    real = client.get("/route/compare", params=TRIP).json()
+    for key in ("route", "shortest"):
+        assert real[key]["properties"] == example[key]["properties"]
+        coords = real[key]["geometry"]["coordinates"]
+        assert example[key]["geometry"]["coordinates"] == [coords[0], coords[len(coords) // 2], coords[-1]]
+    assert (real["detour_pct"], real["same_path"]) == (example["detour_pct"], example["same_path"])

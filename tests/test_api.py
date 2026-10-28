@@ -74,7 +74,7 @@ def test_unroutable_point_is_400(client):
 def test_penalty_is_documented(client):
     spec = client.get("/openapi.json").json()
     bump_penalty = next(p for p in spec["paths"]["/route"]["get"]["parameters"] if p["name"] == "bump_penalty")
-    assert bump_penalty["description"] == "How much do you hate bumps"
+    assert bump_penalty["description"].startswith("How much do you hate bumps. 0 = ignore")
 
 
 def test_danger_penalties_are_passed_through(client):
