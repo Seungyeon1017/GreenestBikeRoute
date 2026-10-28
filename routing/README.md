@@ -73,7 +73,7 @@ Note: This is a judgement from the data; the hardware owners haven't confirmed i
 
 - Each overtaking and PM point is assigned to the nearest street within **25 m** (GPS noise). A point with no street that close is ignored. That is 13% of the overtaking points we use and 16% of the PM points.
 - A two-way street gets the same values in both directions.
-- The start and end you request are moved to the nearest street corner. If that corner is more than 500 m away (for example outside Heilbronn), the API returns an error (HTTP 400).
+- The start and end you request are moved onto the nearest street, which is split there so the route can enter or leave it. If that street is more than 500 m away (for example outside Heilbronn), the API returns an error (HTTP 400).
 
 ## Example
 

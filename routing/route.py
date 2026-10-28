@@ -1,27 +1,121 @@
 """A-to-B routing on the bike graph, returned as GeoJSON."""
+import math
+import threading
+from contextlib import contextmanager
+
 import networkx as nx
-import numpy as np
-import osmnx as ox
+from shapely import LineString, Point, STRtree
+from shapely.ops import substring
 
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_PM_PENALTY, DEFAULT_PM_RISK, \
     DEFAULT_ROUGHNESS, DEFAULT_STOP_GO, DEFAULT_STOP_PENALTY, edge_cost
 
 # Start/end points further than this from any street are treated as outside Heilbronn.
 MAX_SNAP_M = 500
+# Routing temporarily splits streets in the shared graph, so one request at a time may use it.
+_GRAPH_LOCK = threading.Lock()
 
 
 class RouteError(ValueError):
     """The request can't be routed (point off the map, no connection, ...)."""
 
 
-def nearest_node(G, lat, lon):
-    """The graph node closest to (lat, lon) and its distance in metres."""
-    nodes = list(G.nodes)
-    ys = np.array([G.nodes[n]["y"] for n in nodes])
-    xs = np.array([G.nodes[n]["x"] for n in nodes])
-    dist = ox.distance.great_circle(lat, lon, ys, xs)
-    i = int(np.argmin(dist))
-    return nodes[i], float(dist[i])
+class _Plane:
+    """Equirectangular metres around a latitude; good to well under 1% across a city."""
+
+    def __init__(self, lat0):
+        self.scale = 111_320
+        self.cos_lat = math.cos(math.radians(lat0))
+
+    def to_m_point(self, lon, lat):
+        return lon * self.cos_lat * self.scale, lat * self.scale
+
+    def to_lonlat_point(self, x, y):
+        return x / (self.cos_lat * self.scale), y / self.scale
+
+    def to_m(self, line):
+        return LineString([self.to_m_point(x, y) for x, y in line.coords])
+
+    def to_lonlat(self, line):
+        return LineString([self.to_lonlat_point(x, y) for x, y in line.coords])
+
+
+def _edge_line(G, u, v, d):
+    """The edge's street as (lon, lat) from u to v: its OSM geometry, or a straight line between the corners."""
+    if "geometry" in d:
+        return d["geometry"]
+    return LineString([(G.nodes[u]["x"], G.nodes[u]["y"]), (G.nodes[v]["x"], G.nodes[v]["y"])])
+
+
+def _nearest_edge(G, lat, lon):
+    """The edge (u, v, key, data) closest to (lat, lon), its distance in metres and the point on it."""
+    plane = _Plane(lat)
+    edges = list(G.edges(keys=True, data=True))
+    lines = [plane.to_m(_edge_line(G, u, v, d)) for u, v, _, d in edges]
+    point = Point(plane.to_m_point(lon, lat))
+    i = int(STRtree(lines).query_nearest(point)[0])
+    u, v, key, data = edges[i]
+    on_street = lines[i].interpolate(lines[i].project(point))
+    return (u, v, key, data), point.distance(on_street), plane.to_lonlat_point(on_street.x, on_street.y)
+
+
+def _metres_apart(G, node, point_lonlat, plane):
+    a = plane.to_m_point(G.nodes[node]["x"], G.nodes[node]["y"])
+    return Point(a).distance(Point(plane.to_m_point(*point_lonlat)))
+
+
+def _split_edge(G, u, v, data, node, point_lonlat, plane):
+    """Replace edge u->v by u->node and node->v, cut where it passes `point_lonlat`."""
+    line = plane.to_m(_edge_line(G, u, v, data))
+    cut = line.project(Point(plane.to_m_point(*point_lonlat)))
+    share = cut / line.length
+    first = plane.to_lonlat(substring(line, 0, cut))
+    second = plane.to_lonlat(substring(line, cut, line.length))
+    G.add_edge(u, node, **{**data, "length": data["length"] * share, "geometry": first})
+    G.add_edge(node, v, **{**data, "length": data["length"] * (1 - share), "geometry": second})
+
+
+@contextmanager
+def _snapped_ends(G, origin, destination):
+    """Yield graph nodes for origin and destination, both (lat, lon).
+
+    Each end point is put on the street nearest to it: that street is split in two at the point, and
+    the point becomes a node, in both directions. G is restored when the block ends.
+    """
+    undo = []  # (node, [(u, v, key, data) removed edges]) in the order they were made
+    ends = []
+    try:
+        with _GRAPH_LOCK:
+            for label, (lat, lon) in (("start", origin), ("end", destination)):
+                (u, v, key, data), dist, point_lonlat = _nearest_edge(G, lat, lon)
+                if dist > MAX_SNAP_M:
+                    raise RouteError(f"{label} point is {dist:.0f} m from the nearest Heilbronn street")
+                plane = _Plane(lat)
+                corner = next((n for n in (u, v) if _metres_apart(G, n, point_lonlat, plane) < 1), None)
+                if corner is not None:  # the point is a junction already, nothing to split
+                    ends.append(corner)
+                    continue
+                node = f"snap-{label}"
+                G.add_node(node, x=point_lonlat[0], y=point_lonlat[1])
+                removed = []
+                # Split the street in both directions, so the point can be reached and left either way.
+                for a, b in ((u, v), (v, u)):
+                    for k, d in list(G[a][b].items()):
+                        if d.get("osmid") != data.get("osmid"):
+                            continue
+                        _split_edge(G, a, b, d, node, point_lonlat, plane)
+                        removed.append((a, b, k, d))
+                        G.remove_edge(a, b, k)
+                undo.append((node, removed))
+                ends.append(node)
+            if ends[0] == ends[1]:
+                raise RouteError("start and end snap to the same spot")
+            yield ends
+    finally:
+        for node, removed in reversed(undo):
+            G.remove_node(node)
+            for a, b, k, d in removed:
+                G.add_edge(a, b, key=k, **d)
 
 
 def _roughness(d):
@@ -40,20 +134,6 @@ def _cost(d, penalties):
     bump_penalty, danger_penalty, pm_penalty, stop_penalty = penalties
     return edge_cost(d["length"], _roughness(d), bump_penalty,
                      d.get("danger", 0.0), danger_penalty, _pm_risk(d), pm_penalty, _stop_go(d), stop_penalty)
-
-
-def _snap(G, origin, destination):
-    """The graph nodes for origin and destination, both (lat, lon)."""
-    ends = []
-    for label, (lat, lon) in (("start", origin), ("end", destination)):
-        node, dist = nearest_node(G, lat, lon)
-        if dist > MAX_SNAP_M:
-            raise RouteError(f"{label} point is {dist:.0f} m from the nearest Heilbronn street")
-        ends.append(node)
-    a, b = ends
-    if a == b:
-        raise RouteError("start and end snap to the same street corner")
-    return a, b
 
 
 def _route_feature(G, a, b, penalties):
@@ -124,8 +204,8 @@ def find_route(G, origin, destination, bump_penalty=DEFAULT_BUMP_PENALTY,
     streets (bump_penalty), spots where cars overtook closely (danger_penalty), streets with bad
     air (pm_penalty) and streets where bikes keep stopping (stop_penalty).
     """
-    a, b = _snap(G, origin, destination)
-    feature = _route_feature(G, a, b, (bump_penalty, danger_penalty, pm_penalty, stop_penalty))
+    with _snapped_ends(G, origin, destination) as (a, b):
+        feature = _route_feature(G, a, b, (bump_penalty, danger_penalty, pm_penalty, stop_penalty))
     return {"type": "FeatureCollection", "features": [feature]}
 
 
@@ -133,9 +213,9 @@ def compare_routes(G, origin, destination, bump_penalty=DEFAULT_BUMP_PENALTY,
                    danger_penalty=DEFAULT_DANGER_PENALTY, pm_penalty=DEFAULT_PM_PENALTY,
                    stop_penalty=DEFAULT_STOP_PENALTY):
     """The route from find_route next to the shortest route, with how much they differ."""
-    a, b = _snap(G, origin, destination)
-    route = _route_feature(G, a, b, (bump_penalty, danger_penalty, pm_penalty, stop_penalty))
-    shortest = _route_feature(G, a, b, (0, 0, 0, 0))
+    with _snapped_ends(G, origin, destination) as (a, b):
+        route = _route_feature(G, a, b, (bump_penalty, danger_penalty, pm_penalty, stop_penalty))
+        shortest = _route_feature(G, a, b, (0, 0, 0, 0))
     return {
         "route": route,
         "shortest": shortest,
