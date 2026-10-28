@@ -1,4 +1,5 @@
-"""Helpers for turning the ATRAI bumpy_roads, danger_zones, air_quality, traffic_flow and speed_map data into routing costs on the OSM graph."""
+"""Helpers for turning the ATRAI bumpy_roads, danger_zones, air_quality, traffic_flow and speed_map data, plus shade
+and street lighting, into routing costs on the OSM graph."""
 import ast
 
 import numpy as np
@@ -62,6 +63,20 @@ SPEED_PRIOR_POINTS = 5
 # Ways measured slower are raised to walking pace: segments of ~2 km/h with hundreds of points are bikes pushed
 # or waiting, and would otherwise cost like a street 3x+ as long.
 MIN_SPEED_KMH = 5.0
+
+# Shade (routing.shadow): share of a street in building or tree shadow, 0-1, per time slot of a summer day.
+# Used only by day (sun above the horizon at the departure time): routing uses sun = 1 - shade, length-scaled
+# like roughness. Most streets get little shade (median ~0.05 at noon, ~0.16 at 09 and 18), so unknown streets get 0.1.
+DEFAULT_SHADE = 0.1
+# Over 30 random trips of 1.5 km or more at 15:00, shade_penalty 0.5 changes 23 routes for a 0.5% mean detour
+# (mean shade 0.18 -> 0.21); 2 gives a 3% detour for 0.26.
+DEFAULT_SHADE_PENALTY = 0.5
+# Street lighting (routing.lighting): chance a street is lit at night, 0-1. Used only after dark (sun below the
+# horizon at the departure time): routing uses dark = 1 - lit, length-scaled. Unknown streets get 0.5.
+DEFAULT_LIT = 0.5
+# Over the same trips at 21:00, dark_penalty 1 changes 26 of 30 routes for a 3% mean detour, raising the
+# length-weighted chance of being lit from 0.80 to 0.91; 2 adds little more (0.92 for a 4% detour).
+DEFAULT_DARK_PENALTY = 1.0
 
 
 def osm_way_ids(osmid):
@@ -168,8 +183,10 @@ def point_risks(features, risk_key):
 def edge_cost(length_m, normalized_roughness=DEFAULT_ROUGHNESS, bump_penalty=DEFAULT_BUMP_PENALTY,
               danger=0.0, danger_penalty=DEFAULT_DANGER_PENALTY,
               pm_risk=DEFAULT_PM_RISK, pm_penalty=DEFAULT_PM_PENALTY,
-              stop_go=DEFAULT_STOP_GO, stop_penalty=DEFAULT_STOP_PENALTY, lift_ends=0, speed_kmh=MEDIAN_SPEED_KMH):
-    """Routing cost: plain length, inflated on rough, polluted and stop-and-go streets, plus a fixed
+              stop_go=DEFAULT_STOP_GO, stop_penalty=DEFAULT_STOP_PENALTY, lift_ends=0, speed_kmh=MEDIAN_SPEED_KMH,
+              sun=0.0, shade_penalty=DEFAULT_SHADE_PENALTY, dark=0.0, dark_penalty=DEFAULT_DARK_PENALTY):
+    """Routing cost: plain length, inflated on rough, polluted, stop-and-go, sunny (`sun`, by day) and unlit
+    (`dark`, at night) streets, plus a fixed
     `danger_penalty` metres per unit of overtaking risk (`danger` = summed risk on the edge) and a fixed
     `stop_penalty * LIFT_WAIT_M` metres per lift ridden through. A lift sits where two edges meet, so each
     edge ending at one (`lift_ends` = 0, 1 or 2) carries half of it.
@@ -180,5 +197,6 @@ def edge_cost(length_m, normalized_roughness=DEFAULT_ROUGHNESS, bump_penalty=DEF
     Normalized Roughness is 0-100, in the live data and the ATRAI docs.
     """
     base = length_m * (MEDIAN_SPEED_KMH / speed_kmh)
-    return (base * (1 + bump_penalty * normalized_roughness / 100 + pm_penalty * pm_risk + stop_penalty * stop_go)
+    return (base * (1 + bump_penalty * normalized_roughness / 100 + pm_penalty * pm_risk + stop_penalty * stop_go
+                    + shade_penalty * sun + dark_penalty * dark)
             + danger_penalty * danger + stop_penalty * LIFT_WAIT_M * lift_ends / 2)

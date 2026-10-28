@@ -71,6 +71,13 @@ OSMnx's bike network, with these changes:
 - Over 40 random trips of 1.5 km or more: with only `prefer_time` (penalties 0), 95% of routes change, 5.1% longer on average (max 21%) and 8.7% faster (max 29%). With the default penalties, switching it on changes 90% of routes, 3.4% longer and 12.1% faster than the default route.
 - **Map overlay:** `/speed` serves the raw segments as `speed_kmh` (higher = faster, unlike the other overlays).
 
+### Shade and street lighting, chosen by `depart_time`
+
+- Both apply only with a `depart_time`. The sun's altitude at that time and date (NOAA equations, `routing.shadow.sun_position`) decides which one: above the horizon (-0.833°, as for sunrise and sunset), sunny streets cost `shade_penalty × (1 − shade)` times their length; below it, unlit streets cost `dark_penalty × (1 − lit)` times their length.
+- **Shade** (`data/custom/shadow_heilbronn.json`, building and tree shadow per OSM way) exists for 21 July at 09, 12, 15 and 18 h; a route uses the slot nearest its time of day, whatever the date. Ways without it fall back to the static tree canopy (`shade_heilbronn.json`), then 0.1 (most streets get little shade: median ~0.05 at noon). Over 30 random trips at 15:00, `shade_penalty` 0.5 changes 23 routes for a 0.5% mean detour (mean shade 0.18 → 0.21).
+- **Lighting** (`data/custom/lighting_heilbronn.json`) is the chance a way is lit: OSM `lit=*`, else Mapillary street lights, else a road-type and buildings rule. Unknown ways get 0.5; about 11% of the graph's ways have no value yet. Over the same trips at 21:00, `dark_penalty` 1 changes 26 of 30 routes for a 3% mean detour, raising the chance of being lit from 0.80 to 0.91.
+- Routes report `daylight`, `shade_slot`, `mean_shade` (by day only), `mean_lit` and the share of the route each is known for. **Map overlays:** `/shade` (all slots per street, plus `slots`) and `/lighting`.
+
 ## Which overtaking readings count
 
 Each row in `danger_zones_raw_heilbronn` is one overtake, with the gap between car and bike as the sensor measured it. Route planning and `/danger` only count gaps of **more than 25 cm**:

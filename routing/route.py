@@ -3,19 +3,27 @@ import math
 import threading
 import weakref
 from contextlib import contextmanager
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import networkx as nx
 import shapely
 from shapely import LineString, Point, STRtree
 from shapely.ops import substring
 
-from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_PM_PENALTY, DEFAULT_PM_RISK, \
-    DEFAULT_ROUGHNESS, DEFAULT_STOP_GO, DEFAULT_STOP_PENALTY, LIFT_WAIT_M, MEDIAN_SPEED_KMH, edge_cost, osm_way_ids
+from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_LIT, \
+    DEFAULT_PM_PENALTY, DEFAULT_PM_RISK, DEFAULT_ROUGHNESS, DEFAULT_SHADE, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_GO, \
+    DEFAULT_STOP_PENALTY, LIFT_WAIT_M, MEDIAN_SPEED_KMH, edge_cost, osm_way_ids
+from routing.shadow import sun_position
 
 # Start/end points further than this from any street are treated as outside Heilbronn.
 MAX_SNAP_M = 500
 # Routing temporarily splits streets in the shared graph, so one request at a time may use it.
 _GRAPH_LOCK = threading.Lock()
+# Departure times without a time zone are Heilbronn local time.
+LOCAL_TZ = ZoneInfo("Europe/Berlin")
+# Sunrise and sunset: the top of the sun on the horizon, refraction included (the usual -0.833 deg).
+SUNSET_ALTITUDE = -0.833
 
 
 class RouteError(ValueError):
@@ -186,28 +194,71 @@ def _speed_kmh(d):
     return MEDIAN_SPEED_KMH if d.get("speed_kmh") is None else d["speed_kmh"]
 
 
-def _cost(d, penalties):
-    bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time = penalties
+def _shade(d, slot):
+    return DEFAULT_SHADE if d.get("shade") is None else d["shade"][slot]
+
+
+def _lit(d):
+    return DEFAULT_LIT if d.get("lit") is None else d["lit"]
+
+
+def local_time(depart_time):
+    """`depart_time` in Heilbronn local time; one without a time zone is taken as local time already."""
+    return depart_time.replace(tzinfo=LOCAL_TZ) if depart_time.tzinfo is None else depart_time.astimezone(LOCAL_TZ)
+
+
+def sky(G, depart_time):
+    """(shade slot, dark) for a trip leaving at `depart_time` (a datetime, or None when the time doesn't matter).
+
+    dark: the sun is below the horizon, after sunset or before sunrise on that date, so unlit streets cost extra.
+    Shade slot: by day, the index into G.graph["shade_slots"] of the slot nearest the time of day (shade is
+    computed for a few hours of one summer day); None at night, without a time or without shade data.
+    """
+    if depart_time is None:
+        return None, False
+    local = local_time(depart_time)
+    if sun_position(local)[1] < SUNSET_ALTITUDE:
+        return None, True
+    slots = [datetime.fromisoformat(s) for s in G.graph.get("shade_slots", ())]
+    if not slots:
+        return None, False
+    minutes = local.hour * 60 + local.minute
+    return min(range(len(slots)), key=lambda i: abs(slots[i].hour * 60 + slots[i].minute - minutes)), False
+
+
+def _plan(G, penalties):
+    """The request's penalties with depart_time resolved by sky() into (shade slot, dark): what _cost needs."""
+    *weights, depart_time = penalties
+    return (*weights, *sky(G, depart_time))
+
+
+def _cost(d, plan):
+    bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty, slot, dark = plan
     return edge_cost(d["length"], _roughness(d), bump_penalty,
                      d.get("danger", 0.0), danger_penalty, _pm_risk(d), pm_penalty, _stop_go(d), stop_penalty,
                      lift_ends=d.get("lift_start", False) + d.get("lift_end", False),
-                     speed_kmh=_speed_kmh(d) if prefer_time else MEDIAN_SPEED_KMH)
+                     speed_kmh=_speed_kmh(d) if prefer_time else MEDIAN_SPEED_KMH,
+                     sun=0.0 if slot is None else 1 - _shade(d, slot), shade_penalty=shade_penalty,
+                     dark=1 - _lit(d) if dark else 0.0, dark_penalty=dark_penalty)
 
 
 def _route_feature(G, a, b, penalties):
-    """The cheapest route between graph nodes a and b for `penalties` (the four penalties and prefer_time),
-    as one GeoJSON Feature."""
-    bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time = penalties
-    path = _path(G, a, b, penalties)
+    """The cheapest route between graph nodes a and b for `penalties` (the six penalties, prefer_time and
+    depart_time), as one GeoJSON Feature."""
+    bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty, depart_time = penalties
+    plan = _plan(G, penalties)
+    slot, dark = plan[-2:]
+    path = _path(G, a, b, plan)
 
     lifts = sum(1 for n in path[1:-1] if "elevator" in str(G.nodes[n].get("highway")))
     coords, length, rough_len, measured_len, estimated_len = [], 0.0, 0.0, 0.0, 0.0
     danger, danger_points, pm_len, pm_measured_len = 0.0, 0, 0.0, 0.0
     stop_len, stop_measured_len = 0.0, 0.0
+    shade_len, shade_known_len, lit_len, lit_known_len = 0.0, 0.0, 0.0, 0.0
     # Riding time from speed_map, plus waiting for each lift at the median speed.
     duration, speed_measured_len = lifts * LIFT_WAIT_M / (MEDIAN_SPEED_KMH / 3.6), 0.0
     for u, v in zip(path[:-1], path[1:]):
-        d = _edge(G, u, v, penalties)
+        d = _edge(G, u, v, plan)
         pts = edge_coords(G, u, v, d)
         coords.extend(pts if not coords else pts[1:])
         edge_len = float(d["length"])  # numpy float when loaded from GraphML
@@ -225,6 +276,13 @@ def _route_feature(G, a, b, penalties):
         if d.get("stop_go") is not None:
             stop_measured_len += edge_len
             stop_len += d["stop_go"] * edge_len
+        if d.get("shade") is not None:
+            shade_known_len += edge_len
+            if slot is not None:
+                shade_len += d["shade"][slot] * edge_len
+        if d.get("lit") is not None:
+            lit_known_len += edge_len
+            lit_len += d["lit"] * edge_len
         duration += edge_len / (_speed_kmh(d) / 3.6)
         if d.get("speed_kmh") is not None:
             speed_measured_len += edge_len
@@ -235,6 +293,12 @@ def _route_feature(G, a, b, penalties):
         "pm_penalty": pm_penalty,
         "stop_penalty": stop_penalty,
         "prefer_time": prefer_time,
+        "shade_penalty": shade_penalty,
+        "dark_penalty": dark_penalty,
+        "depart_time": local_time(depart_time).isoformat(timespec="minutes") if depart_time else None,
+        # Sun above the horizon at depart_time (null without one): shade counts by day, lighting after dark.
+        "daylight": None if depart_time is None else not dark,
+        "shade_slot": G.graph["shade_slots"][slot] if slot is not None else None,
         "length_m": round(length, 1),
         # Expected riding time from speed_map (unmeasured streets at the median speed), lifts included.
         "duration_s": round(duration),
@@ -253,17 +317,23 @@ def _route_feature(G, a, b, penalties):
         # Length-weighted over the part of the route with traffic_flow measurements.
         "mean_stop_go": round(stop_len / stop_measured_len, 3) if stop_measured_len else None,
         "stop_measured_share": round(stop_measured_len / length, 2),
+        # Length-weighted share in shade at shade_slot, over the part of the route with shade data; null unless by day.
+        "mean_shade": round(shade_len / shade_known_len, 3) if slot is not None and shade_known_len else None,
+        "shade_known_share": round(shade_known_len / length, 2),
+        # Length-weighted chance the streets are lit at night, over the part of the route with lighting data.
+        "mean_lit": round(lit_len / lit_known_len, 3) if lit_known_len else None,
+        "lit_known_share": round(lit_known_len / length, 2),
         # Lifts the route rides through; each costs stop_penalty * LIFT_WAIT_M metres.
         "lifts": lifts,
     }
     return {"type": "Feature", "geometry": {"type": "LineString", "coordinates": coords}, "properties": properties}
 
 
-def _path(G, a, b, penalties):
-    """The nodes of the cheapest route between graph nodes a and b for `penalties`."""
+def _path(G, a, b, plan):
+    """The nodes of the cheapest route between graph nodes a and b for `plan` (see _plan)."""
     # MultiDiGraph: between two nodes there can be parallel edges; use the cheapest.
     def weight(u, v, parallel):
-        return min(_cost(d, penalties) for d in parallel.values())
+        return min(_cost(d, plan) for d in parallel.values())
 
     try:
         return nx.shortest_path(G, a, b, weight=weight)
@@ -271,9 +341,9 @@ def _path(G, a, b, penalties):
         raise RouteError("no bike route between these points") from None
 
 
-def _edge(G, u, v, penalties):
+def _edge(G, u, v, plan):
     """The cheapest of the parallel edges from u to v."""
-    return min(G[u][v].values(), key=lambda d: _cost(d, penalties))
+    return min(G[u][v].values(), key=lambda d: _cost(d, plan))
 
 
 def edge_coords(G, u, v, d):
@@ -289,33 +359,39 @@ def route_edges(G, origin, destination, penalties):
 
     Start and end may be temporary nodes on a split street (see _snapped_ends), which exist only inside the block.
     """
+    plan = _plan(G, penalties)
     with _snapped_ends(G, origin, destination) as (a, b):
-        path = _path(G, a, b, penalties)
-        yield [(u, v, _edge(G, u, v, penalties)) for u, v in zip(path[:-1], path[1:])]
+        path = _path(G, a, b, plan)
+        yield [(u, v, _edge(G, u, v, plan)) for u, v in zip(path[:-1], path[1:])]
 
 
 def find_route(G, origin, destination, bump_penalty=DEFAULT_BUMP_PENALTY,
                danger_penalty=DEFAULT_DANGER_PENALTY, pm_penalty=DEFAULT_PM_PENALTY,
-               stop_penalty=DEFAULT_STOP_PENALTY, prefer_time=False):
+               stop_penalty=DEFAULT_STOP_PENALTY, prefer_time=False, shade_penalty=DEFAULT_SHADE_PENALTY,
+               dark_penalty=DEFAULT_DARK_PENALTY, depart_time=None):
     """Cheapest route from origin to destination, both (lat, lon), as a GeoJSON FeatureCollection.
 
     All penalties 0 give the shortest route; higher values take longer detours to avoid rough
     streets (bump_penalty), spots where cars overtook closely (danger_penalty), streets with bad
     air (pm_penalty) and streets where bikes keep stopping (stop_penalty). prefer_time weighs each
-    street by its riding time at the measured speed instead of its length.
+    street by its riding time at the measured speed instead of its length. With a depart_time (datetime),
+    sunny streets cost extra by day (shade_penalty) and unlit streets after dark (dark_penalty).
     """
+    penalties = (bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty, depart_time)
     with _snapped_ends(G, origin, destination) as (a, b):
-        feature = _route_feature(G, a, b, (bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time))
+        feature = _route_feature(G, a, b, penalties)
     return {"type": "FeatureCollection", "features": [feature]}
 
 
 def compare_routes(G, origin, destination, bump_penalty=DEFAULT_BUMP_PENALTY,
                    danger_penalty=DEFAULT_DANGER_PENALTY, pm_penalty=DEFAULT_PM_PENALTY,
-                   stop_penalty=DEFAULT_STOP_PENALTY, prefer_time=False):
-    """The route from find_route next to the shortest route (by distance), with how much they differ."""
+                   stop_penalty=DEFAULT_STOP_PENALTY, prefer_time=False, shade_penalty=DEFAULT_SHADE_PENALTY,
+                   dark_penalty=DEFAULT_DARK_PENALTY, depart_time=None):
+    """The route from find_route next to the shortest route (by distance) at the same depart_time, with how much they differ."""
+    penalties = (bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty, depart_time)
     with _snapped_ends(G, origin, destination) as (a, b):
-        route = _route_feature(G, a, b, (bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time))
-        shortest = _route_feature(G, a, b, (0, 0, 0, 0, False))
+        route = _route_feature(G, a, b, penalties)
+        shortest = _route_feature(G, a, b, (0, 0, 0, 0, False, 0, 0, depart_time))
     return {
         "route": route,
         "shortest": shortest,

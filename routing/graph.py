@@ -1,4 +1,5 @@
-"""The Heilbronn bike graph from OSM (via OSMnx), with ATRAI roughness, stop-and-go, speed and danger on every edge."""
+"""The Heilbronn bike graph from OSM (via OSMnx), with ATRAI roughness, stop-and-go, speed and danger, shade and
+street lighting on every edge."""
 import json
 import math
 from pathlib import Path
@@ -9,7 +10,10 @@ from shapely import LineString, STRtree, points
 
 from download_data import load_features
 from routing.costs import SNAP_M, air_ranks, clean_overtaking, edge_roughness, osm_way_ids, point_risks, way_roughness, way_speed, way_stop_go
+from routing.lighting import load_lighting
 from routing.rideable_ways import RIDEABLE_WAYS
+from routing.shade import load_way_shade
+from routing.shadow import load_shadow
 
 CACHE_DIR = Path(__file__).resolve().parent.parent / "cache"
 # Renamed when the filter below changes, so an old cached graph isn't reused.
@@ -124,6 +128,8 @@ def load_graph(path=GRAPH_PATH):
     attach_speed(G, way_speed(load_features("speed_map_heilbronn")))
     attach_danger(G, point_risks(clean_overtaking(load_features("danger_zones_raw_heilbronn")), "Risk Index Overtaking"),
                   air_ranks(load_features("air_quality_heilbronn")))
+    attach_shade(G, *load_shadow(), load_way_shade())
+    attach_lighting(G, load_lighting())
     return G
 
 
@@ -165,6 +171,25 @@ def attach_speed(G, way_kmh):
     Both directions of a street get the same value: speed_map is per segment, not per direction."""
     for _, _, d in G.edges(data=True):
         d["speed_kmh"] = edge_roughness(d["osmid"], way_kmh)
+
+
+def attach_shade(G, slots, way_shadow, way_tree_shade=None):
+    """Set edge attribute `shade`: a list with the share in shade (0-1) per time slot of `slots` (stored as
+    G.graph["shade_slots"]), from routing.shadow; where a way has no shadow value, its static tree shade from
+    routing.shade for every slot; None where neither is known.
+    """
+    G.graph["shade_slots"] = list(slots)
+    for _, _, d in G.edges(data=True):
+        ids = d["osmid"] if isinstance(d["osmid"], list) else [d["osmid"]]
+        per_way = [way_shadow[i] if i in way_shadow else [way_tree_shade[i]] * len(slots)
+                   for i in ids if i in way_shadow or i in (way_tree_shade or {})]
+        d["shade"] = [sum(s) / len(per_way) for s in zip(*per_way)] if per_way else None
+
+
+def attach_lighting(G, way_lit):
+    """Set edge attribute `lit` (chance the street is lit at night, 0-1, or None where unknown) from routing.lighting."""
+    for _, _, d in G.edges(data=True):
+        d["lit"] = edge_roughness(d["osmid"], way_lit)
 
 
 def _to_metres(lonlat, lat0):

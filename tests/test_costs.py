@@ -49,6 +49,13 @@ def test_edge_cost_stop_go_scales_length():
     assert edge_cost(100, 0, danger_penalty=0, pm_penalty=0, stop_penalty=1) == pytest.approx(100 * (1 + DEFAULT_STOP_GO))
 
 
+def test_edge_cost_sun_and_dark_scale_length():
+    assert edge_cost(100, 0, danger_penalty=0, pm_penalty=0, stop_penalty=0, sun=0.5, shade_penalty=2) == 200
+    assert edge_cost(100, 0, danger_penalty=0, pm_penalty=0, stop_penalty=0, dark=0.25, dark_penalty=4) == 200
+    # Without a departure time the router passes sun = dark = 0: the penalties change nothing.
+    assert edge_cost(100, 0, danger_penalty=0, pm_penalty=0, stop_penalty=0, shade_penalty=5, dark_penalty=5) == 100
+
+
 def flow(osmid, value, n):
     return {"properties": {"osmid": osmid, "avg_traffic_flow": value, "points_in_segment": n}}
 

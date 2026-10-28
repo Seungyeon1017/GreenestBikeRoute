@@ -2,10 +2,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
-from backend.schemas import DangerCollection, FlowCollection, GradeCollection, RouteCollection, RouteComparison, \
-    RoughnessCollection, SpeedCollection
+from backend.schemas import DangerCollection, FlowCollection, GradeCollection, LightingCollection, RouteCollection, \
+    RouteComparison, RoughnessCollection, ShadeCollection, SpeedCollection
 from download_data import HEILBRONN_BBOX, overtaking_risk
 from routing.costs import MIN_OVERTAKING_CM
+from routing.graph import attach_lighting, attach_shade
 from tests.conftest import COORDS, A, B, joined
 
 
@@ -134,6 +135,50 @@ def test_speed_overlay(client):
     assert all(0 <= f["properties"]["speed_kmh"] < 100 for f in features)
     assert features[0]["geometry"]["type"] == "LineString"
     SpeedCollection.model_validate(r.json())
+
+
+SLOTS = ["2026-07-21T09:00+02:00", "2026-07-21T15:00+02:00"]
+
+
+@pytest.fixture
+def lit_client(toy_graph):
+    attach_shade(toy_graph, SLOTS, {11: [0.2, 0.6], 13: [1.0, 1.0]})
+    attach_lighting(toy_graph, {11: 0.96, 12: 0.0})
+    with TestClient(create_app(graph=toy_graph)) as c:
+        yield c
+
+
+def test_depart_time_is_passed_through_and_off_by_default(lit_client):
+    p = lit_client.get("/route", params=params()).json()["features"][0]["properties"]
+    assert (p["depart_time"], p["daylight"], p["shade_penalty"], p["dark_penalty"]) == (None, None, 0.5, 1.0)
+    p = lit_client.get("/route", params={**params(), "depart_time": "2026-07-21T14:00", "shade_penalty": 2}).json()["features"][0]["properties"]
+    assert (p["depart_time"], p["daylight"], p["shade_slot"], p["shade_penalty"]) == ("2026-07-21T14:00+02:00", True, SLOTS[1], 2)
+    p = lit_client.get("/route", params={**params(), "depart_time": "2026-10-28T19:30"}).json()["features"][0]["properties"]
+    assert (p["depart_time"], p["daylight"], p["mean_shade"]) == ("2026-10-28T19:30+01:00", False, None)
+    RouteCollection.model_validate(lit_client.get("/route", params={**params(), "depart_time": "2026-07-21T14:00"}).json())
+
+
+def test_bad_depart_time_is_invalid(lit_client):
+    assert lit_client.get("/route", params={**params(), "depart_time": "tomorrow"}).status_code == 422
+
+
+def test_shade_overlay(lit_client):
+    r = lit_client.get("/shade")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/geo+json"
+    body = r.json()
+    assert body["slots"] == SLOTS
+    assert [f["properties"]["shade"] for f in body["features"]] == [[0.2, 0.6], [1.0, 1.0]]  # A -> C has no shade data
+    ShadeCollection.model_validate(body)
+
+
+def test_lighting_overlay(lit_client):
+    r = lit_client.get("/lighting")
+    assert r.status_code == 200
+    features = r.json()["features"]
+    assert [f["properties"]["lit"] for f in features] == [0.96, 0.0]
+    assert features[0]["geometry"]["type"] == "LineString"
+    LightingCollection.model_validate(r.json())
 
 
 @pytest.fixture

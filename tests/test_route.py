@@ -1,7 +1,9 @@
+from datetime import datetime, timezone
+
 import pytest
 
-from routing.graph import attach_danger, attach_roughness, attach_speed, attach_stop_go
-from routing.route import RouteError, compare_routes, find_route
+from routing.graph import attach_danger, attach_lighting, attach_roughness, attach_shade, attach_speed, attach_stop_go
+from routing.route import RouteError, compare_routes, find_route, sky
 from tests.conftest import COORDS, A, B, C
 
 
@@ -174,3 +176,75 @@ def test_route_reports_estimated_share_apart_from_measured(toy_graph):
     assert p["length_m"] == 140  # A -> C (estimated) -> B (measured)
     assert (p["measured_share"], p["estimated_share"]) == (0.5, 0.5)
     assert p["mean_roughness"] == 0  # over the measured part only
+
+
+SLOTS = ["2026-07-21T09:00+02:00", "2026-07-21T12:00+02:00", "2026-07-21T15:00+02:00", "2026-07-21T18:00+02:00"]
+SUMMER_AFTERNOON = datetime(2026, 7, 21, 15, 0)
+SUMMER_NIGHT = datetime(2026, 7, 21, 23, 0)
+
+
+def test_attach_shade_falls_back_to_tree_shade(toy_graph):
+    attach_shade(toy_graph, SLOTS, {11: [0.1, 0.2, 0.3, 0.4], 13: [1.0, 1.0, 1.0, 1.0]}, {12: 0.5, 14: 0.0})
+    assert toy_graph.graph["shade_slots"] == SLOTS
+    assert [d["shade"] for *_, d in toy_graph.edges(data=True)] == [[0.1, 0.2, 0.3, 0.4], [0.5] * 4, [0.5] * 4]
+    attach_shade(toy_graph, SLOTS, {})
+    assert [d["shade"] for *_, d in toy_graph.edges(data=True)] == [None, None, None]
+
+
+def test_attach_lighting(toy_graph):
+    attach_lighting(toy_graph, {11: 1.0, 13: 0.2, 14: 0.4})
+    assert [d["lit"] for *_, d in toy_graph.edges(data=True)] == [1.0, None, pytest.approx(0.3)]
+
+
+@pytest.mark.parametrize("when, expected", [
+    (None, (None, False)),                                   # no departure time: neither counts
+    (datetime(2026, 7, 21, 13, 20), (1, False)),             # nearest slot 12:00
+    (datetime(2026, 7, 21, 13, 31, tzinfo=timezone.utc), (2, False)),  # 15:31 local -> 15:00
+    (datetime(2026, 7, 21, 6, 0), (0, False)),               # sun up since ~05:40
+    (datetime(2026, 7, 21, 5, 0), (None, True)),             # before sunrise
+    (datetime(2026, 12, 21, 17, 0), (None, True)),           # winter sunset ~16:30
+    (datetime(2026, 12, 21, 16, 0), (2, False)),             # still light: nearest slot 15:00
+])
+def test_sky_picks_daylight_and_the_nearest_shade_slot(toy_graph, when, expected):
+    toy_graph.graph["shade_slots"] = SLOTS
+    assert sky(toy_graph, when) == expected
+
+
+@pytest.fixture
+def sunny_unlit_shortcut(toy_graph):
+    """The direct street A -> B is sunny and unlit; the 40 % longer detour via C is shaded and lit."""
+    for d in toy_graph.edges.values():
+        d["roughness"] = 0.0
+    attach_shade(toy_graph, SLOTS, {11: [0.0] * 4, 12: [1.0] * 4, 13: [1.0] * 4, 14: [1.0] * 4})
+    attach_lighting(toy_graph, {11: 0.0, 12: 1.0, 13: 1.0, 14: 1.0})
+    return toy_graph
+
+
+def route_props(G, **kw):
+    return find_route(G, COORDS[A], COORDS[B], 0, 0, 0, 0, **kw)["features"][0]["properties"]
+
+
+def test_shade_penalty_detours_into_the_shade_by_day_only(sunny_unlit_shortcut):
+    G = sunny_unlit_shortcut
+    p = route_props(G, shade_penalty=1, dark_penalty=0, depart_time=SUMMER_AFTERNOON)  # 100 x 2 > 140
+    assert (p["length_m"], p["daylight"], p["shade_slot"], p["mean_shade"]) == (140, True, SLOTS[2], 1.0)
+    p = route_props(G, shade_penalty=1, dark_penalty=0, depart_time=SUMMER_NIGHT)
+    assert (p["length_m"], p["daylight"], p["shade_slot"], p["mean_shade"]) == (100, False, None, None)
+
+
+def test_dark_penalty_detours_onto_lit_streets_after_dark_only(sunny_unlit_shortcut):
+    G = sunny_unlit_shortcut
+    p = route_props(G, shade_penalty=0, dark_penalty=1, depart_time=SUMMER_NIGHT)
+    assert (p["length_m"], p["mean_lit"], p["lit_known_share"]) == (140, 1.0, 1.0)
+    assert route_props(G, shade_penalty=0, dark_penalty=1, depart_time=SUMMER_AFTERNOON)["length_m"] == 100
+
+
+def test_without_depart_time_shade_and_lighting_change_nothing(sunny_unlit_shortcut):
+    p = route_props(sunny_unlit_shortcut, shade_penalty=5, dark_penalty=5)
+    assert (p["length_m"], p["depart_time"], p["daylight"], p["mean_shade"], p["mean_lit"]) == (100, None, None, None, 0.0)
+
+
+def test_compare_routes_plans_the_shortest_route_for_the_same_time(sunny_unlit_shortcut):
+    r = compare_routes(sunny_unlit_shortcut, COORDS[A], COORDS[B], 0, 0, 0, 0, shade_penalty=1, depart_time=SUMMER_AFTERNOON)
+    assert r["shortest"]["properties"]["depart_time"] == "2026-07-21T15:00+02:00"
+    assert (r["shortest"]["properties"]["mean_shade"], r["route"]["properties"]["mean_shade"]) == (0.0, 1.0)

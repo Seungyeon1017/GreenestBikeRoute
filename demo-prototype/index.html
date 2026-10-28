@@ -13,7 +13,7 @@
   html, body { margin: 0; height: 100%; overflow: hidden; font: 14px/1.4 system-ui, sans-serif; color: #1d2733; }
   #map { position: absolute; inset: 0; }
   #panel {
-    position: absolute; top: 12px; left: 12px; z-index: 1000; width: 400px;
+    position: absolute; top: 12px; left: 12px; z-index: 1000; width: 470px;
     max-height: calc(100% - 48px); overflow-y: auto; box-sizing: border-box;
     background: #fff; border-radius: 10px; padding: 14px 16px; box-shadow: 0 2px 12px rgba(0,0,0,.2);
   }
@@ -27,7 +27,7 @@
   input[type=range] { width: 100%; }
   .row { display: flex; justify-content: space-between; color: #5b6773; font-size: 12px; }
   table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; font-variant-numeric: tabular-nums; }
-  th, td { text-align: right; padding: 3px 0 3px 6px; white-space: nowrap; }
+  th, td { text-align: right; padding: 3px 0 3px 5px; white-space: nowrap; }
   th:first-child, td:first-child { text-align: left; padding-left: 0; }
   .swatch { display: inline-block; width: 18px; height: 4px; vertical-align: middle; margin-right: 6px; border-radius: 2px; }
   #summary { margin-top: 10px; font-weight: 600; min-height: 1.4em; }
@@ -61,10 +61,22 @@
   <label><input type="checkbox" id="preferTime"> Time matters, not distance</label>
   <div class="row"><span>Weigh streets by how fast bikes were measured riding them</span></div>
 
+  <label for="departTime">Departure (empty = time doesn't matter)</label>
+  <input id="departTime" type="datetime-local">
+  <div class="row"><span id="sky">By day shade counts, after dark lighting</span></div>
+
+  <label for="shadePenalty">By day, how much do you hate the sun: <span id="shadePenaltyValue">0.5</span></label>
+  <input id="shadePenalty" type="range" min="0" max="5" step="0.25" value="0.5">
+  <div class="row"><span>0 = ignore</span><span>5 = strongly prefer shade</span></div>
+
+  <label for="darkPenalty">After dark, how much do you hate unlit streets: <span id="darkPenaltyValue">1</span></label>
+  <input id="darkPenalty" type="range" min="0" max="5" step="0.25" value="1">
+  <div class="row"><span>0 = ignore</span><span>5 = strongly prefer lit</span></div>
+
   <table>
-    <tr><th></th><th>Length</th><th title="expected riding time from measured cyclist speeds">Time</th><th title="mean roughness of the measured part; hover a value for how much is measured / estimated">Rough</th><th title="close-overtaking spots passed">Overtakes</th><th title="mean air rank, 0.5 = typical">PM</th><th title="mean stop-and-go, 0-1">Stops</th></tr>
-    <tr><td><span class="swatch" style="background:#7a8794"></span>Shortest</td><td id="sLen">–</td><td id="sTime">–</td><td id="sRough">–</td><td id="sDanger">–</td><td id="sPm">–</td><td id="sStop">–</td></tr>
-    <tr><td><span class="swatch" style="background:#1a7f37"></span>Your route</td><td id="rLen">–</td><td id="rTime">–</td><td id="rRough">–</td><td id="rDanger">–</td><td id="rPm">–</td><td id="rStop">–</td></tr>
+    <tr><th></th><th>Length</th><th title="expected riding time from measured cyclist speeds">Time</th><th title="mean roughness of the measured part; hover a value for how much is measured / estimated">Rough</th><th title="close-overtaking spots passed">Overtakes</th><th title="mean air rank, 0.5 = typical">PM</th><th title="mean stop-and-go, 0-1">Stops</th><th title="share in shade at the departure time (by day only)">Shade</th><th title="chance the streets are lit at night">Lit</th></tr>
+    <tr><td><span class="swatch" style="background:#7a8794"></span>Shortest</td><td id="sLen">–</td><td id="sTime">–</td><td id="sRough">–</td><td id="sDanger">–</td><td id="sPm">–</td><td id="sStop">–</td><td id="sShade">–</td><td id="sLit">–</td></tr>
+    <tr><td><span class="swatch" style="background:#1a7f37"></span>Your route</td><td id="rLen">–</td><td id="rTime">–</td><td id="rRough">–</td><td id="rDanger">–</td><td id="rPm">–</td><td id="rStop">–</td><td id="rShade">–</td><td id="rLit">–</td></tr>
   </table>
   <div id="summary"></div>
   <div id="error"></div>
@@ -80,6 +92,8 @@
     <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showAir"> Show air quality (darker = worse than usual)</label>
     <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showFlow"> Show stop-and-go (darker = more stopping)</label>
     <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showSpeed"> Show cyclist speed (darker = slower)</label>
+    <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showShade"> Show shade at <span id="shadeSlot">15:00</span> (darker = more shade)</label>
+    <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showLighting"> Show street lighting (darker = more likely lit)</label>
     <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showGrade"> Colour your route by grade (display only)</label>
     <div id="gradeLegend" hidden>
       <span class="swatch" style="background:#4caf50"></span>&lt;2%
@@ -155,6 +169,39 @@ fetch(API + "/speed").then(r => r.json()).then(data => {
 });
 document.getElementById("showSpeed").onchange = e => e.target.checked ? speed.addTo(map) : speed.remove();
 
+// Shade from LoD2 buildings and street trees, per time slot of a summer day; drawn for the slot nearest the departure time.
+const shade = L.layerGroup();
+let shadeData = null;
+const slotTime = s => s.slice(11, 16);
+function shadeSlot() {
+  const slots = shadeData?.slots ?? [];
+  const t = departTime.value ? departTime.value.slice(11, 16) : "15:00";
+  const minutes = hm => +hm.slice(0, 2) * 60 + +hm.slice(3, 5);
+  return slots.reduce((best, s, i) => Math.abs(minutes(slotTime(s)) - minutes(t)) < Math.abs(minutes(slotTime(slots[best])) - minutes(t)) ? i : best, 0);
+}
+function drawShade() {
+  if (!shadeData) return;
+  const i = shadeSlot();
+  setText("shadeSlot", slotTime(shadeData.slots[i]));
+  shade.clearLayers();
+  L.geoJSON(shadeData, {
+    style: f => ({ color: "#1565c0", weight: 3, opacity: 0.05 + 0.85 * f.properties.shade[i] }),
+    interactive: false,
+  }).addTo(shade);
+}
+fetch(API + "/shade").then(r => r.json()).then(data => { shadeData = data; drawShade(); });
+document.getElementById("showShade").onchange = e => e.target.checked ? shade.addTo(map) : shade.remove();
+
+// Chance each street is lit at night (OSM lit=*, Mapillary street lights, road-type rule).
+const lighting = L.layerGroup();
+fetch(API + "/lighting").then(r => r.json()).then(data => {
+  L.geoJSON(data, {
+    style: f => ({ color: "#f9a825", weight: 3, opacity: 0.05 + 0.85 * f.properties.lit }),
+    interactive: false,
+  }).addTo(lighting);
+});
+document.getElementById("showLighting").onchange = e => e.target.checked ? lighting.addTo(map) : lighting.remove();
+
 const shortestLayer =L.geoJSON(null, { style: { color: "#7a8794", weight: 5, opacity: 0.9, dashArray: "6 8" } }).addTo(map);
 const routeLayer = L.geoJSON(null, { style: { color: "#1a7f37", weight: 6, opacity: 0.9 } }).addTo(map);
 
@@ -182,7 +229,7 @@ map.on("click", e => {
   update();
 });
 
-const sliders = ["bumpPenalty", "dangerPenalty", "pmPenalty", "stopPenalty"].map(id => {
+const sliders = ["bumpPenalty", "dangerPenalty", "pmPenalty", "stopPenalty", "shadePenalty", "darkPenalty"].map(id => {
   const el = document.getElementById(id);
   el.oninput = () => document.getElementById(id + "Value").textContent = el.value;
   el.onchange = update;
@@ -190,6 +237,8 @@ const sliders = ["bumpPenalty", "dangerPenalty", "pmPenalty", "stopPenalty"].map
 });
 const preferTime = document.getElementById("preferTime");
 preferTime.onchange = update;
+const departTime = document.getElementById("departTime");
+departTime.onchange = () => { drawShade(); update(); };
 
 document.getElementById("reset").onclick = () => {
   [start, end].forEach(m => m && m.remove());
@@ -221,11 +270,14 @@ function show(prefix, p) {
   setText(prefix + "Danger", p ? p.danger_points : "–");
   setText(prefix + "Pm", p && p.mean_pm_risk != null ? p.mean_pm_risk.toFixed(2) : "–");
   setText(prefix + "Stop", p && p.mean_stop_go != null ? p.mean_stop_go.toFixed(2) : "–");
+  setText(prefix + "Shade", p && p.mean_shade != null ? p.mean_shade.toFixed(2) : "–");
+  setText(prefix + "Lit", p && p.mean_lit != null ? p.mean_lit.toFixed(2) : "–");
 }
 
-async function getJSON(path, [bump_penalty, danger_penalty, pm_penalty, stop_penalty], prefer_time) {
+async function getJSON(path, [bump_penalty, danger_penalty, pm_penalty, stop_penalty, shade_penalty, dark_penalty], prefer_time) {
   const a = start.getLatLng(), b = end.getLatLng();
-  const q = new URLSearchParams({ from_lat: a.lat, from_lon: a.lng, to_lat: b.lat, to_lon: b.lng, bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time });
+  const q = new URLSearchParams({ from_lat: a.lat, from_lon: a.lng, to_lat: b.lat, to_lon: b.lng, bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty });
+  if (departTime.value) q.set("depart_time", departTime.value);
   const res = await fetch(API + path + "?" + q);
   const body = await res.json();
   if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail));
@@ -258,6 +310,8 @@ async function update() {
     routeLayer.clearLayers().addData(route);
     const s = shortest.properties, r = route.properties;
     show("s", s); show("r", r);
+    setText("sky", r.daylight == null ? "By day shade counts, after dark lighting"
+      : r.daylight ? `Sun is up: shade counts (slot ${r.shade_slot.slice(11, 16)})` : "After dark: lighting counts");
     setText("summary", same_path ? "Same as the shortest route."
       : `${signed(detour_pct)}% distance, ${signed(extra_time_pct)}% time, roughness ${s.mean_roughness?.toFixed(1)} → ${r.mean_roughness?.toFixed(1)}, `
         + `overtaking spots ${s.danger_points} → ${r.danger_points}`);

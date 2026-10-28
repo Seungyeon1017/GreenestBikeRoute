@@ -11,13 +11,15 @@ Example request: `/route?from_lat=49.14838&from_lon=9.22687&to_lat=49.1262&to_lo
 - `pm_penalty` (default 0.5): how much you hate bad air (`air_quality`, fine dust ranked within each ride so weather drops out, averaged per street).
 - `stop_penalty` (default 0.5): how much you hate slowing down and stopping at traffic lights, in congestion (`traffic_flow`) or at a lift (each costs 100 m × this).
 
+`depart_time` (e.g. `2026-07-21T15:00`, Heilbronn local time) brings in two more penalties, chosen by the sun at that time: while it is up, `shade_penalty` (default 0.5) avoids sunny streets (building and tree shade, `routing.shadow`); after sunset or before sunrise, `dark_penalty` (default 1) avoids streets that are probably unlit (`routing.lighting`). Without `depart_time` neither applies.
+
 `prefer_time=true` plans by riding time instead of distance, using the speed bikes were measured at on each street (`speed_map`); the penalties still apply. Every route reports its expected `duration_s`.
 
 `/route/compare` takes the same parameters and returns the route next to the shortest route (by distance, with `detour_pct` and `extra_time_pct`), to draw both and show what the penalties changed. See `/docs` for the response.
 
 `/route/grade` takes the same parameters and returns the same route in pieces coloured by grade (flat < 2% … very steep ≥ 10%), plus climb, descent and the steepest piece. It is display only: grade doesn't change the route. Heights: LGL DGM1 (Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0), see [routing/README.md](routing/README.md#grade-display-only-not-in-the-route-cost).
 
-Map overlays: `/roughness` (streets), `/danger` (overtaking spots), `/air` (air-quality points, 0-1 worse than usual for the same bike trip) , `/flow` (streets, 0-1 stop-and-go) and `/speed` (streets, measured cyclist km/h) return GeoJSON.
+Map overlays: `/roughness` (streets), `/danger` (overtaking spots), `/air` (air-quality points, 0-1 worse than usual for the same bike trip) , `/flow` (streets, 0-1 stop-and-go), `/speed` (streets, measured cyclist km/h), `/shade` (streets, 0-1 in shade per time slot) and `/lighting` (streets, 0-1 chance lit at night) return GeoJSON.
 
 Danger points come from `danger_zones_raw_heilbronn` (one row per overtake, with device id and exact distance) and are snapped to the nearest street within 25 m. [routing/README.md](routing/README.md) explains how route planning works and why readings of 25 cm or less are ignored.
 
