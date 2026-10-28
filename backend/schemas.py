@@ -414,6 +414,32 @@ class ZoneCollection(BaseModel):
             "scooters_available": 5, "bike_capacity": 5, "scooter_capacity": 5}}]}}}
 
 
+class PlaceProperties(BaseModel):
+    label: str = Field(description="Full name with street and district, to show in a \"did you mean\" list")
+    name: Optional[str] = Field(description="Short name of the place, e.g. \"Rathaus Heilbronn\"; null for a plain address")
+    category: Optional[str] = Field(description="OSM category, e.g. amenity, highway, building")
+    type: Optional[str] = Field(description="OSM type within the category, e.g. townhall, residential, yes")
+
+
+class PlaceFeature(BaseModel):
+    type: Literal["Feature"]
+    geometry: Point
+    properties: PlaceProperties
+
+
+class PlaceCollection(BaseModel):
+    """Places matching the search, best first; empty if nothing in Heilbronn matches."""
+    type: Literal["FeatureCollection"]
+    features: list[PlaceFeature]
+    attribution: str = Field(description="Data credit to show with the results")
+
+    model_config = {"json_schema_extra": {"example": {
+        "type": "FeatureCollection", "attribution": "© OpenStreetMap contributors (ODbL), search by Nominatim",
+        "features": [{"type": "Feature", "geometry": {"type": "Point", "coordinates": [9.21839, 49.142788]}, "properties": {
+            "label": "Rathaus Heilbronn, 7, Marktplatz, Kernstadt, Heilbronn, Baden-Württemberg, 74072, Deutschland",
+            "name": "Rathaus Heilbronn", "category": "amenity", "type": "townhall"}}]}}}
+
+
 class ClosureReport(BaseModel):
     """A rider's report that the street at a point is closed right now (construction, event, ...)."""
     lat: float = Field(ge=-90, le=90, description="Where the street is closed; the report goes to the nearest street within 50 m")
