@@ -3,16 +3,22 @@
 The Heilbronn street map (OpenStreetMap, ~42k street pieces) is a graph. Every street piece gets a **cost**, and route planning picks the path with the lowest total cost. Bad streets "feel longer", so a detour wins when it's cheaper than riding through.
 
 ```
-cost = length × (1 + bump_penalty × roughness / 100 + pm_penalty × pm_risk + stop_penalty × stop_go)
-     + danger_penalty × danger
-     + stop_penalty × 100 m × lifts
+cost = (length + danger_penalty × danger)
+       × (1 + ¼ bump_penalty × bad(roughness)) × (1 + ¼ pm_penalty × bad(pm_risk)) × (1 + ¼ stop_penalty × bad(stop_go))
+       × (1 + ¼ shade_penalty × sun) × (1 + ¼ dark_penalty × unlit) × (1 + ¼ prefer_bike_friendly × not_bike_friendly)
+     + stop_penalty × 25 m × lifts
+
+bad(x) = max(0, (x − typical) / (bad line − typical))
 ```
 
-- Roughness, PM risk and stop-and-go describe the whole street, so they **scale with length**.
-- Danger counts incidents at spots, so it's **a fixed amount per street**, whatever its length.
-- A lift (`highway=elevator` node, e.g. onto the Campusbrücke) is a stop too: riding through one costs `stop_penalty` × 100 m (waiting plus getting in and out, about 25 s), a **fixed amount per lift**. At the default 0.5 that is 50 m of detour, at 5 it is 500 m. The route reports its `lifts`.
+- **Only worse than typical costs extra.** `bad()` is 0 on a typical street (the city median, also what unmeasured streets get) or a better one, 1 on the bad line (the worst tenth of measured street length: roughness 20, air 0.555, stop-and-go 0.77, the same lines as `bumpy_m`, `bad_air_m`, `stop_go_m`), and keeps growing beyond it. Penalties count in whole points, 0-10, and each point adds a quarter: 4 points mean a street on the bad line costs 2× a typical one, the same for every dislike.
+- **The dislikes multiply.** Two streets that differ only in roughness keep their cost ratio however high another penalty is.
+- **Why:** this used to be one sum, `length × (1 + bump_penalty × roughness / 100 + pm_penalty × pm_risk + stop_penalty × stop_go + …)`. Stop-and-go is about the same on most streets (0.58-0.71, 10-90%, and two thirds of the length is unmeasured at 0.63), so a high `stop_penalty` made every street about equally dearer: length decided again, and routes drifted back to the shortest one (over 40 random trips, `stop_penalty` 20 points cut the detour from 3.6% to 2.2% and made routes bumpier). A high `prefer_bike_friendly` likewise drowned the other dislikes.
+- Danger counts incidents at spots, so it's **a fixed number of metres per street**, whatever its length, scaled by the street's dislikes like its length.
+- A lift (`highway=elevator` node, e.g. onto the Campusbrücke) is a stop too: riding through one costs `stop_penalty` × 25 m (at 4 points the 100 m of waiting plus getting in and out, about 25 s), a **fixed amount per lift**. At the default 1 that is 25 m of detour, at 10 it is 250 m. The route reports its `lifts`.
 - All penalties at 0 give the shortest route.
 - With `prefer_time`, `length` becomes riding time: `length × 15.7 km/h / speed`, i.e. metres ridden at the median cyclist speed (see [speed_map](#speed_map_heilbronn-cyclist-speed-per-street-for-prefer_time)). The other terms keep their meaning in metres.
+- **Defaults** (bump 2, danger 10, air 1, stop 1): over 40 random trips of 1.5-5 km, routes are 5.5% longer than the shortest route, with 65% fewer bumpy metres, 58% less bad air, 49% less stop-and-go and 68% fewer overtaking spots than it.
 - **Riders' closure reports** (`backend/reports.py`): a street reported closed by too few riders yet, or whose reports lapsed without confirmation, costs 4× as much (`REPORTED_CLOSED_FACTOR`), so routes take a detour up to 4× its length but still ride it when there is none. A closed street (3 live independent reports) isn't ridden at all, except the piece up to a start or end point on it. This applies to the shortest route in `/route/compare` too, but not to `/score`, which rates streets, not today's closures.
 
 ## Which streets are in the graph
@@ -31,13 +37,13 @@ OSMnx's bike network, with these changes:
 - Matched by OSM way id. Values are 0–100 (`Normalized Roughness`; the ATRAI docs call it `normalized_score`).
 - A street without data but with measured streets close by gets an **estimate** from them (`data/custom/roughness_estimates_heilbronn.json`, see [estimation/README.md](../estimation/README.md)). Responses report it as `estimated_share`; `mean_roughness` stays over the measured part.
 - Any other street gets **10**, the median. With 0, unknown streets would look perfectly smooth and attract every route.
-- Graph edges: 38% measured, 28% estimated, 34% unknown. `bump_penalty` default: 10.
+- Graph edges: 38% measured, 28% estimated, 34% unknown. `bump_penalty` default: 2.
 
 ### `danger_zones_raw_heilbronn`: close overtakes, **summed** per street
 
 - One row is one overtake, with its device, time and exact distance. A street's danger is the sum of its rows' Risk Index (0–1). A mean would rate one near-miss the same as fifty.
 - A street without rows gets no penalty.
-- `danger_penalty` default 25 = metres of detour you'd ride to avoid one full-risk spot.
+- `danger_penalty` default 10 = metres of detour you'd ride to avoid one full-risk spot on a typical street. (It was 25 when the other dislikes inflated every street about 2.5×, which watered it down to about the same.)
 - Only rows over 25 cm count, see [below](#which-overtaking-readings-count).
 - **Source:** `download_data.py` builds it from the raw sensor table `osem_bike_data`: devices tagged `heilbronn`, inside Heilbronn (`HEILBRONN_BBOX`). 6,280 rows from 28 devices. Fields: `index`, `boxId`, `boxName`, `createdAt`, `Overtaking Distance` (cm), `Overtaking Manoeuvre`, `Risk Index Overtaking`, `Speed`.
 - **Why not the ready-made `danger_zones_heilbronn`?** Same overtakes, but no device or time, 919 of its 7,095 points are rides in Karlsruhe, Heidelberg, Munich and elsewhere, and a distance of 0 ("no reading") is scored as maximum risk. After the 25 cm rule both give the same 4,052 points and the same routes.
@@ -54,8 +60,8 @@ OSMnx's bike network, with these changes:
 - Streets agree only weakly. Split the bikes into two random halves and rank streets by each half's readings: the rankings correlate ~0.24 (Spearman, 30 splits, streets with 5+ readings in both halves; 0.18 with the old within-ride rank, which the new score beat in 28 of 30 splits). Split by day instead: ~0.39 (0.38 before).
 - **Averaged per street by ride, not by reading.** One pass leaves several readings from the same sensor in the same minute, so they count as one: each ride's readings on a street are averaged first, then the rides, pulled towards the street's prior (0.5, or 0.525 on a hotspot, below) by 8 virtual rides (`AIR_PRIOR_RIDES`). A street one bike passed once barely moves from 0.5; a street 20 rides agree on keeps most of its value. A third of the measured streets have a single ride.
   - Why 8: street values from one half of the bikes (or days) predict the other half's per-ride street means. Plain reading means, as before, are 25-30% *worse* than giving every street 0.5, i.e. they mostly carried noise. 8 rides does best, slightly better than 0.5 everywhere (1% by bike, 3.5% by day); anything from 5 to 30 is within 1%.
-  - Street values now span about 0.44-0.58 (5-95%; 0.23-0.86 before). Over 40 random trips of 1.5-5 km with only `pm_penalty` on, 0.5 changes 15 routes (26 before) for no extra length, and 2 changes 24 for 0.2%. Air now moves routes only where many rides agree.
-- `pm_penalty` default 0.5. Unmeasured streets get 0.5.
+  - Street values now span about 0.44-0.58 (5-95%; 0.23-0.86 before). Air moves routes only where many rides agree.
+- `pm_penalty` default 1, kept mild as streets agree only weakly. Unmeasured streets get 0.5, typical: no extra cost.
 - **Source:** built from `osem_bike_data` with the `danger_zones_PM` filters: devices tagged `heilbronn`, humidity ≤ 75%, per-device IQR outlier removal, then cut to `HEILBRONN_BBOX`. 166,429 rows; 164,789 are scored (rows before the stations started in March 2026, or in hours without a station reading, are dropped).
 - **Map overlay:** `/air` serves these points with their 0-1 score (not an absolute PM value).
 - **Why not `danger_zones_PM_heilbronn`?** Its `Risk Index` mixes in overtaking, which `danger_penalty` already counts. Our rows match its points inside Heilbronn exactly, plus 21,915 valid air readings from bikes without a distance sensor.
@@ -79,7 +85,7 @@ OSMnx's bike network, with these changes:
 - `avg_traffic_flow` is 0-1 per segment: near 1 = bikes roll freely, near 0 = slow or stop-and-go (traffic lights, congestion). Routing uses `stop_go = 1 − flow`, so higher is worse like the other factors.
 - Matched by OSM way id, like roughness. A way's value is the mean of its segments **weighted by `points_in_segment`**, pulled towards the median flow (0.37) by 5 extra points. Half the segments have 7 or fewer points and their values scatter more, so one slow reading doesn't brand a street.
 - Unmeasured streets get **0.63** (1 − median). About 43% of graph edges (35% of the length) are measured.
-- `stop_penalty` default 0.5. Streets differ little (way values ~0.5-0.85, 5-95%), and the shortest route is rarely the slow one: over 40 random trips of 1.5 km or more, a penalty of 1 changes 72% of routes but adds only 0.4% distance and lowers `mean_stop_go` by 0.02. Expect small detours.
+- `stop_penalty` default 1. Streets differ little (way values ~0.5-0.85, 5-95%), so only the stop-and-go above typical counts (see the cost above). On the example trip below, 4 avoids every street on the bad line, like `prefer_time` does.
 - **Map overlay:** `/flow` serves the raw segments as `stop_go`.
 
 ### `speed_map_heilbronn`: cyclist speed per street, for `prefer_time`
@@ -90,14 +96,14 @@ OSMnx's bike network, with these changes:
 - Both directions of a street get the same speed: the dataset is per segment, not per direction, so uphill and downhill are not told apart.
 - **Overlap with stop_go:** traffic_flow is itself built from normalized speed and standing time, so `prefer_time` and `stop_penalty` partly count the same thing. Time mode already lowers `mean_stop_go` on its own (0.67 → 0.59 on the example trip); keep `stop_penalty` low when using it.
 - **Every route** reports `duration_s` (length / speed per street, plus ~23 s per lift) and `speed_measured_share`; `/route/compare` adds `extra_time_pct` next to `detour_pct`. The comparison's shortest route is always by distance.
-- Over 40 random trips of 1.5 km or more: with only `prefer_time` (penalties 0), 95% of routes change, 5.1% longer on average (max 21%) and 8.7% faster (max 29%). With the default penalties, switching it on changes 90% of routes, 3.4% longer and 12.1% faster than the default route.
+- Over 40 random trips of 1.5 km or more: with only `prefer_time` (penalties 0), 95% of routes change, 5.1% longer on average (max 21%) and 8.7% faster (max 29%).
 - **Map overlay:** `/speed` serves the raw segments as `speed_kmh` (higher = faster, unlike the other overlays).
 
 ### Shade and street lighting, chosen by `depart_time`
 
-- Both apply only with a `depart_time`. The sun's altitude at that time and date (NOAA equations, `routing.shadow.sun_position`) decides which one: above the horizon (-0.833°, as for sunrise and sunset), sunny streets cost `shade_penalty × (1 − shade)` times their length; below it, unlit streets cost `dark_penalty × (1 − lit)` times their length.
-- **Shade** (`data/custom/shadow_heilbronn.json`, building and tree shadow per OSM way) exists for 21 July at 09, 12, 15 and 18 h; a route uses the slot nearest its time of day, whatever the date. Ways without it fall back to the static tree canopy (`shade_heilbronn.json`), then 0.1 (most streets get little shade: median ~0.05 at noon). Over 30 random trips at 15:00, `shade_penalty` 0.5 changes 23 routes for a 0.5% mean detour (mean shade 0.18 → 0.21).
-- **Lighting** (`data/custom/lighting_heilbronn.json`) is the chance a way is lit: OSM `lit=*`, else Mapillary street lights, else a road-type and buildings rule. Unknown ways get 0.5; about 11% of the graph's ways have no value yet. Over the same trips at 21:00, `dark_penalty` 1 changes 26 of 30 routes for a 3% mean detour, raising the chance of being lit from 0.80 to 0.91.
+- Both apply only with a `depart_time`. The sun's altitude at that time and date (NOAA equations, `routing.shadow.sun_position`) decides which one: above the horizon (-0.833°, as for sunrise and sunset), sunny streets cost `¼ shade_penalty × (1 − shade)` more per metre; below it, unlit streets cost `¼ dark_penalty × (1 − lit)` more.
+- **Shade** (`data/custom/shadow_heilbronn.json`, building and tree shadow per OSM way) exists for 21 July at 09, 12, 15 and 18 h; a route uses the slot nearest its time of day, whatever the date. Ways without it fall back to the static tree canopy (`shade_heilbronn.json`), then 0.1 (most streets get little shade: median ~0.05 at noon). Over 30 random trips at 15:00, `shade_penalty` 2 changes 23 routes for a 0.5% mean detour (mean shade 0.18 → 0.21).
+- **Lighting** (`data/custom/lighting_heilbronn.json`) is the chance a way is lit: OSM `lit=*`, else Mapillary street lights, else a road-type and buildings rule. Unknown ways get 0.5; about 11% of the graph's ways have no value yet. Over the same trips at 21:00, `dark_penalty` 4 changes 26 of 30 routes for a 3% mean detour, raising the chance of being lit from 0.80 to 0.91.
 - Routes report `daylight`, `shade_slot`, `mean_shade` (by day only), `mean_lit` and the share of the route each is known for. **Map overlays:** `/shade` (all slots per street, plus `slots`) and `/lighting`.
 
 ## Which overtaking readings count
@@ -131,13 +137,13 @@ From 49.14838, 9.22687 to 49.1262, 9.22439:
 | Penalties (bump / danger / PM / stop) | Length  | Roughness | Overtaking spots | Stop-and-go |
 |---------------------------------------|---------|-----------|------------------|-------------|
 | 0 / 0 / 0 / 0 (shortest)              | 3.06 km | 24.7      | 10               | 0.67        |
-| 10 / 25 / 0.5 / 0.5 (defaults)        | 3.09 km | 12.3      | 21               | 0.69        |
-| 10 / 100 / 0.5 / 0.5                  | 3.23 km | 12.4      | 6                | 0.69        |
-| 0 / 0 / 0 / 5                         | 3.07 km | 24.3      | 12               | 0.66        |
+| 2 / 10 / 1 / 1 (defaults)             | 3.26 km | 12.4      | 11               | 0.68        |
+| 2 / 50 / 1 / 1                        | 3.24 km | 13.5      | 4                | 0.68        |
+| 0 / 0 / 0 / 4                         | 3.79 km | 17.7      | 6                | 0.59        |
 | 0 / 0 / 0 / 0, `prefer_time`          | 3.72 km | 19.6      | 9                | 0.59        |
-| 10 / 25 / 0.5 / 0.5, `prefer_time`    | 4.15 km | 11.3      | 3                | 0.60        |
+| 2 / 10 / 1 / 1, `prefer_time`         | 4.15 km | 11.3      | 3                | 0.60        |
 
-On this trip the defaults pick the smooth street, which has more overtaking spots than the shortest route, and 25 is too weak to change that. At 100 the route avoids both. The default `stop_penalty` doesn't change any of these routes, and even 5 only swaps a few short pieces. `prefer_time` takes faster streets: 822 s instead of 940 s for the shortest route (−13%), 21% further. With the default penalties it rides 918 s over 4.15 km: the time-scaled penalties now find a detour around nearly all overtaking spots that pays off.
+On this trip the defaults pick the smooth street at about the shortest route's overtaking spots; at 50 the route also avoids most of those. `stop_penalty` 4 finds nearly the route `prefer_time` takes (the free-flowing streets are the fast ones): 825 s instead of 940 s for the shortest route, 24% further. `prefer_time` alone: 822 s, 21% further. With the default penalties it rides 918 s over 4.15 km, around nearly all overtaking spots.
 
 ## Grade (display only, not in the route cost)
 

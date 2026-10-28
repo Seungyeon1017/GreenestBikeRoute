@@ -44,6 +44,14 @@ def test_route_grade_follows_the_route_in_pieces(hilly):
     assert s["length_by_severity_m"] == {"flat": 0, "gentle": 70, "noticeable": 0, "steep": 70, "very_steep": 0}
 
 
+def test_grade_summary_has_the_kcal_of_the_route(hilly):
+    p = find_route(hilly, COORDS[A], COORDS[B], 10)["features"][0]["properties"]
+    s = route_grade(hilly, COORDS[A], COORDS[B], 10)["summary"]
+    assert (s["kcal"], s["climb_m"]) == (p["kcal"], p["climb_m"])
+    assert route_grade(hilly, COORDS[A], COORDS[B], 10, weight_kg=90)["summary"]["kcal"] > s["kcal"]
+    assert route_grade(hilly, COORDS[A], COORDS[B], 10, e_bike=True)["summary"]["kcal"] < s["kcal"]
+
+
 @pytest.mark.parametrize("bump_penalty", [0, 10])
 def test_grade_pieces_join_up_to_the_route(hilly, bump_penalty):
     route = find_route(hilly, COORDS[A], COORDS[B], bump_penalty)["features"][0]["geometry"]["coordinates"]
@@ -69,7 +77,12 @@ def test_grade_does_not_change_the_route(toy_graph):
     before = find_route(toy_graph, COORDS[A], COORDS[B])
     for n, h in {**HEIGHTS, C: 300.0}.items():  # a wall on the detour
         toy_graph.nodes[n]["elevation"] = h
-    assert find_route(toy_graph, COORDS[A], COORDS[B]) == before
+    after = find_route(toy_graph, COORDS[A], COORDS[B])
+    # climb_m and kcal are the only things heights change: they add climbing to the energy estimate
+    for f in (before, after):
+        for key in ("climb_m", "kcal"):
+            f["features"][0]["properties"].pop(key)
+    assert after == before
 
 
 def test_start_in_the_middle_of_a_street_gets_an_interpolated_height(hilly):

@@ -1,6 +1,6 @@
 """GeoJSON response shapes, so /docs shows what the endpoints return, and the request bodies of the reports."""
 from datetime import date
-from typing import Literal, Optional
+from typing import Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -11,17 +11,18 @@ LonLat = tuple[float, float]  # GeoJSON order: [longitude, latitude]
 EXAMPLE_TRIP = {"from_lat": 49.14838, "from_lon": 9.22687, "to_lat": 49.1262, "to_lon": 9.22439}
 ROUTE_EXAMPLE = {
     "type": "Feature",
-    # Shortened: the real line has 157 points.
+    # Shortened: the real line has 160 points.
     "geometry": {"type": "LineString",
-                 "coordinates": [[9.2268683, 49.148385], [9.2228294, 49.1386103], [9.2243909, 49.1262013]]},
+                 "coordinates": [[9.2268683, 49.148385], [9.2227619, 49.139049], [9.2243909, 49.1262013]]},
     "properties": {
-        "bump_penalty": 10.0, "danger_penalty": 25.0, "pm_penalty": 0.5, "stop_penalty": 0.5, "prefer_time": False,
-        "shade_penalty": 0.5, "dark_penalty": 1.0, "prefer_bike_friendly": 0.0, "depart_time": None, "daylight": None, "shade_slot": None,
-        "length_m": 3088.2, "duration_s": 940, "speed_measured_share": 0.97, "mean_roughness": 12.3, "measured_share": 0.97, "estimated_share": 0.0,
-        "danger_points": 21, "danger_risk": 17.12, "mean_pm_risk": 0.511, "pm_measured_share": 0.65,
-        "mean_stop_go": 0.691, "stop_measured_share": 0.97,
-        "mean_shade": None, "shade_known_share": 1.0, "mean_lit": 0.986, "lit_known_share": 0.97, "lifts": 0,
+        "bump_penalty": 2, "danger_penalty": 10.0, "pm_penalty": 1, "stop_penalty": 1, "prefer_time": False,
+        "shade_penalty": 2, "dark_penalty": 4, "prefer_bike_friendly": 0, "depart_time": None, "daylight": None, "shade_slot": None,
+        "length_m": 3257.1, "duration_s": 959, "climb_m": 26.2, "kcal": 147.6, "speed_measured_share": 0.89, "mean_roughness": 12.4, "measured_share": 0.88, "estimated_share": 0.0,
+        "danger_points": 11, "danger_risk": 9.0, "mean_pm_risk": 0.506, "pm_measured_share": 0.63,
+        "mean_stop_go": 0.68, "stop_measured_share": 0.89,
+        "mean_shade": None, "shade_known_share": 0.95, "mean_lit": 0.986, "lit_known_share": 0.89, "lifts": 0,
         "reported_closures": 0,
+        "bumpy_m": 202, "bad_air_m": 292, "stop_go_m": 379, "sunny_m": None, "unlit_m": None, "bike_friendly_m": 1160, "pushed_m": 0,
     },
 }
 SHORTEST_EXAMPLE = {
@@ -31,15 +32,16 @@ SHORTEST_EXAMPLE = {
     "properties": {
         "bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0, "prefer_time": False,
         "shade_penalty": 0, "dark_penalty": 0, "prefer_bike_friendly": 0, "depart_time": None, "daylight": None, "shade_slot": None,
-        "length_m": 3061.2, "duration_s": 940, "speed_measured_share": 0.97, "mean_roughness": 24.7, "measured_share": 0.97, "estimated_share": 0.02,
+        "length_m": 3061.2, "duration_s": 940, "climb_m": 30.7, "kcal": 148.8, "speed_measured_share": 0.97, "mean_roughness": 24.7, "measured_share": 0.97, "estimated_share": 0.02,
         "danger_points": 10, "danger_risk": 7.94, "mean_pm_risk": 0.524, "pm_measured_share": 0.75,
         "mean_stop_go": 0.665, "stop_measured_share": 0.97,
         "mean_shade": None, "shade_known_share": 1.0, "mean_lit": 0.93, "lit_known_share": 0.99, "lifts": 0,
         "reported_closures": 0,
+        "bumpy_m": 1895, "bad_air_m": 733, "stop_go_m": 481, "sunny_m": None, "unlit_m": None, "bike_friendly_m": 874, "pushed_m": 0,
     },
 }
 
-# /route/grade for the example trip, shortened to its first 2 of 12 pieces; tests/test_heilbronn.py checks them and the summary.
+# /route/grade for the example trip, shortened to its first 2 of 14 pieces; tests/test_heilbronn.py checks them and the summary.
 GRADE_EXAMPLE = {
     "type": "FeatureCollection",
     "features": [
@@ -56,9 +58,10 @@ GRADE_EXAMPLE = {
                         "start_m": 110.4}},
     ],
     "summary": {
-        "length_m": 3088.2, "climb_m": 24.6, "descent_m": 6.4, "start_elevation_m": 162.7, "end_elevation_m": 180.8,
+        "length_m": 3257.1, "climb_m": 26.2, "descent_m": 8.0, "start_elevation_m": 162.7, "end_elevation_m": 180.8,
         "max_grade_pct": 4.1, "max_descent_grade_pct": -3.0,
-        "length_by_severity_m": {"flat": 2735.3, "gentle": 343.3, "noticeable": 9.6, "steep": 0.0, "very_steep": 0.0},
+        "length_by_severity_m": {"flat": 2851.5, "gentle": 396.0, "noticeable": 9.6, "steep": 0.0, "very_steep": 0.0},
+        "kcal": 147.6,
     },
 }
 
@@ -96,6 +99,13 @@ class RouteProperties(BaseModel):
     length_m: float = Field(description="Route length in metres")
     duration_s: int = Field(
         description="Expected riding time in seconds from speed_map (measured cyclist speed, waits included; unmeasured streets at 15.7 km/h), lifts included")
+    climb_m: Optional[float] = Field(
+        description="Total height gained in metres, bridge humps included (same as `climb_m` of /route/grade); null without elevation data")
+    kcal: float = Field(description=(
+        "Rough energy use in kcal for riding this route (MET 6.8 for the riding time, plus the climbs), for the weight_kg "
+        "rider; e_bike gives a rough pedelec estimate. When `climb_m` is null the climbs count as 0, so it is a lower bound. "
+        "For an e-scooter ride (/route/sharing) only pushing it (pushed_m) counts, as walking: the motor does the riding. "
+        "Show it rounded, e.g. \"about 120 kcal\". An estimate, not a measurement; see routing/calories.py"))
     speed_measured_share: float = Field(description="Share of the route length with speed_map measurements, 0-1")
     mean_roughness: Optional[float] = Field(
         description="Normalized Roughness 0-100, length-weighted over the measured part; null if none was measured")
@@ -116,11 +126,18 @@ class RouteProperties(BaseModel):
     mean_lit: Optional[float] = Field(
         description="Chance the streets are lit at night, 0-1, length-weighted over the part with lighting data; null if none")
     lit_known_share: float = Field(description="Share of the route length with lighting data, 0-1")
-    lifts: int = Field(description="Lifts (elevators) the route rides through, e.g. onto the Campusbrücke; each one costs stop_penalty x 100 m")
+    lifts: int = Field(description="Lifts (elevators) the route rides through, e.g. onto the Campusbrücke; each one costs stop_penalty x 25 m")
     reported_closures: int = Field(description=(
         "Streets on the route that riders reported closed, by too few to close them or without a recent report "
         "(status reported or unconfirmed in `/reports/closures`); the route still rides them, as there was no sensible "
         "way round. Worth a warning"))
+    bumpy_m: int = Field(description="Metres on bumpy streets: roughness (measured or estimated) 20 or more, the worst tenth of measured street length")
+    bad_air_m: int = Field(description="Metres on streets with bad air: measured air score 0.555 or more, the worst tenth of measured street length")
+    stop_go_m: int = Field(description="Metres on stop-and-go streets: measured stop_go 0.77 or more, the worst tenth of measured street length")
+    sunny_m: Optional[int] = Field(description="By day: metres in the sun at shade_slot (share not in shade, over the streets with shade data); null otherwise")
+    unlit_m: Optional[int] = Field(description="After dark: metres on probably unlit streets (chance not lit, over the streets with lighting data); null otherwise")
+    bike_friendly_m: int = Field(description="Metres on bike paths, bike lanes and bike routes (see /bike-friendly-streets)")
+    pushed_m: int = Field(description="Metres an e-scooter is pushed at walking pace, on footways and pedestrian streets it must not ride on (eKFV); 0 for bikes")
 
 
 class RouteFeature(BaseModel):
@@ -146,7 +163,22 @@ class RouteComparison(BaseModel):
     same_path: bool = Field(description="True if the route follows the same streets as the shortest route")
 
     model_config = {"json_schema_extra": {"example": {
-        "route": ROUTE_EXAMPLE, "shortest": SHORTEST_EXAMPLE, "detour_pct": 0.9, "extra_time_pct": 0.0, "same_path": False}}}
+        "route": ROUTE_EXAMPLE, "shortest": SHORTEST_EXAMPLE, "detour_pct": 6.4, "extra_time_pct": 2.0, "same_path": False}}}
+
+
+class DayPeriod(RouteComparison):
+    """/route/compare for every departure time in [from, to)."""
+    from_: str = Field(alias="from", description="First departure time of the period, HH:MM local time")
+    to: str = Field(description="End of the period, HH:MM local time (23:59 for the last one)")
+
+    model_config = {"populate_by_name": True}
+
+
+class DayRoutes(BaseModel):
+    """The routes of one day by departure time: by day the route can follow the shade of the time slot, after
+    dark the lit streets. Consecutive periods differ in shade slot or in daylight."""
+    date: str = Field(description="The day, ISO 8601 (that of depart_time, or today)")
+    periods: list[DayPeriod] = Field(min_length=1, description="From 00:00 to 23:59, in order")
 
 
 Severity = Literal["flat", "gentle", "noticeable", "steep", "very_steep"]
@@ -176,6 +208,7 @@ class GradeSummary(BaseModel):
     max_grade_pct: float = Field(description="Steepest uphill street piece in % (0 if the route never climbs)")
     max_descent_grade_pct: float = Field(description="Steepest downhill street piece in %, negative (0 if it never descends)")
     length_by_severity_m: dict[Severity, float] = Field(description="Metres of the route in each severity")
+    kcal: float = Field(description="Rough energy use in kcal for riding the route, for the weight_kg rider (same as `kcal` of /route)")
 
 
 class GradeCollection(BaseModel):
@@ -545,6 +578,87 @@ class MappingCollection(BaseModel):
                                                       "note": "Footway beside the tram lane, signed for bikes",
                                                       "status": "pending", "created": "2026-10-28T15:10:00+00:00",
                                                       "resolved": None}})
+
+
+EndRule = Literal["anywhere", "parking_zone", "no"]
+
+
+class GeofencingProperties(BaseModel):
+    provider: str
+    name: Optional[str] = Field(description="The zone's name, if the provider gives one (Dott: only its whole area)")
+    order: int = Field(description="Position in the provider's feed: where zones overlap, the lowest order decides")
+    bike: Optional[EndRule] = Field(None, description="Where an e-bike ride may end in this zone: anywhere, only at a parking zone, or not at all; null if the zone has no rule for e-bikes")
+    scooter: Optional[EndRule] = Field(None, description="The same for e-scooters")
+
+
+class GeofencingFeature(BaseModel):
+    type: Literal["Feature"]
+    geometry: dict = Field(description="GeoJSON Polygon or MultiPolygon")
+    properties: GeofencingProperties
+
+
+class GeofencingCollection(BaseModel):
+    """The provider's geofencing zones in feed order, from the saved copy (python -m backend.sharing): they change
+    rarely. Outside every zone a ride may not end."""
+    type: Literal["FeatureCollection"]
+    features: list[GeofencingFeature]
+    updated: str = Field(description=SHARING_UPDATED)
+    attribution: str = Field(description=SHARING_ATTRIBUTION)
+
+
+class ReturnPointProperties(BaseModel):
+    rule: Literal["anywhere", "parking_zone"] = Field(description="Left where free parking is allowed, or at a parking zone")
+    at_destination: bool = Field(description="True when the vehicle can be left at the destination itself")
+    name: Optional[str] = Field(description="The parking zone's name, null elsewhere")
+
+
+class ReturnPoint(BaseModel):
+    type: Literal["Feature"]
+    geometry: Point
+    properties: ReturnPointProperties
+
+
+class WalkProperties(BaseModel):
+    mode: Literal["walk"]
+    length_m: float = Field(description="Walking distance in metres")
+    duration_s: int = Field(description="Walking time in seconds at 4.8 km/h")
+    kcal: float = Field(description="Rough energy use in kcal for the walk (MET 3.5, climbs not counted), for the weight_kg rider")
+
+
+class WalkFeature(BaseModel):
+    type: Literal["Feature"]
+    geometry: LineString
+    properties: WalkProperties
+
+
+class RideProperties(RouteProperties):
+    mode: Literal["bike", "scooter"] = Field(description=(
+        "Ridden on the rented e-bike or e-scooter. `kcal` is for a pedelec when the bike is electric; on an e-scooter "
+        "it counts only pushing it, as walking"))
+
+
+class RideFeature(BaseModel):
+    type: Literal["Feature"]
+    geometry: LineString
+    properties: RideProperties
+
+
+class SharingTrip(BaseModel):
+    """Walk to a free shared vehicle, ride it to the end (or, where the end is a no-parking zone, to the nearest place
+    it may be left), walk to the end. The walks follow OSM's
+    walking network (pavements, footways, pedestrian zones; no bike paths), the ride the bike graph with the request's
+    penalties, as /route; an e-scooter is pushed on footways and in pedestrian zones (pushed_m)."""
+    vehicle: VehicleFeature = Field(description="The vehicle to rent, as from /sharing")
+    zone: Optional[ZoneFeature] = Field(description="The parking zone the ride ends at; null when it ends elsewhere")
+    return_point: ReturnPoint = Field(description="Where to leave the vehicle")
+    legs: list[Union[WalkFeature, RideFeature]] = Field(min_length=3, max_length=3, description="Walk, ride, walk")
+    duration_s: int = Field(description="Walking plus riding time in seconds (not counting unlocking)")
+    walk_m: float = Field(description="Metres walked, both walks")
+    ride_m: float = Field(description="Metres ridden")
+    ride_s: int = Field(description="Riding time in seconds, what the per-minute price applies to")
+    kcal: float = Field(description="Rough energy use in kcal for the whole trip: both walks and the ride, for the weight_kg rider")
+    updated: str = Field(description=SHARING_UPDATED)
+    attribution: str = Field(description=SHARING_ATTRIBUTION)
 
 
 class Error(BaseModel):
