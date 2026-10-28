@@ -661,5 +661,78 @@ class SharingTrip(BaseModel):
     attribution: str = Field(description=SHARING_ATTRIBUTION)
 
 
+TRANSIT_VALID_UNTIL = ("Last day the timetable covers (the yearly timetable change in December); later days have no "
+                       "departures until the next timetable is out")
+TRANSIT_ATTRIBUTION = "Data credit to show with the timetable"
+
+
+class TransitStopProperties(BaseModel):
+    stop_id: str = Field(description="Station id (IFOPT stop place, e.g. de:08121:26), for /transit/departures")
+    name: str = Field(description="Station name as in the timetable, e.g. \"Mosbach, Bahnhof\"")
+    lines: list[str] = Field(description="Stadtbahn and train lines calling here, e.g. [\"S4\", \"S41\", \"S42\"]")
+    distance_m: Optional[int] = Field(None, description="Metres from the near_lat/near_lon point, when one was given")
+
+
+class TransitStopFeature(BaseModel):
+    type: Literal["Feature"]
+    geometry: Point
+    properties: TransitStopProperties
+
+
+class TransitStopCollection(BaseModel):
+    """Every station a Stadtbahn or train line of the HNV timetable calls at (S4, S41, S42, RE, RB, MEX), inside
+    Heilbronn and beyond (Mosbach, Öhringen, Sinsheim, Stuttgart, ...). All stations are alike: a rider can ride
+    to any of them and take the train, or get off at any of them and ride on."""
+    type: Literal["FeatureCollection"]
+    features: list[TransitStopFeature]
+    valid_until: Optional[str] = Field(description=TRANSIT_VALID_UNTIL)
+    attribution: str = Field(description=TRANSIT_ATTRIBUTION)
+
+    model_config = {"json_schema_extra": {"example": {
+        "type": "FeatureCollection", "valid_until": "2026-12-12",
+        "attribution": "NVBW / MobiData BW (ODbL), timetable of the Heilbronner Hohenloher Haller Nahverkehr (HNV)",
+        "features": [{"type": "Feature", "geometry": {"type": "Point", "coordinates": [9.2084503, 49.1427624]},
+                      "properties": {"stop_id": "de:08121:1114", "name": "Heilbronn Hbf/Willy-Brandt-Pl.",
+                                     "lines": ["S4", "S41", "S42"], "distance_m": 178}}]}}}
+
+
+class TransitDeparture(BaseModel):
+    line: str = Field(description="Line, e.g. S41 or RE 8")
+    headsign: str = Field(description="Where the train is going, as shown on it")
+    departure: str = Field(description="When it leaves, Heilbronn local time with offset (ISO 8601), as timetabled")
+    platform: Optional[str] = Field(description="Platform (Gleis) it leaves from, null if the timetable doesn't say")
+    bike_ticket_needed: bool = Field(description=(
+        "True Monday to Friday 06:00-09:00 (not on public holidays), when a bike needs a Fahrradkarte on HNV trains; "
+        "else bikes ride free. There is no guaranteed space, and other networks the train runs into may differ"))
+    arrival: Optional[str] = Field(None, description="When it arrives at the `to` station (ISO 8601); only with `to`")
+    arrival_platform: Optional[str] = Field(None, description="Platform at the `to` station; only with `to`")
+    duration_min: Optional[int] = Field(None, description="Minutes on the train to the `to` station; only with `to`")
+
+
+class TransitStopName(BaseModel):
+    stop_id: str
+    name: str
+
+
+class TransitDepartures(BaseModel):
+    """The next trains from a station, soonest first, from the timetable (no live delays). With `to`, only trains
+    that go there without a change, each with its arrival: for a bike + train trip, pick the train and start riding
+    early enough to catch it."""
+    stop: TransitStopName = Field(description="The station the trains leave from")
+    to: Optional[TransitStopName] = Field(description="The station they go to, when `to` was given")
+    departures: list[TransitDeparture]
+    valid_until: Optional[str] = Field(description=TRANSIT_VALID_UNTIL)
+    attribution: str = Field(description=TRANSIT_ATTRIBUTION)
+
+    model_config = {"json_schema_extra": {"example": {
+        "stop": {"stop_id": "de:08121:1114", "name": "Heilbronn Hbf/Willy-Brandt-Pl."},
+        "to": {"stop_id": "de:08225:8209", "name": "Mosbach, Bahnhof"},
+        "departures": [{"line": "S41", "headsign": "Mosbach, Bahnhof", "departure": "2026-11-04T08:18+01:00",
+                        "platform": "2", "bike_ticket_needed": True, "arrival": "2026-11-04T09:16+01:00",
+                        "arrival_platform": None, "duration_min": 58}],
+        "valid_until": "2026-12-12",
+        "attribution": "NVBW / MobiData BW (ODbL), timetable of the Heilbronner Hohenloher Haller Nahverkehr (HNV)"}}}
+
+
 class Error(BaseModel):
     detail: str = Field(description="What went wrong, readable enough to show to the user")
