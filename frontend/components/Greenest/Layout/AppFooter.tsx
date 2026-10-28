@@ -103,9 +103,14 @@ export default function AppFooter() {
           </div>
         </div>
         <div className="flex gap-5 text-xs">
-          <Link className={LINK} href="/impressum">
+          <a
+            className={LINK}
+            href="https://reedu.de/imprint"
+            rel="noreferrer"
+            target="_blank"
+          >
             {t('footer.impressum')}
-          </Link>
+          </a>
           <Link className={LINK} href="/datenschutz">
             {t('footer.datenschutz')}
           </Link>
