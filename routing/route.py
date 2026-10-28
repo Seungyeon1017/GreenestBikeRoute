@@ -117,14 +117,26 @@ def _metres_apart(G, node, point_lonlat, plane):
 
 
 def _split_edge(G, u, v, data, node, point_lonlat, plane):
-    """Replace edge u->v by u->node and node->v, cut where it passes `point_lonlat`."""
+    """Replace edge u->v by u->node and node->v, cut where it passes `point_lonlat`.
+
+    A bridge crest inside the edge (`crest`, from routing.elevation) stays with the piece it is on, and the new
+    node gets the height on the line through it, so /route/grade still shows the climb."""
     line = plane.to_m(_edge_line(G, u, v, data))
     cut = line.project(Point(plane.to_m_point(*point_lonlat)))
     share = cut / line.length
     first = plane.to_lonlat(substring(line, 0, cut))
     second = plane.to_lonlat(substring(line, cut, line.length))
-    G.add_edge(u, node, **{**data, "length": data["length"] * share, "geometry": first, "lift_end": False})
-    G.add_edge(node, v, **{**data, "length": data["length"] * (1 - share), "geometry": second, "lift_start": False})
+    crests = (None, None)
+    if data.get("crest") is not None:
+        frac, top = data["crest"]
+        crests = ((frac / share, top) if frac < share else None, ((frac - share) / (1 - share), top) if frac > share else None)
+        hu, hv = G.nodes[u].get("elevation"), G.nodes[v].get("elevation")
+        if hu is not None and hv is not None:
+            G.nodes[node]["elevation"] = (hu + (top - hu) * share / frac if share <= frac
+                                          else top + (hv - top) * (share - frac) / (1 - frac))
+    G.add_edge(u, node, **{**data, "length": data["length"] * share, "geometry": first, "lift_end": False, "crest": crests[0]})
+    G.add_edge(node, v, **{**data, "length": data["length"] * (1 - share), "geometry": second, "lift_start": False,
+                           "crest": crests[1]})
 
 
 @contextmanager

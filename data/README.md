@@ -17,6 +17,7 @@ Built by us from raw `osem_bike_data`, `osem_home_data_heilbronn` and other sour
 - `shade_heilbronn`: street-tree canopy per OSM way (`routing.shade`)
 - `shadow_heilbronn`: building and tree shadow per OSM way and time slot (`routing.shadow`)
 - `roughness_estimates_heilbronn.json`: roughness for unmeasured OSM ways near measured streets, from `bumpy_roads` by `estimation/estimate_roughness.py` (see [estimation/README.md](../estimation/README.md))
-- `elevation_heilbronn.json`: height of every bike-graph node (m above sea level) from the LGL DGM1 terrain model, bridges and tunnels interpolated; built by `python -m routing.elevation --download`, used only to show grade (`/route/grade`), not for routing. Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0
+- `elevation_heilbronn.json`: height of every bike-graph node (m above sea level) from the LGL DGM1 terrain model, bridges and tunnels interpolated, plus the crests of humped bridges; built by `python -m routing.elevation --download`, used only to show grade (`/route/grade`), not for routing. Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0
+- `bridge_decks.json`: hand-checked deck heights of humped bridges (Erwin-Fuchs-, Karl-Nägele-, Bleichinselbrücke) from the LGL DOM1 surface model, read with `python -m routing.bridge_profile`; see [routing/README.md](../routing/README.md#humped-bridges-datacustombridge_decksjson). Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0
 
 Details: [routing/README.md](../routing/README.md)

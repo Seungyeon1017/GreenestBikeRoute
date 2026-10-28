@@ -16,7 +16,7 @@ from backend.sharing import Sharing, SharingUnavailable
 from download_data import DATA_DIR, load_features
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_PM_PENALTY, \
     DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, air_scores, clean_overtaking
-from routing.elevation import attach_elevation, load_elevation
+from routing.elevation import attach_elevation, load_crests, load_elevation
 from routing.grade import NoElevationError, route_grade
 from routing.graph import load_graph
 from routing.route import RouteError, compare_routes, edge_coords, find_route, sky, street_scores
@@ -239,7 +239,7 @@ def create_app(graph=None, sharing=None):
     @asynccontextmanager
     async def lifespan(app):
         app.state.graph = graph if graph is not None else load_graph()
-        attach_elevation(app.state.graph, load_elevation())  # node heights for /route/grade
+        attach_elevation(app.state.graph, load_elevation(), load_crests())  # node heights and bridge crests for /route/grade
         app.state.scores = {}
         yield
 

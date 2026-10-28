@@ -190,3 +190,19 @@ def test_neckar_bridge_has_no_grade_spike(client):
     assert [middle["x"], middle["y"]] in joined(grade["features"])  # the route does cross the bridge
     assert grade["summary"]["max_grade_pct"] < 4 and grade["summary"]["max_descent_grade_pct"] > -4
     assert all(f["properties"]["severity"] in ("flat", "gentle") for f in grade["features"])
+
+
+@needs_elevation
+def test_humped_bridge_shows_its_climb(client):
+    """Erwin-Fuchs-Brücke rises about 5 m above its abutments (data/custom/bridge_decks.json). Interpolated
+    straight between them, its deck read -1.1 % and +1.8 % on the way east; now the route climbs onto it and
+    down again, about 10 m in all with the ramp."""
+    G = client.app.state.graph
+    assert G.nodes[148083098]["elevation"] > max(G.nodes[21725964]["elevation"], G.nodes[21725975]["elevation"])
+    trip = {"from_lat": 49.1330, "from_lon": 9.1925, "to_lat": 49.1330, "to_lon": 9.2060, **ZERO}
+    grade = client.get("/route/grade", params=trip).json()
+    assert [G.nodes[148083098]["x"], G.nodes[148083098]["y"]] in joined(grade["features"])  # it does cross the bridge
+    pieces = [(f["properties"]["grade_pct"], f["properties"]["length_m"]) for f in grade["features"]]
+    # onto the deck (at least 100 m over 3 %), then straight down from the crest
+    assert any(g >= 3 and length >= 100 and after <= -2.5 for (g, length), (after, _) in zip(pieces, pieces[1:]))
+    assert grade["summary"]["climb_m"] >= 9

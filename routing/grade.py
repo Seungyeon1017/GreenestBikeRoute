@@ -2,7 +2,11 @@
 
 Grade of an edge = rise in the travel direction / edge length, from the node heights of
 routing.elevation. A two-way street is two edges, so it is uphill one way and downhill the other.
+An edge with a bridge crest inside it (edge attribute `crest`, see routing.elevation) is two parts:
+up to the crest, then down from it.
 """
+import math
+
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_PM_PENALTY, \
     DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY
 from routing.route import edge_coords, route_edges
@@ -51,6 +55,31 @@ def edge_rise(G, u, v):
     return node_height(G, v) - node_height(G, u)
 
 
+def split_coords(pts, frac):
+    """[lon, lat] points of a line cut at `frac` of its length: (first part, second part), both with the cut point."""
+    cos_lat = math.cos(math.radians(pts[0][1]))
+    seg = [math.hypot((b[0] - a[0]) * cos_lat, b[1] - a[1]) for a, b in zip(pts, pts[1:])]
+    target = frac * sum(seg)
+    for i, length in enumerate(seg):
+        if target <= length or i == len(seg) - 1:
+            t = target / length if length else 0.0
+            cut = [pts[i][0] + t * (pts[i + 1][0] - pts[i][0]), pts[i][1] + t * (pts[i + 1][1] - pts[i][1])]
+            return [*pts[:i + 1], cut], [cut, *pts[i + 1:]]
+        target -= length
+
+
+def edge_parts(G, u, v, d):
+    """Edge (u, v) with data d as [(length, rise, [lon, lat] points)] from u to v: one part, or up to the crest
+    and down from it when a bridge crest lies inside the edge."""
+    length, start, end = float(d["length"]), node_height(G, u), node_height(G, v)
+    pts = edge_coords(G, u, v, d)
+    if d.get("crest") is None:
+        return [(length, end - start, pts)]
+    frac, top = d["crest"]
+    first, second = split_coords(pts, frac)
+    return [(frac * length, top - start, first), ((1 - frac) * length, end - top, second)]
+
+
 def grade_pct(rise, length):
     return 100 * rise / length if length else 0.0
 
@@ -68,11 +97,9 @@ def grade_pieces(G, edges):
     """Runs of consecutive edges with the same severity and direction (up/down), as GeoJSON Features."""
     runs = []  # [key, coords, length, rise, start_m]
     along = 0.0
-    for u, v, d in edges:
-        length, rise = float(d["length"]), edge_rise(G, u, v)
+    for length, rise, pts in (part for u, v, d in edges for part in edge_parts(G, u, v, d)):
         grade = grade_pct(rise, length)
         key = (severity(grade), _direction(grade))
-        pts = edge_coords(G, u, v, d)
         if runs and runs[-1][0] == key:
             run = runs[-1]
             run[1].extend(pts[1:])
@@ -100,8 +127,7 @@ def grade_summary(G, edges):
     length = climb = descent = 0.0
     max_up = max_down = 0.0
     by_severity = {name: 0.0 for _, name, _ in SEVERITIES}
-    for u, v, d in edges:
-        edge_len, rise = float(d["length"]), edge_rise(G, u, v)
+    for edge_len, rise, _ in (part for u, v, d in edges for part in edge_parts(G, u, v, d)):
         grade = grade_pct(rise, edge_len)
         length += edge_len
         climb += max(rise, 0)

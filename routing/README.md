@@ -153,10 +153,32 @@ Why not route on it: Heilbronn is mostly flat in the valley, and the hills (Wart
 
 - One height per graph node (17,546), in metres above sea level (NHN, DHHN2016), from the **LGL DGM1** terrain model: 1 m × 1 m cells, ±15 cm. Each node gets the height of the cell it lies in.
 - Built by `python -X utf8 -m routing.elevation --download`: downloads the 43 DGM1 tiles (2 km × 2 km, ~520 MB) the graph touches into `cache/dgm1/` (git-ignored, ~3.5 min), then reads only the 1 km files with nodes (~10 s). The API reads only the 340 kB JSON. Without it, `/route/grade` answers 503.
-- **Bridges and tunnels:** the DGM is bare ground, so a node on a bridge gets the river or railway below it and a node in a tunnel the hill above it. 88 nodes touch only bridge/tunnel edges (519 such edges). 68 of them are interpolated along their structure between the two nearest ends, weighted by distance (a straight line between the abutments of a simple bridge); they moved by up to 10.8 m. The other 20 are on 10 short bridge pieces cut off from the routable network, which keep the terrain height. Example: Kaiserstraße over the Neckar, eastbound. With terrain heights its three bridge edges read −11.3%, −1.9% and +8.8% (the two middle nodes sat about 4 m below the deck); now all three are −0.4%.
+- **Bridges and tunnels:** the DGM is bare ground, so a node on a bridge gets the river or railway below it and a node in a tunnel the hill above it. A node is on a structure when it is an inner point of an OSM bridge/tunnel way, or where two such ways meet (`structure_nodes_from_ways`; the ways come from Overpass, cached in `cache/`). That is 39 nodes; 38 of them are interpolated along their structure between the nearest known height on each side, weighted by distance (a straight line between the abutments of a simple bridge), moving by up to 8.1 m. Example: Kaiserstraße over the Neckar, eastbound. With terrain heights its three bridge edges read −11.3%, −1.9% and +8.8% (the two middle nodes sat about 4 m below the deck); now all three are −0.4%.
+- Why the OSM ways and not the edges' `bridge` tag: after `simplify_graph` an edge is tagged bridge when any of the ways it merges is one, so the 24.6 km of tagged edges hold only 8.7 km of bridge (an 805 m track over a 17 m culvert). Going by the tag, 88 nodes counted as on a structure and many ordinary nodes, mostly on such tracks, were interpolated from abutments far away, by up to 10.8 m. Switching changed 47 node heights; the number of edges steeper than 15% stayed at 139, and those steeper than 25% went from 13 to 11.
+
+### Humped bridges: `data/custom/bridge_decks.json`
+
+A straight line between the abutments flattens a bridge that rises over a river or railway. Erwin-Fuchs-Brücke (Böckingen, over the railway yard and the Neckar) was the worst: its deck read −1.1% and +1.8% eastbound, but it rises about 5 m above its abutments, which riders feel. For the bridges listed in this file, hand-checked heights on the deck are used as well: listed `nodes` keep their height, the rest of the bridge is interpolated through them, and a `crest` in the middle of an edge is stored with the heights (`crests` in `elevation_heilbronn.json`), so `/route/grade` shows that edge as two pieces, up to the crest and down from it. Routing is unchanged.
+
+| Bridge | Edges | Before (one direction) | Now |
+|---|---|---|---|
+| Erwin-Fuchs-Brücke | Badstraße, 94 m + 165 m | −1.1%, +1.8% | +3.9%, then +3.0% up to the crest and −2.5% down; with the ramp the crossing climbs about 10 m |
+| Karl-Nägele-Brücke | the two side paths (cars only on the deck), 204 m and 243 m | −0.2% each | about +2% up to 160.7 m, about −3% down |
+| Bleichinselbrücke | road both ways, two side paths | 0% to −0.5% | gentle hump, 0.6–1.5 m |
+
+The heights come from the **LGL DOM1** surface model (1 m, ±15 cm), which keeps bridge decks but also arches, lamp posts, trees and vehicles, so it is used only here and every value was checked on a plot. To check or add a bridge:
+
+```bash
+uv run --group estimation python -X utf8 -m routing.bridge_profile "Karl-Nägele-Brücke" --at 1=100
+uv run python -X utf8 -m routing.elevation
+```
+
+`routing/bridge_profile.py` takes the bridge-tagged graph edges inside the bridge's OSM `man_made=bridge` outline (so not the paths passing underneath), joins them from abutment to abutment, samples the DOM1 every metre (median of 3 × 3 cells, then a 15 m running median), and prints the heights for the run's inner nodes and its highest point, ready to paste. A deck height is today's straight line between the abutments plus how far the DOM1 deck rises above the line between its own ends, so an offset between the two models at the abutments drops out. The plot goes to `cache/bridge_profiles/`. When the highest point is not the deck, read the deck off the plot and print that spot with `--at RUN=METRES`: on Karl-Nägele-Brücke the highest DOM1 points are a jump near one end and a stretch where the 2017 surface is lower than today's ground, so both crests are the deck plateau at 160.7 m; on Bleichinselbrücke one is a narrow spike (a sign or lamp). Each entry in the file says what was checked.
+
+DOM1 around Heilbronn was captured on 2017-02-15 and not updated since, while DGM1 was updated in 2024. A bridge rebuilt since 2017 needs another source; the script prints how far the two models differ at the abutments (here within 0.7 m, and 0.9 m at the west end of Karl-Nägele's south path, where the plateau value was used). Industriebrücke and Salzhafenbrücke were checked too and need no entry: Industriebrücke climbs to the harbour terrace, which the DGM already has (+6.0% and +3.6% on the bike path), and only 42 m of Salzhafenbrücke is bridge.
 
 Limits:
-- Only nodes have heights. A long edge over a hump shows its average grade; half of the edges are under 35 m, but 10% are over 158 m.
+- Only nodes have heights (plus the hand-checked crests above). A long edge over a hump shows its average grade; half of the edges are under 35 m, but 10% are over 158 m. Humped bridges not in `bridge_decks.json` still read as a straight line between their abutments.
 - Where a street is on a ramp or wall that OSM doesn't tag as a bridge, its nodes get the ground beside or below it. 9 of the 194 routable bridges/tunnels have an approach edge steeper than 15% within 50 m of their ends. Worst: a 7 m piece of Wilhelm-Leuschner-Straße next to the Neckartalstraße bridges at 54%.
 - A node a few metres off the real street, next to an embankment or retaining wall, can make a short piece look steep. Treat very short red pieces with suspicion.
 - **Data:** LGL Baden-Württemberg, Digitales Geländemodell DGM1, https://opengeodata.lgl-bw.de. Licence Datenlizenz Deutschland – Namensnennung – 2.0: the portal states it for every dataset not marked otherwise (DGM1 isn't), and every DGM1 zip ships `GOVDATA-Datenlizenz_Deutschland.pdf`. Required credit: "Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0".
