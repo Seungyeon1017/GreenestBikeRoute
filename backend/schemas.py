@@ -297,5 +297,23 @@ class LightingCollection(BaseModel):
     model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"lit": 0.96}})
 
 
+class ScoreFeature(BaseModel):
+    type: Literal["Feature"]
+    geometry: LineString
+    properties: dict[Literal["score"], float] = Field(
+        description="Overall score 0-100: the street's percentile, by length, among Heilbronn streets ranked by routing cost per "
+                    "metre for the request's penalties (higher = better; 50 = median). Combines roughness, close-overtaking spots "
+                    "and air-quality points snapped to the street, stop-and-go and lifts; with depart_time also sun "
+                    "(by day) or no street lighting (after dark). Streets without data count at the routing defaults")
+
+
+class ScoreCollection(BaseModel):
+    """Every bike graph street once, with its overall score."""
+    type: Literal["FeatureCollection"]
+    features: list[ScoreFeature]
+
+    model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"score": 72.4}})
+
+
 class Error(BaseModel):
     detail: str = Field(description="What went wrong, readable enough to show to the user")

@@ -7,6 +7,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import networkx as nx
+import numpy as np
 import shapely
 from shapely import LineString, Point, STRtree
 from shapely.ops import substring
@@ -240,6 +241,43 @@ def _cost(d, plan):
                      speed_kmh=_speed_kmh(d) if prefer_time else MEDIAN_SPEED_KMH,
                      sun=0.0 if slot is None else 1 - _shade(d, slot), shade_penalty=shade_penalty,
                      dark=1 - _lit(d) if dark else 0.0, dark_penalty=dark_penalty)
+
+
+def street_scores(G, bump_penalty=DEFAULT_BUMP_PENALTY, danger_penalty=DEFAULT_DANGER_PENALTY,
+                  pm_penalty=DEFAULT_PM_PENALTY, stop_penalty=DEFAULT_STOP_PENALTY, prefer_time=False,
+                  shade_penalty=DEFAULT_SHADE_PENALTY, dark_penalty=DEFAULT_DARK_PENALTY, depart_time=None):
+    """Each street once (a two-way street is two edges) as a GeoJSON LineString with `score` 0-100: its percentile, by
+    street length, among Heilbronn streets ranked by routing cost per metre for these penalties (as find_route),
+    cheapest at 100 (higher = better).
+
+    The cost is routing's (_cost): roughness, overtaking spots and air points snapped to the street, stop-and-go
+    and lifts, plus by day sun or after dark unlit streets when depart_time is given; with prefer_time, slow streets
+    cost more. Per metre, so a short street with one overtaking spot ranks low. All penalties 0 (and no prefer_time)
+    make every street cost the same: all score 50.
+    """
+    plan = _plan(G, (bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty,
+                     depart_time))
+    streets = {}
+    for u, v, d in G.edges(data=True):
+        street = (min(u, v), max(u, v), str(d["osmid"]), round(float(d["length"]), 1))
+        length = max(float(d["length"]), 1.0)  # a few edges are a few cm long
+        per_m = _cost(d, plan) / length
+        if street not in streets or per_m < streets[street][0]:
+            streets[street] = (per_m, length, u, v, d)
+    ranked = sorted(streets.values(), key=lambda s: s[0])
+    per_m = np.array([s[0] for s in ranked])
+    # Length of the streets costing more than each one, plus half of those costing the same (midpoint rank): the
+    # many streets without any data all cost the routing defaults.
+    above = np.concatenate([np.cumsum([s[1] for s in ranked][::-1])[::-1], [0.0]])
+    first, after = np.searchsorted(per_m, per_m, side="left"), np.searchsorted(per_m, per_m, side="right")
+    worse = (above[first] + above[after]) / 2
+    features = [
+        {"type": "Feature",
+         "geometry": {"type": "LineString", "coordinates": [[round(x, 6), round(y, 6)] for x, y in edge_coords(G, u, v, d)]},
+         "properties": {"score": round(100 * float(w) / above[0], 1)}}
+        for (_, _, u, v, d), w in zip(ranked, worse)
+    ]
+    return {"type": "FeatureCollection", "features": features}
 
 
 def _route_feature(G, a, b, penalties):

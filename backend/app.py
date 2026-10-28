@@ -9,14 +9,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.schemas import EXAMPLE_TRIP, AirCollection, DangerCollection, Error, FlowCollection, GradeCollection, \
-    LightingCollection, RouteCollection, RouteComparison, RoughnessCollection, ShadeCollection, SpeedCollection
+    LightingCollection, RouteCollection, RouteComparison, RoughnessCollection, ScoreCollection, ShadeCollection, \
+    SpeedCollection
 from download_data import load_features
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_PM_PENALTY, \
     DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, air_ranks, clean_overtaking
 from routing.elevation import attach_elevation, load_elevation
 from routing.grade import NoElevationError, route_grade
 from routing.graph import load_graph
-from routing.route import RouteError, compare_routes, edge_coords, find_route
+from routing.route import RouteError, compare_routes, edge_coords, find_route, sky, street_scores
 
 
 class GeoJSONResponse(JSONResponse):
@@ -119,6 +120,10 @@ grade doesn't change which route is picked).
   value is 0-1 (roughness 0-100), and higher is always worse. `/speed` gives km/h, where higher is faster.
   `/shade` (share in shade per time slot) and `/lighting` (chance a street is lit at night) are 0-1 where higher
   is better.
+- **Overall score:** `/score` puts every street on one 0-100 scale (higher = better): its percentile, by length, among
+  Heilbronn streets ranked by routing cost per metre. It takes the same penalties, `prefer_time` and `depart_time` as
+  `/route`, so it shows the streets the way that route request weighs them. Overtaking spots and air points count for
+  the street they are snapped to.
 
 Heights for `/route/grade`: Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0 (DGM1).
 Shade: LGL BW LoD2 (dl-de/by-2-0) and Stadt Heilbronn Baumkataster (dl-de/by-2-0).
@@ -131,13 +136,7 @@ def trip_example(name):
     return {"example_trip": {"summary": "Example trip (README)", "value": EXAMPLE_TRIP[name]}}
 
 
-def route_query(
-    from_lat: float = Query(..., ge=-90, le=90, description="Start latitude (must be in Heilbronn)",
-                            openapi_examples=trip_example("from_lat")),
-    from_lon: float = Query(..., ge=-180, le=180, description="Start longitude", openapi_examples=trip_example("from_lon")),
-    to_lat: float = Query(..., ge=-90, le=90, description="End latitude (must be in Heilbronn)",
-                          openapi_examples=trip_example("to_lat")),
-    to_lon: float = Query(..., ge=-180, le=180, description="End longitude", openapi_examples=trip_example("to_lon")),
+def penalty_query(
     bump_penalty: float = Query(DEFAULT_BUMP_PENALTY, ge=0, le=50, description=(
         "How much do you hate bumps. 0 = ignore; 10 accepts a few % detour for smoother streets; 50 = strongly avoid")),
     danger_penalty: float = Query(DEFAULT_DANGER_PENALTY, ge=0, le=100, description=(
@@ -162,9 +161,25 @@ def route_query(
         openapi_examples={"afternoon": {"summary": "Summer afternoon (shade counts)", "value": "2026-07-21T15:00"},
                           "night": {"summary": "Autumn evening after sunset (lighting counts)", "value": "2026-10-28T19:30"}}),
 ):
+    """The penalties, prefer_time and depart_time, shared by the routes and /score."""
+    return bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty, depart_time
+
+
+def route_query(
+    from_lat: float = Query(..., ge=-90, le=90, description="Start latitude (must be in Heilbronn)",
+                            openapi_examples=trip_example("from_lat")),
+    from_lon: float = Query(..., ge=-180, le=180, description="Start longitude", openapi_examples=trip_example("from_lon")),
+    to_lat: float = Query(..., ge=-90, le=90, description="End latitude (must be in Heilbronn)",
+                          openapi_examples=trip_example("to_lat")),
+    to_lon: float = Query(..., ge=-180, le=180, description="End longitude", openapi_examples=trip_example("to_lon")),
+    penalties=Depends(penalty_query),
+):
     """The query parameters shared by /route, /route/compare and /route/grade."""
-    return (from_lat, from_lon), (to_lat, to_lon), (bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time,
-                                                     shade_penalty, dark_penalty, depart_time)
+    return (from_lat, from_lon), (to_lat, to_lon), penalties
+
+
+# /score collections kept for the most recent penalty settings; each is ~4 MB.
+SCORE_CACHE_SIZE = 8
 
 
 ROUTE_ERRORS = {400: {"description": "Start or end is outside Heilbronn, or no route exists",
@@ -187,6 +202,7 @@ def create_app(graph=None):
     async def lifespan(app):
         app.state.graph = graph if graph is not None else load_graph()
         attach_elevation(app.state.graph, load_elevation())  # node heights for /route/grade
+        app.state.scores = {}
         yield
 
     app = FastAPI(title="Greenest Bike Route", description=API_DESCRIPTION, lifespan=lifespan,
@@ -269,6 +285,19 @@ def create_app(graph=None):
         if not hasattr(app.state, "lighting"):
             app.state.lighting = street_collection(app.state.graph, "lit")
         return GeoJSONResponse(app.state.lighting)
+
+    @app.get("/score", tags=[OVERLAYS], summary="Overall score per street, all factors in one, as GeoJSON for a map overlay",
+             response_class=GeoJSONResponse, response_model=ScoreCollection,
+             response_description="LineStrings with `score` 0-100 (higher = better); every street of the bike graph")
+    def score(penalties=Depends(penalty_query)):
+        *weights, depart_time = penalties
+        key = (*weights, *sky(app.state.graph, depart_time))  # departure times in the same shade slot score alike
+        scores = app.state.scores
+        if key not in scores:
+            if len(scores) >= SCORE_CACHE_SIZE:
+                del scores[next(iter(scores))]  # the oldest
+            scores[key] = street_scores(app.state.graph, *penalties)
+        return GeoJSONResponse(scores[key])
 
     return app
 

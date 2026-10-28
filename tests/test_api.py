@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 
 from backend.app import create_app
 from backend.schemas import DangerCollection, FlowCollection, GradeCollection, LightingCollection, RouteCollection, \
-    RouteComparison, RoughnessCollection, ShadeCollection, SpeedCollection
+    RouteComparison, RoughnessCollection, ScoreCollection, ShadeCollection, SpeedCollection
 from download_data import HEILBRONN_BBOX, overtaking_risk
 from routing.costs import MIN_OVERTAKING_CM
 from routing.graph import attach_lighting, attach_shade
@@ -179,6 +179,38 @@ def test_lighting_overlay(lit_client):
     assert [f["properties"]["lit"] for f in features] == [0.96, 0.0]
     assert features[0]["geometry"]["type"] == "LineString"
     LightingCollection.model_validate(r.json())
+
+
+def test_score_overlay_ranks_streets_by_cost_per_metre(client):
+    r = client.get("/score")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/geo+json"
+    body = ScoreCollection.model_validate(r.json())
+    # C -> B (smooth, 70 m) beats A -> C (default roughness, 70 m) beats A -> B (bumpy, 100 m): midpoint
+    # percentile of the 240 m by cost per metre, e.g. C -> B (170 + 70 / 2) / 240.
+    assert [f.properties["score"] for f in body.features] == [85.4, 56.2, 20.8]
+
+
+def test_score_overlay_follows_the_penalties(client):
+    scores = lambda **p: [f["properties"]["score"] for f in client.get("/score", params=p).json()["features"]]
+    # Without the bump penalty, the bumpy A -> B costs what the others do: all three tie in the middle.
+    assert scores(bump_penalty=0) == [50.0, 50.0, 50.0]
+    assert scores(bump_penalty=0, danger_penalty=0, pm_penalty=0, stop_penalty=0) == [50.0, 50.0, 50.0]
+    assert scores(bump_penalty=50) == scores()  # same order: A -> B is the bumpiest either way
+    assert client.get("/score", params={"bump_penalty": -1}).status_code == 422
+    spec = client.get("/openapi.json").json()["paths"]
+    names = lambda path: [p["name"] for p in spec[path]["get"]["parameters"]]
+    assert names("/score") == names("/route")[4:]  # everything but the start and end
+
+
+def test_score_overlay_counts_unlit_streets_after_dark(toy_graph):
+    attach_lighting(toy_graph, {12: 1.0, 13: 0.0, 14: 0.0})  # the smooth C -> B is unlit
+    with TestClient(create_app(graph=toy_graph)) as c:
+        scores = lambda **p: [f["properties"]["score"] for f in c.get("/score", params=p).json()["features"]]
+        assert scores() == [85.4, 56.2, 20.8]
+        # After dark C -> B costs as much per metre as A -> C: both get the middle of their 140 m.
+        assert sorted(scores(depart_time="2026-10-28T19:30")) == [20.8, 70.8, 70.8]
+        assert c.get("/score", params={"depart_time": "tomorrow"}).status_code == 422
 
 
 @pytest.fixture

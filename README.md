@@ -19,7 +19,7 @@ Example request: `/route?from_lat=49.14838&from_lon=9.22687&to_lat=49.1262&to_lo
 
 `/route/grade` takes the same parameters and returns the same route in pieces coloured by grade (flat < 2% … very steep ≥ 10%), plus climb, descent and the steepest piece. It is display only: grade doesn't change the route. Heights: LGL DGM1 (Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0), see [routing/README.md](routing/README.md#grade-display-only-not-in-the-route-cost).
 
-Map overlays: `/roughness` (streets), `/danger` (overtaking spots), `/air` (air-quality points, 0-1 worse than usual for the same bike trip) , `/flow` (streets, 0-1 stop-and-go), `/speed` (streets, measured cyclist km/h), `/shade` (streets, 0-1 in shade per time slot) and `/lighting` (streets, 0-1 chance lit at night) return GeoJSON.
+Map overlays: `/roughness` (streets), `/danger` (overtaking spots), `/air` (air-quality points, 0-1 worse than usual for the same bike trip) , `/flow` (streets, 0-1 stop-and-go), `/speed` (streets, measured cyclist km/h), `/shade` (streets, 0-1 in shade per time slot) `/lighting` (streets, 0-1 chance lit at night) and `/score` (every street, 0-100 overall score combining all factors for the same penalties as `/route`, higher = better) return GeoJSON.
 
 Danger points come from `danger_zones_raw_heilbronn` (one row per overtake, with device id and exact distance) and are snapped to the nearest street within 25 m. [routing/README.md](routing/README.md) explains how route planning works and why readings of 25 cm or less are ignored.
 
