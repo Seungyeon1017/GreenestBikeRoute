@@ -94,5 +94,13 @@
     "megabytes": 48.5,
     "seconds": 38,
     "downloaded_at": "2026-10-27T22:15:30+00:00"
+  },
+  "custom/air_background_heilbronn.geojson": {
+    "collection": "osem_home_data_heilbronn",
+    "features": 5211,
+    "rows_in_collection": 2026306,
+    "megabytes": 0.9,
+    "seconds": 45,
+    "downloaded_at": "2026-10-28T16:13:18+00:00"
   }
 }

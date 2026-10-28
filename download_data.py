@@ -35,7 +35,7 @@ DATA_DIR = Path(__file__).resolve().parent / "data"
 
 # Raw tables whose pages come back in a different order on every request: paging them
 # duplicates and skips rows, so they are fetched in a single request instead.
-UNSTABLE_PAGING = {"osem_bike_data"}
+UNSTABLE_PAGING = {"osem_bike_data", "osem_home_data_heilbronn"}
 ALL_ROWS = 5_000_000  # a `limit` above any collection's size
 
 # Heilbronn road network extent plus ~1 km: (min lon, min lat, max lon, max lat).
@@ -159,6 +159,45 @@ def clean_pm_rows(features):
             if west <= f["geometry"]["coordinates"][0] <= east and south <= f["geometry"]["coordinates"][1] <= north]
 
 
+# senseBox:home stations that measured fine dust for fewer hours than this are left out of the background:
+# a few logged only on their first day. The 7 left are in and around Heilbronn (Innenstadt to Beilstein).
+MIN_HOME_HOURS = 1000
+
+
+class HourlyBackground:
+    """Row filter for osem_home_data_heilbronn (2M rows from ~15 senseBox:home stations, one every ~10 s) that keeps
+    no row but sums each station's PM readings per hour. features() then gives one feature per hour: the median
+    over stations of their hourly mean, per PM value, the fine-dust level of the region at that hour.
+
+    Hours are the first 13 characters of createdAt (UTC, as in osem_bike_data), e.g. "2026-07-13T15".
+    """
+
+    def __init__(self):
+        self.sums = {}  # (box, hour) -> [sum per PM_FIELDS..., count]
+
+    def __call__(self, feature):
+        p = feature["properties"]
+        if all(p.get(k) is not None for k in PM_FIELDS):
+            s = self.sums.setdefault((p["boxId"], p["createdAt"][:13]), [0.0] * len(PM_FIELDS) + [0])
+            for i, k in enumerate(PM_FIELDS):
+                s[i] += p[k]
+            s[-1] += 1
+        return None
+
+    def features(self):
+        hours_per_box = {}
+        for box, _ in self.sums:
+            hours_per_box[box] = hours_per_box.get(box, 0) + 1
+        by_hour = {}
+        for (box, hour), s in self.sums.items():
+            if hours_per_box[box] >= MIN_HOME_HOURS:
+                by_hour.setdefault(hour, []).append([v / s[-1] for v in s[:-1]])
+        return [{"type": "Feature", "geometry": None,
+                 "properties": {"hour": hour, "stations": len(means),
+                                **{k: round(float(v), 3) for k, v in zip(PM_FIELDS, np.median(means, axis=0))}}}
+                for hour, means in sorted(by_hour.items())]
+
+
 # Collections that cover all cities: (collection, output name, row filter).
 # A row filter returns True to keep the feature, a replacement feature to keep that instead, or a falsy value to skip it.
 FILTERED = [
@@ -167,13 +206,16 @@ FILTERED = [
     # Each streams all 1.4M raw rows (about 1 GB over the wire), but keeps only a few to tens of MB.
     ("osem_bike_data", f"danger_zones_raw_{CITY}", _danger_zone_row),
     ("osem_bike_data", f"air_quality_{CITY}", _pm_row),
+    # Streams ~3 GB (about a minute), keeps one row per hour. A class is a fresh row filter per download
+    # that builds the features itself (see HourlyBackground).
+    ("osem_home_data_heilbronn", f"air_background_{CITY}", HourlyBackground),
 ]
 
 # Steps that need all kept rows at once, run on the downloaded file: output name -> features -> features.
 FINISH = {f"air_quality_{CITY}": clean_pm_rows}
 
 # Datasets we build from raw sensor rows; they go to data/custom/, everything else to data/ready-made/.
-CUSTOM = {f"danger_zones_raw_{CITY}", f"air_quality_{CITY}"}
+CUSTOM = {f"danger_zones_raw_{CITY}", f"air_quality_{CITY}", f"air_background_{CITY}"}
 
 # Raw sensor collections with over a million rows (GBs of JSON). Opt-in only.
 # The first two contain every city; osem_home_data_heilbronn is Heilbronn only.
@@ -305,9 +347,11 @@ def fetch(collection, name, keep=None, force=False, session=None, page=2000):
         return out
     print(f"{name}: downloading")
     t0 = time.time()
+    if isinstance(keep, type):
+        keep = keep()
     written, seen = download(session or make_session(), collection, out, page, keep)
-    if name in FINISH:
-        features = FINISH[name](json.loads(out.read_text(encoding="utf-8"))["features"])
+    if name in FINISH or hasattr(keep, "features"):
+        features = keep.features() if hasattr(keep, "features") else FINISH[name](json.loads(out.read_text(encoding="utf-8"))["features"])
         # compact, so the file stays under GitHub's 50 MB warning
         out.write_text(json.dumps({"type": "FeatureCollection", "features": features}, ensure_ascii=False, separators=(",", ":")),
                        encoding="utf-8")

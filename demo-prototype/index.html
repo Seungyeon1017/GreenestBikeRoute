@@ -13,7 +13,7 @@
   html, body { margin: 0; height: 100%; overflow: hidden; font: 14px/1.4 system-ui, sans-serif; color: #1d2733; }
   #map { position: absolute; inset: 0; }
   #panel {
-    position: absolute; top: 12px; left: 12px; z-index: 1000; width: 360px;
+    position: absolute; top: 12px; left: 12px; z-index: 1000; width: 470px;
     max-height: calc(100% - 48px); overflow-y: auto; box-sizing: border-box;
     background: #fff; border-radius: 10px; padding: 14px 16px; box-shadow: 0 2px 12px rgba(0,0,0,.2);
   }
@@ -27,7 +27,7 @@
   input[type=range] { width: 100%; }
   .row { display: flex; justify-content: space-between; color: #5b6773; font-size: 12px; }
   table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; font-variant-numeric: tabular-nums; }
-  th, td { text-align: right; padding: 3px 0 3px 6px; white-space: nowrap; }
+  th, td { text-align: right; padding: 3px 0 3px 5px; white-space: nowrap; }
   th:first-child, td:first-child { text-align: left; padding-left: 0; }
   .swatch { display: inline-block; width: 18px; height: 4px; vertical-align: middle; margin-right: 6px; border-radius: 2px; }
   #summary { margin-top: 10px; font-weight: 600; min-height: 1.4em; }
@@ -58,17 +58,44 @@
   <input id="stopPenalty" type="range" min="0" max="5" step="0.25" value="0.5">
   <div class="row"><span>0 = ignore</span><span>5 = strongly avoid</span></div>
 
+  <label for="bikeFriendly">How much do you prefer bike paths and lanes: <span id="bikeFriendlyValue">0</span></label>
+  <input id="bikeFriendly" type="range" min="0" max="5" step="0.25" value="0">
+  <div class="row"><span>0 = ignore</span><span>1 = other streets feel twice as long</span></div>
+
+  <label><input type="checkbox" id="preferTime"> Time matters, not distance</label>
+  <div class="row"><span>Weigh streets by how fast bikes were measured riding them</span></div>
+
+  <label for="departTime">Departure (empty = time doesn't matter)</label>
+  <input id="departTime" type="datetime-local">
+  <div class="row"><span id="sky">By day shade counts, after dark lighting</span></div>
+
+  <label for="shadePenalty">By day, how much do you hate the sun: <span id="shadePenaltyValue">0.5</span></label>
+  <input id="shadePenalty" type="range" min="0" max="5" step="0.25" value="0.5">
+  <div class="row"><span>0 = ignore</span><span>5 = strongly prefer shade</span></div>
+
+  <label for="darkPenalty">After dark, how much do you hate unlit streets: <span id="darkPenaltyValue">1</span></label>
+  <input id="darkPenalty" type="range" min="0" max="5" step="0.25" value="1">
+  <div class="row"><span>0 = ignore</span><span>5 = strongly prefer lit</span></div>
+
   <table>
-    <tr><th></th><th>Length</th><th>Rough</th><th title="close-overtaking spots passed">Overtakes</th><th title="mean air rank, 0.5 = typical">PM</th><th title="mean stop-and-go, 0-1">Stops</th></tr>
-    <tr><td><span class="swatch" style="background:#7a8794"></span>Shortest</td><td id="sLen">–</td><td id="sRough">–</td><td id="sDanger">–</td><td id="sPm">–</td><td id="sStop">–</td></tr>
-    <tr><td><span class="swatch" style="background:#1a7f37"></span>Your route</td><td id="rLen">–</td><td id="rRough">–</td><td id="rDanger">–</td><td id="rPm">–</td><td id="rStop">–</td></tr>
+    <tr><th></th><th>Length</th><th title="expected riding time from measured cyclist speeds">Time</th><th title="mean roughness of the measured part; hover a value for how much is measured / estimated">Rough</th><th title="close-overtaking spots passed">Overtakes</th><th title="mean air score, 0.5 = typical">PM</th><th title="mean stop-and-go, 0-1">Stops</th><th title="share in shade at the departure time (by day only)">Shade</th><th title="chance the streets are lit at night">Lit</th></tr>
+    <tr><td><span class="swatch" style="background:#7a8794"></span>Shortest</td><td id="sLen">–</td><td id="sTime">–</td><td id="sRough">–</td><td id="sDanger">–</td><td id="sPm">–</td><td id="sStop">–</td><td id="sShade">–</td><td id="sLit">–</td></tr>
+    <tr><td><span class="swatch" style="background:#1a7f37"></span>Your route</td><td id="rLen">–</td><td id="rTime">–</td><td id="rRough">–</td><td id="rDanger">–</td><td id="rPm">–</td><td id="rStop">–</td><td id="rShade">–</td><td id="rLit">–</td></tr>
   </table>
   <div id="summary"></div>
   <div id="error"></div>
 
   <button id="example">Example trip</button><button id="reset">Reset</button>
   <div class="legend">
-    <label style="font-weight:400;margin:0"><input type="checkbox" id="showBumps" checked> Show measured roughness</label>
+    <label style="font-weight:400;margin:0"><input type="checkbox" id="showScore"> Show overall score (all factors, for your settings)</label>
+    <div id="scoreLegend" hidden>
+      <span class="swatch" style="background:#d63b3b"></span>worst 25%
+      <span class="swatch" style="background:#f2994a"></span>25–50%
+      <span class="swatch" style="background:#f2c94c"></span>50–75%
+      <span class="swatch" style="background:#4caf50"></span>best 25%
+      <div>Quarters of Heilbronn's street length. Streets without data tie in the middle (yellow).</div>
+    </div>
+    <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showBumps" checked> Show measured roughness</label>
     <span class="swatch" style="background:#4caf50"></span>&lt;10
     <span class="swatch" style="background:#f2c94c"></span>10–20
     <span class="swatch" style="background:#f2994a"></span>20–30
@@ -76,6 +103,29 @@
     <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showDanger"> Show close-overtaking spots</label>
     <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showAir"> Show air quality (darker = worse than usual)</label>
     <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showFlow"> Show stop-and-go (darker = more stopping)</label>
+    <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showSpeed"> Show cyclist speed (darker = slower)</label>
+    <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showShade"> Show shade at <span id="shadeSlot">15:00</span> (darker = more shade)</label>
+    <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showLighting"> Show street lighting (darker = more likely lit)</label>
+    <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showBikeFriendly"> Show bike paths, lanes and routes</label>
+    <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showGrade"> Colour your route by grade (display only)</label>
+    <div id="gradeLegend" hidden>
+      <span class="swatch" style="background:#4caf50"></span>&lt;2%
+      <span class="swatch" style="background:#c0ca33"></span>2–4
+      <span class="swatch" style="background:#f2c94c"></span>4–6
+      <span class="swatch" style="background:#f2994a"></span>6–10
+      <span class="swatch" style="background:#d63b3b"></span>10%+
+      <div id="gradeSummary"></div>
+    </div>
+    <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showSharing"> Show
+      <select id="sharingVehicle"><option value="all">e-bikes and e-scooters</option><option value="bike">e-bikes</option>
+      <option value="scooter">e-scooters</option></select> to rent (Dott, live)</label>
+    <div id="sharingInfo" hidden>
+      <span class="swatch" style="background:#00838f;height:8px;width:8px;border-radius:50%"></span>e-bike
+      <span class="swatch" style="background:#d81b60;height:8px;width:8px;border-radius:50%;margin-left:8px"></span>e-scooter
+      <span class="swatch" style="background:#fff;border:2px solid #37474f;height:6px;width:6px;border-radius:50%;margin-left:8px"></span>parking zone
+      <span style="margin-left:8px">faded = battery under 20%</span>
+      <div id="sharingSummary"></div>
+    </div>
   </div>
 </div>
 
@@ -84,19 +134,50 @@ const API = new URLSearchParams(location.search).get("api") || "http://127.0.0.1
 
 const map = L.map("map", { preferCanvas: true }).setView([49.142, 9.215], 13);
 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  maxZoom: 19, attribution: "&copy; OpenStreetMap contributors",
+  maxZoom: 19, attribution: "&copy; OpenStreetMap contributors | Heights: LGL, www.lgl-bw.de, dl-de/by-2-0",
 }).addTo(map);
 
 // Measured roughness from bumpy_roads_heilbronn, drawn faintly under the routes.
 const roughColor = r => r < 10 ? "#4caf50" : r < 20 ? "#f2c94c" : r < 30 ? "#f2994a" : "#d63b3b";
 const bumps = L.layerGroup().addTo(map);
+map.createPane("roughness").style.zIndex = 390;  // under the overall score
 fetch(API + "/roughness").then(r => r.json()).then(data => {
   L.geoJSON(data, {
     style: f => ({ color: roughColor(f.properties.roughness ?? 0), weight: 2, opacity: 0.55 }),
-    interactive: false,
+    renderer: L.canvas({ pane: "roughness" }), interactive: false,
   }).addTo(bumps);
 });
 document.getElementById("showBumps").onchange = e => e.target.checked ? bumps.addTo(map) : bumps.remove();
+
+// Overall score per street: share of Heilbronn street length that costs more per metre to route along
+// (overtaking spots and air points count for their street), for the current sliders, checkbox and departure time.
+const scoreColor = s => s < 25 ? "#d63b3b" : s < 50 ? "#f2994a" : s < 75 ? "#f2c94c" : "#4caf50";
+const score = L.layerGroup();
+// Own pane above roughness (390) and below the routes (overlay pane, 400), however the layers are toggled.
+map.createPane("score").style.zIndex = 395;
+const scoreRenderer = L.canvas({ pane: "score" });
+const showScore = document.getElementById("showScore");
+// Wider when zoomed in: 2 px up to zoom 13 (whole city), 1 px more per level, at most 6 px.
+const scoreStyle = f => ({ color: scoreColor(f.properties.score), weight: Math.max(2, Math.min(6, map.getZoom() - 11)), opacity: 0.7 });
+map.on("zoomend", () => score.eachLayer(l => l.setStyle(scoreStyle)));
+let scoreFor = null;
+function drawScore() {
+  const q = settings().toString();
+  if (!showScore.checked || scoreFor === q) return;
+  scoreFor = q;
+  fetch(API + "/score?" + q).then(r => r.json()).then(data => {
+    if (scoreFor !== q) return;  // the settings changed meanwhile
+    score.clearLayers();
+    L.geoJSON(data, {
+      style: scoreStyle,
+      renderer: scoreRenderer, interactive: false,
+    }).addTo(score);
+  });
+}
+showScore.onchange = () => {
+  document.getElementById("scoreLegend").hidden = !showScore.checked;
+  if (showScore.checked) { score.addTo(map); drawScore(); } else score.remove();
+};
 
 // Overtaking spots from danger_zones_raw_heilbronn (over 25 cm), darker = riskier.
 const dangers = L.layerGroup();
@@ -110,7 +191,7 @@ fetch(API + "/danger").then(r => r.json()).then(data => {
 });
 document.getElementById("showDanger").onchange = e => e.target.checked ? dangers.addTo(map) : dangers.remove();
 
-// Air quality from air_quality_heilbronn, ranked within each ride, darker = worse.
+// Air quality from air_quality_heilbronn, 0.5 = usual, darker = worse.
 const air = L.layerGroup();
 fetch(API + "/air").then(r => r.json()).then(data => {
   L.geoJSON(data, {
@@ -132,8 +213,112 @@ fetch(API + "/flow").then(r => r.json()).then(data => {
 });
 document.getElementById("showFlow").onchange = e => e.target.checked ? flow.addTo(map) : flow.remove();
 
+// Measured cyclist speed from speed_map_heilbronn, darker = slower (5 km/h or less darkest, 25+ km/h faint).
+const speed = L.layerGroup();
+fetch(API + "/speed").then(r => r.json()).then(data => {
+  L.geoJSON(data, {
+    style: f => ({ color: "#00695c", weight: 3, opacity: 0.05 + 0.85 * Math.min(1, Math.max(0, (25 - f.properties.speed_kmh) / 20)) }),
+    interactive: false,
+  }).addTo(speed);
+});
+document.getElementById("showSpeed").onchange = e => e.target.checked ? speed.addTo(map) : speed.remove();
+
+// Shade from LoD2 buildings and street trees, per time slot of a summer day; drawn for the slot nearest the departure time.
+const shade = L.layerGroup();
+let shadeData = null;
+const slotTime = s => s.slice(11, 16);
+function shadeSlot() {
+  const slots = shadeData?.slots ?? [];
+  const t = departTime.value ? departTime.value.slice(11, 16) : "15:00";
+  const minutes = hm => +hm.slice(0, 2) * 60 + +hm.slice(3, 5);
+  return slots.reduce((best, s, i) => Math.abs(minutes(slotTime(s)) - minutes(t)) < Math.abs(minutes(slotTime(slots[best])) - minutes(t)) ? i : best, 0);
+}
+function drawShade() {
+  if (!shadeData) return;
+  const i = shadeSlot();
+  setText("shadeSlot", slotTime(shadeData.slots[i]));
+  shade.clearLayers();
+  L.geoJSON(shadeData, {
+    style: f => ({ color: "#1565c0", weight: 3, opacity: 0.05 + 0.85 * f.properties.shade[i] }),
+    interactive: false,
+  }).addTo(shade);
+}
+fetch(API + "/shade").then(r => r.json()).then(data => { shadeData = data; drawShade(); });
+document.getElementById("showShade").onchange = e => e.target.checked ? shade.addTo(map) : shade.remove();
+
+// Chance each street is lit at night (OSM lit=*, Mapillary street lights, road-type rule).
+const lighting = L.layerGroup();
+fetch(API + "/lighting").then(r => r.json()).then(data => {
+  L.geoJSON(data, {
+    style: f => ({ color: "#f9a825", weight: 3, opacity: 0.05 + 0.85 * f.properties.lit }),
+    interactive: false,
+  }).addTo(lighting);
+});
+document.getElementById("showLighting").onchange = e => e.target.checked ? lighting.addTo(map) : lighting.remove();
+
+// Bike paths, bike lanes and bike routes from OSM: the streets prefer_bike_friendly favours.
+const bikeFriendly = L.layerGroup();
+fetch(API + "/bike-friendly-streets").then(r => r.json()).then(data => {
+  L.geoJSON(data, { style: { color: "#5e35b1", weight: 3, opacity: 0.7 }, interactive: false }).addTo(bikeFriendly);
+});
+document.getElementById("showBikeFriendly").onchange = e => e.target.checked ? bikeFriendly.addTo(map) : bikeFriendly.remove();
+
+// Shared e-bikes and e-scooters free to rent now (/sharing) and their parking zones (/sharing/zones). With a
+// start pin, vehicles come closest first and the nearest one is named in the panel. Colour = vehicle type
+// (teal e-bike, pink e-scooter; not the purple/blue of the danger and air layers), faded = battery under 20%.
+const sharing = L.layerGroup();
+const VEHICLE_COLOR = { bike: "#00838f", scooter: "#d81b60" };
+const vehicleName = v => v === "scooter" ? "e-scooter" : "e-bike";
+async function drawSharing() {
+  if (!showSharing.checked) return;
+  const q = new URLSearchParams({ vehicle: sharingVehicle.value });
+  if (start) { q.set("near_lat", start.getLatLng().lat); q.set("near_lon", start.getLatLng().lng); }
+  try {
+    const [vehicles, zones] = await Promise.all([fetch(API + "/sharing?" + q), fetch(API + "/sharing/zones")]
+      .map(p => p.then(async r => { const b = await r.json(); if (!r.ok) throw new Error(b.detail); return b; })));
+    sharing.clearLayers();
+    L.geoJSON(zones, { pointToLayer: (f, latlng) => L.circleMarker(latlng, {
+        radius: 7, color: "#37474f", weight: 2, fillColor: "#fff", fillOpacity: 0.9 })
+      .bindTooltip(`${f.properties.name}: ${f.properties.bikes_available} e-bikes, ${f.properties.scooters_available} e-scooters`) }).addTo(sharing);
+    L.geoJSON(vehicles, { pointToLayer: (f, latlng) => {
+      const p = f.properties, low = p.battery_pct != null && p.battery_pct < 20;
+      return L.circleMarker(latlng, { radius: 5, color: "#fff", weight: 1, opacity: low ? 0.4 : 1,
+                                      fillColor: VEHICLE_COLOR[p.vehicle], fillOpacity: low ? 0.35 : 0.95 })
+        .bindPopup(`<b>${p.provider} ${vehicleName(p.vehicle)}</b><br>Battery ${p.battery_pct ?? "?"}%, about ${Math.round((p.range_m ?? 0) / 1000)} km left`
+          + (p.distance_m != null ? `<br>${p.distance_m} m from your start` : "") + (p.price ? `<br>${p.price}` : "")
+          + (p.rent_url ? `<br><a href="${p.rent_url}" target="_blank" rel="noopener">Rent in the ${p.provider} app</a>` : ""));
+    } }).addTo(sharing);
+    const count = v => vehicles.features.filter(f => f.properties.vehicle === v).length;
+    const first = vehicles.features[0]?.properties;
+    setText("sharingSummary", `${count("bike")} e-bikes, ${count("scooter")} e-scooters free`
+      + (start && first ? `; nearest: ${vehicleName(first.vehicle)} ${first.distance_m} m from your start (${first.battery_pct}%)` : "")
+      + `. ${vehicles.attribution}`);
+  } catch (e) {
+    sharing.clearLayers();
+    setText("sharingSummary", e.message);
+  }
+}
+const showSharing = document.getElementById("showSharing"), sharingVehicle = document.getElementById("sharingVehicle");
+showSharing.onchange = () => {
+  document.getElementById("sharingInfo").hidden = !showSharing.checked;
+  if (showSharing.checked) { sharing.addTo(map); drawSharing(); } else sharing.remove();
+};
+sharingVehicle.onchange = drawSharing;
+
 const shortestLayer =L.geoJSON(null, { style: { color: "#7a8794", weight: 5, opacity: 0.9, dashArray: "6 8" } }).addTo(map);
 const routeLayer = L.geoJSON(null, { style: { color: "#1a7f37", weight: 6, opacity: 0.9 } }).addTo(map);
+
+// Your route from /route/grade: the same path, in pieces coloured by how steep they are (uphill or downhill).
+const gradeLayer = L.geoJSON(null, {
+  style: f => ({ color: f.properties.color, weight: 7, opacity: 1 }),
+  onEachFeature: (f, layer) => layer.bindTooltip(
+    `${f.properties.grade_pct > 0 ? "+" : ""}${f.properties.grade_pct}% over ${Math.round(f.properties.length_m)} m`, { sticky: true }),
+});
+const showGrade = document.getElementById("showGrade");
+showGrade.onchange = () => {
+  document.getElementById("gradeLegend").hidden = !showGrade.checked;
+  if (showGrade.checked) update(); else { gradeLayer.remove(); routeLayer.setStyle({ opacity: 0.9 }); setText("gradeSummary", ""); }
+};
 
 let start = null, end = null;
 const pin = (latlng, label) => L.marker(latlng, { draggable: true, title: label })
@@ -147,19 +332,32 @@ map.on("click", e => {
   update();
 });
 
-const sliders = ["bumpPenalty", "dangerPenalty", "pmPenalty", "stopPenalty"].map(id => {
+const sliders = ["bumpPenalty", "dangerPenalty", "pmPenalty", "stopPenalty", "shadePenalty", "darkPenalty", "bikeFriendly"].map(id => {
   const el = document.getElementById(id);
   el.oninput = () => document.getElementById(id + "Value").textContent = el.value;
-  el.onchange = update;
+  el.onchange = () => { drawScore(); update(); };
   return el;
 });
+const preferTime = document.getElementById("preferTime");
+preferTime.onchange = () => { drawScore(); update(); };
+const departTime = document.getElementById("departTime");
+departTime.onchange = () => { drawShade(); drawScore(); update(); };
+
+// The query parameters of the current sliders, checkbox and departure time, as /route and /score take them.
+function settings() {
+  const [bump_penalty, danger_penalty, pm_penalty, stop_penalty, shade_penalty, dark_penalty, prefer_bike_friendly] = sliders.map(s => s.value);
+  const q = new URLSearchParams({ bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time: preferTime.checked, shade_penalty, dark_penalty,
+                                  prefer_bike_friendly });
+  if (departTime.value) q.set("depart_time", departTime.value);
+  return q;
+}
 
 document.getElementById("reset").onclick = () => {
   [start, end].forEach(m => m && m.remove());
   start = end = null;
-  shortestLayer.clearLayers(); routeLayer.clearLayers();
+  shortestLayer.clearLayers(); routeLayer.clearLayers(); gradeLayer.clearLayers();
   show("s", null); show("r", null);
-  setText("summary", ""); setText("error", "");
+  setText("summary", ""); setText("error", ""); setText("gradeSummary", "");
   update();
 };
 
@@ -171,40 +369,66 @@ document.getElementById("example").onclick = () => {
   update();
 };
 
+const signed = x => (x > 0 ? "+" : "") + x.toFixed(1);
 const setText = (id, t) => document.getElementById(id).textContent = t;
 function show(prefix, p) {
   setText(prefix + "Len", p ? (p.length_m / 1000).toFixed(2) + " km" : "–");
+  setText(prefix + "Time", p ? Math.round(p.duration_s / 60) + " min" : "–");
   setText(prefix + "Rough", p && p.mean_roughness != null ? p.mean_roughness.toFixed(1) : "–");
+  // Where the route's roughness comes from; streets that are neither get the median 10.
+  const pct = x => Math.round(x * 100) + "%";
+  document.getElementById(prefix + "Rough").title = p ? `measured ${pct(p.measured_share)}, ` +
+    `estimated ${pct(p.estimated_share)}, unknown ${pct(1 - p.measured_share - p.estimated_share)}` : "";
   setText(prefix + "Danger", p ? p.danger_points : "–");
   setText(prefix + "Pm", p && p.mean_pm_risk != null ? p.mean_pm_risk.toFixed(2) : "–");
   setText(prefix + "Stop", p && p.mean_stop_go != null ? p.mean_stop_go.toFixed(2) : "–");
+  setText(prefix + "Shade", p && p.mean_shade != null ? p.mean_shade.toFixed(2) : "–");
+  setText(prefix + "Lit", p && p.mean_lit != null ? p.mean_lit.toFixed(2) : "–");
 }
 
-async function compareRoutes([bump_penalty, danger_penalty, pm_penalty, stop_penalty]) {
+async function getJSON(path) {
   const a = start.getLatLng(), b = end.getLatLng();
-  const q = new URLSearchParams({ from_lat: a.lat, from_lon: a.lng, to_lat: b.lat, to_lon: b.lng, bump_penalty, danger_penalty, pm_penalty, stop_penalty });
-  const res = await fetch(API + "/route/compare?" + q);
+  const q = new URLSearchParams({ from_lat: a.lat, from_lon: a.lng, to_lat: b.lat, to_lon: b.lng, ...Object.fromEntries(settings()) });
+  const res = await fetch(API + path + "?" + q);
   const body = await res.json();
   if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail));
   return body;
 }
 
+async function drawGrade() {
+  if (!showGrade.checked) return;
+  try {
+    const { features, summary: g } = await getJSON("/route/grade");
+    gradeLayer.clearLayers().addData({ type: "FeatureCollection", features }).addTo(map);
+    routeLayer.setStyle({ opacity: 0 });
+    setText("gradeSummary", `Climb ${Math.round(g.climb_m)} m, descent ${Math.round(g.descent_m)} m, `
+      + `steepest uphill ${g.max_grade_pct}% (${Math.round(g.start_elevation_m)} → ${Math.round(g.end_elevation_m)} m)`);
+  } catch (e) {  // e.g. no elevation data on the server: keep the plain route
+    gradeLayer.clearLayers(); routeLayer.setStyle({ opacity: 0.9 });
+    setText("gradeSummary", e.message);
+  }
+}
+
 async function update() {
   setText("hint", !start ? "Click the map to set the start." : !end ? "Click the map to set the end."
     : "Drag the pins or click to move the end.");
+  drawSharing();  // distances from the (moved) start pin
   if (!start || !end) return;
   setText("error", "");
   try {
-    const { route, shortest, detour_pct, same_path } = await compareRoutes(sliders.map(s => s.value));
+    const { route, shortest, detour_pct, extra_time_pct, same_path } = await getJSON("/route/compare");
     shortestLayer.clearLayers().addData(shortest);
     routeLayer.clearLayers().addData(route);
     const s = shortest.properties, r = route.properties;
     show("s", s); show("r", r);
+    setText("sky", r.daylight == null ? "By day shade counts, after dark lighting"
+      : r.daylight ? `Sun is up: shade counts (slot ${r.shade_slot.slice(11, 16)})` : "After dark: lighting counts");
     setText("summary", same_path ? "Same as the shortest route."
-      : `+${detour_pct.toFixed(1)}% distance, roughness ${s.mean_roughness?.toFixed(1)} → ${r.mean_roughness?.toFixed(1)}, `
+      : `${signed(detour_pct)}% distance, ${signed(extra_time_pct)}% time, roughness ${s.mean_roughness?.toFixed(1)} → ${r.mean_roughness?.toFixed(1)}, `
         + `overtaking spots ${s.danger_points} → ${r.danger_points}`);
+    await drawGrade();
   } catch (e) {
-    shortestLayer.clearLayers(); routeLayer.clearLayers();
+    shortestLayer.clearLayers(); routeLayer.clearLayers(); gradeLayer.clearLayers();
     show("s", null); show("r", null); setText("summary", "");
     setText("error", e.message);
   }
