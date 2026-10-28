@@ -6,11 +6,13 @@ from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.schemas import EXAMPLE_TRIP, AirCollection, DangerCollection, Error, FlowCollection, RouteCollection, \
-    RouteComparison, RoughnessCollection, SpeedCollection
+from backend.schemas import EXAMPLE_TRIP, AirCollection, DangerCollection, Error, FlowCollection, GradeCollection, \
+    RouteCollection, RouteComparison, RoughnessCollection, SpeedCollection
 from download_data import load_features
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_PM_PENALTY, DEFAULT_STOP_PENALTY, air_ranks, \
     clean_overtaking
+from routing.elevation import attach_elevation, load_elevation
+from routing.grade import NoElevationError, route_grade
 from routing.graph import load_graph
 from routing.route import RouteError, compare_routes, find_route
 
@@ -76,6 +78,8 @@ based on ATRAI bike sensor data, optionally the fastest one by measured cyclist 
 
 **Quick start:** call `/route/compare` with the example trip (pre-filled under *Try it out*) and draw
 `route` and `shortest` on a map. `/route` returns just the route as GeoJSON.
+`/route/grade` returns the same route split into pieces coloured by how steep they are (display only:
+grade doesn't change which route is picked).
 
 - **Coordinate order:** the query takes `lat` and `lon` separately, but every GeoJSON response is in
   **[lon, lat]** order (Leaflet's `L.geoJSON` handles this; raw `L.polyline` needs `[lat, lon]`).
@@ -114,7 +118,7 @@ def route_query(
         "Time matters, not distance: weigh each street by its riding time at the measured cyclist speed "
         "(unmeasured streets at the median, 15.7 km/h) instead of its length. The penalties still apply")),
 ):
-    """The query parameters shared by /route and /route/compare."""
+    """The query parameters shared by /route, /route/compare and /route/grade."""
     return (from_lat, from_lon), (to_lat, to_lon), (bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time)
 
 
@@ -136,6 +140,7 @@ def create_app(graph=None):
     @asynccontextmanager
     async def lifespan(app):
         app.state.graph = graph if graph is not None else load_graph()
+        attach_elevation(app.state.graph, load_elevation())  # node heights for /route/grade
         yield
 
     app = FastAPI(title="Greenest Bike Route", description=API_DESCRIPTION, lifespan=lifespan,
@@ -160,6 +165,17 @@ def create_app(graph=None):
              response_description="The route, the shortest route, and how much they differ")
     def route_compare(query=Depends(route_query)):
         return JSONResponse(routed(compare_routes, query))
+
+    @app.get("/route/grade", tags=[ROUTING], summary="The route from /route split into pieces coloured by grade (display only)",
+             response_class=GeoJSONResponse, response_model=GradeCollection,
+             responses={**ROUTE_ERRORS, 503: {"description": "No elevation data: run python -m routing.elevation",
+                                              "model": Error}},
+             response_description="LineStrings with `grade_pct`, `severity` and `color`, plus route totals in `summary`")
+    def route_grade_pieces(query=Depends(route_query)):
+        try:
+            return GeoJSONResponse(routed(route_grade, query))
+        except NoElevationError as e:
+            raise HTTPException(status_code=503, detail=str(e))
 
     @app.get("/roughness", tags=[OVERLAYS], summary="Measured street roughness as GeoJSON, e.g. for a map overlay",
              response_class=GeoJSONResponse, response_model=RoughnessCollection,

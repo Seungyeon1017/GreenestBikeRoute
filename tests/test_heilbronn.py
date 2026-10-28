@@ -7,9 +7,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
-from backend.schemas import EXAMPLE_TRIP, RouteComparison
+from backend.schemas import EXAMPLE_TRIP, GradeCollection, RouteComparison
 from routing.costs import osm_way_ids
+from routing.elevation import OUT as ELEVATION_PATH
 from routing.graph import GRAPH_PATH, load_graph
+from tests.conftest import joined
 
 pytestmark = pytest.mark.skipif(not GRAPH_PATH.exists(), reason="Heilbronn graph not cached yet")
 
@@ -148,3 +150,43 @@ def test_route_can_end_next_to_a_way_with_parallel_edges(client):
     r = client.get("/route/compare", params={"from_lat": 49.13980383591573, "from_lon": 9.208045005798342,
                                              "to_lat": 49.13531584034481, "to_lon": 9.202290567660226})
     assert r.status_code == 200
+
+
+needs_elevation = pytest.mark.skipif(not ELEVATION_PATH.exists(), reason="no elevation file: run python -m routing.elevation")
+ZERO = {"bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0}
+
+
+@needs_elevation
+@pytest.mark.parametrize("trip, penalties", [
+    (TRIP, {}), (TRIP, ZERO), (TRIP, {"danger_penalty": 100}),
+    ({"from_lat": 49.16, "from_lon": 9.215, "to_lat": 49.135, "to_lon": 9.235}, {"stop_penalty": 5}),
+    ({"from_lat": 49.1415, "from_lon": 9.205, "to_lat": 49.1405, "to_lon": 9.231}, {}),  # across the Neckar
+])
+def test_grade_route_is_exactly_the_route(client, trip, penalties):
+    route = client.get("/route", params={**trip, **penalties}).json()["features"][0]
+    grade = client.get("/route/grade", params={**trip, **penalties}).json()
+    assert joined(grade["features"]) == route["geometry"]["coordinates"]
+    assert grade["summary"]["length_m"] == route["properties"]["length_m"]
+
+
+@needs_elevation
+def test_grade_docs_example_is_a_real_response(client):
+    """The /route/grade example in /docs is what the example trip returns (its first pieces and the summary)."""
+    example = GradeCollection.model_config["json_schema_extra"]["example"]
+    real = client.get("/route/grade", params=TRIP).json()
+    assert real["summary"] == example["summary"]
+    assert real["features"][:len(example["features"])] == example["features"]
+
+
+@needs_elevation
+def test_neckar_bridge_has_no_grade_spike(client):
+    """Kaiserstraße crosses the Neckar on three bridge edges. The terrain model under the two middle nodes is
+    about 4 m below the deck, which made a fake -11.3 %, -1.9 %, +8.8 % on the way east."""
+    G = client.app.state.graph
+    west, middle, east = G.nodes[392616596], G.nodes[393412335], G.nodes[817445456]
+    assert min(west["elevation"], east["elevation"]) <= middle["elevation"] <= max(west["elevation"], east["elevation"])
+    trip = {"from_lat": 49.1422, "from_lon": 9.2120, "to_lat": 49.1426, "to_lon": 9.2190}
+    grade = client.get("/route/grade", params=trip).json()
+    assert [middle["x"], middle["y"]] in joined(grade["features"])  # the route does cross the bridge
+    assert grade["summary"]["max_grade_pct"] < 4 and grade["summary"]["max_descent_grade_pct"] > -4
+    assert all(f["properties"]["severity"] in ("flat", "gentle") for f in grade["features"])

@@ -2,10 +2,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
-from backend.schemas import DangerCollection, FlowCollection, RouteCollection, RouteComparison, RoughnessCollection, SpeedCollection
+from backend.schemas import DangerCollection, FlowCollection, GradeCollection, RouteCollection, RouteComparison, \
+    RoughnessCollection, SpeedCollection
 from download_data import HEILBRONN_BBOX, overtaking_risk
 from routing.costs import MIN_OVERTAKING_CM
-from tests.conftest import COORDS, A, B
+from tests.conftest import COORDS, A, B, joined
 
 
 @pytest.fixture
@@ -133,3 +134,35 @@ def test_speed_overlay(client):
     assert all(0 <= f["properties"]["speed_kmh"] < 100 for f in features)
     assert features[0]["geometry"]["type"] == "LineString"
     SpeedCollection.model_validate(r.json())
+
+
+@pytest.fixture
+def hilly_client(hilly):
+    with TestClient(create_app(graph=hilly)) as c:
+        yield c
+
+
+def test_grade_returns_the_route_in_coloured_pieces(hilly_client):
+    r = hilly_client.get("/route/grade", params=params(bump_penalty=10))
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/geo+json"
+    body = GradeCollection.model_validate(r.json())
+    assert [(f.properties.severity, f.properties.grade_pct) for f in body.features] == [("steep", 7.1), ("gentle", -2.9)]
+    assert (body.summary.climb_m, body.summary.descent_m, body.summary.max_grade_pct) == (5, 2, 7.1)
+    route = hilly_client.get("/route", params=params(bump_penalty=10)).json()["features"][0]
+    assert joined(r.json()["features"]) == route["geometry"]["coordinates"]
+    assert body.summary.length_m == route["properties"]["length_m"]
+
+
+def test_grade_takes_the_same_parameters_and_errors_as_route(hilly_client):
+    spec = hilly_client.get("/openapi.json").json()["paths"]
+    names = lambda path: [p["name"] for p in spec[path]["get"]["parameters"]]
+    assert names("/route/grade") == names("/route")
+    assert hilly_client.get("/route/grade", params=params(start=(48.7758, 9.1829))).status_code == 400
+    assert hilly_client.get("/route/grade", params=params(bump_penalty=-1)).status_code == 422
+
+
+def test_grade_without_elevation_data_is_503(client):
+    r = client.get("/route/grade", params=params())
+    assert r.status_code == 503
+    assert "routing.elevation" in r.json()["detail"]

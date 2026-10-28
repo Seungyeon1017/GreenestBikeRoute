@@ -156,15 +156,7 @@ def _route_feature(G, a, b, penalties):
     """The cheapest route between graph nodes a and b for `penalties` (the four penalties and prefer_time),
     as one GeoJSON Feature."""
     bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time = penalties
-
-    # MultiDiGraph: between two nodes there can be parallel edges; use the cheapest.
-    def weight(u, v, parallel):
-        return min(_cost(d, penalties) for d in parallel.values())
-
-    try:
-        path = nx.shortest_path(G, a, b, weight=weight)
-    except nx.NetworkXNoPath:
-        raise RouteError("no bike route between these points") from None
+    path = _path(G, a, b, penalties)
 
     lifts = sum(1 for n in path[1:-1] if "elevator" in str(G.nodes[n].get("highway")))
     coords, length, rough_len, measured_len, estimated_len = [], 0.0, 0.0, 0.0, 0.0
@@ -173,11 +165,8 @@ def _route_feature(G, a, b, penalties):
     # Riding time from speed_map, plus waiting for each lift at the median speed.
     duration, speed_measured_len = lifts * LIFT_WAIT_M / (MEDIAN_SPEED_KMH / 3.6), 0.0
     for u, v in zip(path[:-1], path[1:]):
-        d = min(G[u][v].values(), key=lambda d: _cost(d, penalties))
-        if "geometry" in d:  # OSMnx edge geometries run from u to v
-            pts = [[float(x), float(y)] for x, y in d["geometry"].coords]
-        else:
-            pts = [[float(G.nodes[n]["x"]), float(G.nodes[n]["y"])] for n in (u, v)]
+        d = _edge(G, u, v, penalties)
+        pts = edge_coords(G, u, v, d)
         coords.extend(pts if not coords else pts[1:])
         edge_len = float(d["length"])  # numpy float when loaded from GraphML
         length += edge_len
@@ -226,6 +215,41 @@ def _route_feature(G, a, b, penalties):
         "lifts": lifts,
     }
     return {"type": "Feature", "geometry": {"type": "LineString", "coordinates": coords}, "properties": properties}
+
+
+def _path(G, a, b, penalties):
+    """The nodes of the cheapest route between graph nodes a and b for `penalties`."""
+    # MultiDiGraph: between two nodes there can be parallel edges; use the cheapest.
+    def weight(u, v, parallel):
+        return min(_cost(d, penalties) for d in parallel.values())
+
+    try:
+        return nx.shortest_path(G, a, b, weight=weight)
+    except nx.NetworkXNoPath:
+        raise RouteError("no bike route between these points") from None
+
+
+def _edge(G, u, v, penalties):
+    """The cheapest of the parallel edges from u to v."""
+    return min(G[u][v].values(), key=lambda d: _cost(d, penalties))
+
+
+def edge_coords(G, u, v, d):
+    """[lon, lat] points of edge (u, v) with data d, from u to v."""
+    if "geometry" in d:  # OSMnx edge geometries run from u to v
+        return [[float(x), float(y)] for x, y in d["geometry"].coords]
+    return [[float(G.nodes[n]["x"]), float(G.nodes[n]["y"])] for n in (u, v)]
+
+
+@contextmanager
+def route_edges(G, origin, destination, penalties):
+    """Yield the edges (u, v, data) of the route find_route picks from origin to destination, both (lat, lon).
+
+    Start and end may be temporary nodes on a split street (see _snapped_ends), which exist only inside the block.
+    """
+    with _snapped_ends(G, origin, destination) as (a, b):
+        path = _path(G, a, b, penalties)
+        yield [(u, v, _edge(G, u, v, penalties)) for u, v in zip(path[:-1], path[1:])]
 
 
 def find_route(G, origin, destination, bump_penalty=DEFAULT_BUMP_PENALTY,

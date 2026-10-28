@@ -80,6 +80,15 @@
     <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showAir"> Show air quality (darker = worse than usual)</label>
     <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showFlow"> Show stop-and-go (darker = more stopping)</label>
     <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showSpeed"> Show cyclist speed (darker = slower)</label>
+    <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showGrade"> Colour your route by grade (display only)</label>
+    <div id="gradeLegend" hidden>
+      <span class="swatch" style="background:#4caf50"></span>&lt;2%
+      <span class="swatch" style="background:#c0ca33"></span>2–4
+      <span class="swatch" style="background:#f2c94c"></span>4–6
+      <span class="swatch" style="background:#f2994a"></span>6–10
+      <span class="swatch" style="background:#d63b3b"></span>10%+
+      <div id="gradeSummary"></div>
+    </div>
   </div>
 </div>
 
@@ -88,7 +97,7 @@ const API = new URLSearchParams(location.search).get("api") || "http://127.0.0.1
 
 const map = L.map("map", { preferCanvas: true }).setView([49.142, 9.215], 13);
 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  maxZoom: 19, attribution: "&copy; OpenStreetMap contributors",
+  maxZoom: 19, attribution: "&copy; OpenStreetMap contributors | Heights: LGL, www.lgl-bw.de, dl-de/by-2-0",
 }).addTo(map);
 
 // Measured roughness from bumpy_roads_heilbronn, drawn faintly under the routes.
@@ -149,6 +158,18 @@ document.getElementById("showSpeed").onchange = e => e.target.checked ? speed.ad
 const shortestLayer =L.geoJSON(null, { style: { color: "#7a8794", weight: 5, opacity: 0.9, dashArray: "6 8" } }).addTo(map);
 const routeLayer = L.geoJSON(null, { style: { color: "#1a7f37", weight: 6, opacity: 0.9 } }).addTo(map);
 
+// Your route from /route/grade: the same path, in pieces coloured by how steep they are (uphill or downhill).
+const gradeLayer = L.geoJSON(null, {
+  style: f => ({ color: f.properties.color, weight: 7, opacity: 1 }),
+  onEachFeature: (f, layer) => layer.bindTooltip(
+    `${f.properties.grade_pct > 0 ? "+" : ""}${f.properties.grade_pct}% over ${Math.round(f.properties.length_m)} m`, { sticky: true }),
+});
+const showGrade = document.getElementById("showGrade");
+showGrade.onchange = () => {
+  document.getElementById("gradeLegend").hidden = !showGrade.checked;
+  if (showGrade.checked) update(); else { gradeLayer.remove(); routeLayer.setStyle({ opacity: 0.9 }); setText("gradeSummary", ""); }
+};
+
 let start = null, end = null;
 const pin = (latlng, label) => L.marker(latlng, { draggable: true, title: label })
   .bindTooltip(label, { permanent: true, direction: "top", offset: [-15, -12] })
@@ -173,9 +194,9 @@ preferTime.onchange = update;
 document.getElementById("reset").onclick = () => {
   [start, end].forEach(m => m && m.remove());
   start = end = null;
-  shortestLayer.clearLayers(); routeLayer.clearLayers();
+  shortestLayer.clearLayers(); routeLayer.clearLayers(); gradeLayer.clearLayers();
   show("s", null); show("r", null);
-  setText("summary", ""); setText("error", "");
+  setText("summary", ""); setText("error", ""); setText("gradeSummary", "");
   update();
 };
 
@@ -202,13 +223,27 @@ function show(prefix, p) {
   setText(prefix + "Stop", p && p.mean_stop_go != null ? p.mean_stop_go.toFixed(2) : "–");
 }
 
-async function compareRoutes([bump_penalty, danger_penalty, pm_penalty, stop_penalty], prefer_time) {
+async function getJSON(path, [bump_penalty, danger_penalty, pm_penalty, stop_penalty], prefer_time) {
   const a = start.getLatLng(), b = end.getLatLng();
   const q = new URLSearchParams({ from_lat: a.lat, from_lon: a.lng, to_lat: b.lat, to_lon: b.lng, bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time });
-  const res = await fetch(API + "/route/compare?" + q);
+  const res = await fetch(API + path + "?" + q);
   const body = await res.json();
   if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail));
   return body;
+}
+
+async function drawGrade(penalties, prefer_time) {
+  if (!showGrade.checked) return;
+  try {
+    const { features, summary: g } = await getJSON("/route/grade", penalties, prefer_time);
+    gradeLayer.clearLayers().addData({ type: "FeatureCollection", features }).addTo(map);
+    routeLayer.setStyle({ opacity: 0 });
+    setText("gradeSummary", `Climb ${Math.round(g.climb_m)} m, descent ${Math.round(g.descent_m)} m, `
+      + `steepest uphill ${g.max_grade_pct}% (${Math.round(g.start_elevation_m)} → ${Math.round(g.end_elevation_m)} m)`);
+  } catch (e) {  // e.g. no elevation data on the server: keep the plain route
+    gradeLayer.clearLayers(); routeLayer.setStyle({ opacity: 0.9 });
+    setText("gradeSummary", e.message);
+  }
 }
 
 async function update() {
@@ -217,7 +252,8 @@ async function update() {
   if (!start || !end) return;
   setText("error", "");
   try {
-    const { route, shortest, detour_pct, extra_time_pct, same_path } = await compareRoutes(sliders.map(s => s.value), preferTime.checked);
+    const penalties = sliders.map(s => s.value);
+    const { route, shortest, detour_pct, extra_time_pct, same_path } = await getJSON("/route/compare", penalties, preferTime.checked);
     shortestLayer.clearLayers().addData(shortest);
     routeLayer.clearLayers().addData(route);
     const s = shortest.properties, r = route.properties;
@@ -225,8 +261,9 @@ async function update() {
     setText("summary", same_path ? "Same as the shortest route."
       : `${signed(detour_pct)}% distance, ${signed(extra_time_pct)}% time, roughness ${s.mean_roughness?.toFixed(1)} → ${r.mean_roughness?.toFixed(1)}, `
         + `overtaking spots ${s.danger_points} → ${r.danger_points}`);
+    await drawGrade(penalties, preferTime.checked);
   } catch (e) {
-    shortestLayer.clearLayers(); routeLayer.clearLayers();
+    shortestLayer.clearLayers(); routeLayer.clearLayers(); gradeLayer.clearLayers();
     show("s", null); show("r", null); setText("summary", "");
     setText("error", e.message);
   }
