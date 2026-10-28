@@ -17,6 +17,7 @@ import argparse
 import json
 import math
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 import requests
@@ -66,8 +67,21 @@ def _price(plan):
     return _text(plan.get("description")) or None
 
 
+# The feeds read_system reads. Each takes ~1 s from MobiData BW, so they are fetched at the same time.
+SYSTEM_FEEDS = ("system_information", "vehicle_types", "system_pricing_plans", "vehicle_status", "station_information",
+                "station_status")
+
+
+def _fetched_together(system, fetch, feeds):
+    """`fetch` for `system`'s `feeds`, all requested at once: returns each feed's JSON or raises its error."""
+    with ThreadPoolExecutor(len(feeds)) as pool:
+        futures = {feed: pool.submit(fetch, system, feed) for feed in feeds}
+    return lambda system, feed: futures[feed].result()
+
+
 def read_system(system, fetch=fetch_json):
     """(vehicles, zones) of one GBFS system, as GeoJSON Features inside Heilbronn."""
+    fetch = _fetched_together(system, fetch, SYSTEM_FEEDS)
     provider, types, kind = _system(system, fetch)
     try:
         plans = {p["plan_id"]: p for p in fetch(system, "system_pricing_plans")["data"]["plans"]}
