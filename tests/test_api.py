@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 
 from backend.app import create_app
 from backend.schemas import DangerCollection, FlowCollection, GradeCollection, LightingCollection, RouteCollection, \
-    RouteComparison, RoughnessCollection, ScoreCollection, ShadeCollection, SpeedCollection
+    RouteComparison, RoughnessCollection, ScoreCollection, ShadeCollection, SpeedCollection, DayRoutes
 from download_data import HEILBRONN_BBOX, overtaking_risk
 from routing.costs import MIN_OVERTAKING_CM
 from routing.graph import attach_lighting, attach_shade
@@ -253,3 +253,17 @@ def test_grade_without_elevation_data_is_503(client):
     r = client.get("/route/grade", params=params())
     assert r.status_code == 503
     assert "routing.elevation" in r.json()["detail"]
+
+
+def test_day_returns_periods_of_comparisons(client):
+    r = client.get("/route/day", params={**params(), "depart_time": "2026-07-21T15:00"})
+    assert r.status_code == 200
+    body = DayRoutes.model_validate(r.json())
+    assert body.date == "2026-07-21"
+    assert (r.json()["periods"][0]["from"], body.periods[-1].to) == ("00:00", "23:59")
+
+
+def test_day_takes_the_same_parameters_and_errors_as_route(client):
+    names = lambda path: {p["name"] for p in client.get("/openapi.json").json()["paths"][path]["get"]["parameters"]}
+    assert names("/route/day") == names("/route")
+    assert client.get("/route/day", params=params(start=(48.7758, 9.1829))).status_code == 400

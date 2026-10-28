@@ -36,6 +36,18 @@
   .legend { margin-top: 10px; font-size: 12px; color: #5b6773; }
   #ask { margin-top: 10px; padding: 8px 10px; border-radius: 6px; background: #fff4e5; }
   #ask button, .leaflet-popup button { margin: 6px 6px 0 0; }
+  #why { margin-top: 10px; border: 1px solid #dde3e9; border-radius: 8px; padding: 8px 10px; background: #f8faf9; }
+  #why h2 { font-size: 13px; margin: 0 0 6px; }
+  #why .cost { color: #5b6773; margin-bottom: 6px; }
+  .why-row { display: grid; grid-template-columns: 1fr 90px; gap: 2px 8px; align-items: center; font-size: 12px; margin: 5px 0; }
+  .why-row .delta { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .why-row .better { color: #1a7f37; } .why-row .worse { color: #b3261e; } .why-row .same { color: #7a8794; }
+  .why-bars { grid-column: 1 / -1; display: grid; gap: 2px; }
+  #trip { margin-top: 8px; border: 1px solid #dde3e9; border-radius: 8px; padding: 8px 10px; background: #fbf8fa; font-size: 12px; }
+  .trip-label { font-size: 12px; padding: 2px 6px; }
+  #trip ol { margin: 4px 0; padding-left: 18px; } #trip li { margin: 2px 0; }
+  #trip .total { font-weight: 600; font-size: 13px; }
+  .why-bars div { height: 4px; border-radius: 2px; min-width: 1px; }
 </style>
 </head>
 <body>
@@ -71,6 +83,17 @@
   <input id="departTime" type="datetime-local">
   <div class="row"><span id="sky">By day shade counts, after dark lighting</span></div>
 
+  <label><input type="checkbox" id="dayMode"> Slide through the day</label>
+  <div id="dayControls" hidden>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="dayPlay" style="margin:0;width:34px">▶</button>
+      <input id="dayTime" type="range" min="0" max="0" step="1" value="0" style="flex:1" disabled>
+      <b id="dayClock" style="font-variant-numeric:tabular-nums;width:42px">–</b>
+    </div>
+    <div id="dayTicks" style="display:flex;justify-content:space-between;margin-left:42px;font-size:11px;color:#5b6773"></div>
+    <div class="row"><span id="dayPeriod">Set start and end to see how the route changes over the day</span></div>
+  </div>
+
   <label for="shadePenalty">By day, how much do you hate the sun: <span id="shadePenaltyValue">0.5</span></label>
   <input id="shadePenalty" type="range" min="0" max="5" step="0.25" value="0.5">
   <div class="row"><span>0 = ignore</span><span>5 = strongly prefer shade</span></div>
@@ -86,6 +109,13 @@
   </table>
   <div class="row"><span>kcal is a rough estimate for the default rider: 70 kg on a normal bike (weight and e-bike can't be set here yet)</span></div>
   <div id="summary"></div>
+  <div id="why" hidden></div>
+
+  <label><input type="checkbox" id="tripMode"> No bike? Rent one:
+    <select id="tripVehicle"><option value="all">quickest e-bike or e-scooter</option><option value="bike">e-bike</option>
+    <option value="scooter">e-scooter</option></select></label>
+  <div class="row"><span>Walk to a free Dott vehicle, ride it to the end (or the nearest place outside Dott's no-parking zones), walk on (live)</span></div>
+  <div id="trip" hidden></div>
   <div id="error"></div>
 
   <button id="example">Example trip</button><button id="reset">Reset</button>
@@ -509,9 +539,10 @@ function settings() {
 document.getElementById("reset").onclick = () => {
   [start, end].forEach(m => m && m.remove());
   start = end = null;
-  shortestLayer.clearLayers(); routeLayer.clearLayers(); gradeLayer.clearLayers();
+  shortestLayer.clearLayers(); routeLayer.clearLayers(); gradeLayer.clearLayers(); tripLayer.clearLayers();
+  document.getElementById("trip").hidden = true;
   show("s", null); show("r", null);
-  setText("summary", ""); setText("error", ""); setText("gradeSummary", "");
+  setText("summary", ""); setText("error", ""); setText("gradeSummary", ""); document.getElementById("why").hidden = true;
   update();
 };
 
@@ -543,10 +574,48 @@ function show(prefix, p) {
   setText(prefix + "Lit", p && p.mean_lit != null ? p.mean_lit.toFixed(2) : "–");
 }
 
+// "Why this route?": per factor, the metres on bad streets of the shortest route (grey bar) and of yours (green bar).
+const WHY = [
+  ["bumpy_m", "On bumpy streets", "m"],
+  ["danger_points", "Close-overtaking spots", ""],
+  ["bad_air_m", "On streets with bad air", "m"],
+  ["stop_go_m", "On stop-and-go streets", "m"],
+  ["sunny_m", "In the sun", "m"],
+  ["unlit_m", "On unlit streets", "m"],
+  ["bike_friendly_m", "On bike paths and lanes", "m", true],  // more is better
+];
+function explain(s, r, detour_pct, same_path) {
+  const why = document.getElementById("why");
+  const shown = WHY.filter(([k]) => r[k] != null && s[k] != null && (r[k] || s[k]));
+  if (same_path) {  // nothing traded: what the route is like, so the card doesn't just vanish
+    const max = Math.max(...shown.filter(([, , unit]) => unit).map(([k]) => r[k]), 1);
+    why.innerHTML = `<h2>Why this route?</h2><div class="cost">It is also the shortest route: for your settings no detour `
+      + `is worth it (${(r.length_m / 1000).toFixed(2)} km, ${Math.round(r.duration_s / 60)} min). On the way:</div>`
+      + shown.map(([k, what, unit]) => `<div class="why-row"><span>${what}</span><span class="delta same">${r[k]}${unit ? " m" : ""}</span>`
+        + (unit ? `<div class="why-bars"><div style="width:${100 * r[k] / max}%;background:#1a7f37"></div></div>` : "") + `</div>`).join("");
+    why.hidden = false;
+    return;
+  }
+  const dm = Math.round(r.length_m - s.length_m), dt = Math.round((r.duration_s - s.duration_s) / 60);
+  const rows = shown.map(([k, what, unit, more]) => {
+    const d = r[k] - s[k], good = more ? d > 0 : d < 0;
+    const cls = Math.abs(d) < (unit ? 20 : 1) ? "same" : good ? "better" : "worse";
+    const amount = Math.abs(d) + (unit ? " m" : "");
+    const text = cls === "same" ? "about the same" : unit ? `${amount} ${d < 0 ? "less" : "more"}` : `${amount} ${d < 0 ? "fewer" : "more"}`;
+    const max = Math.max(r[k], s[k]);
+    return `<div class="why-row"><span>${what}</span><span class="delta ${cls}">${text}</span>
+      <div class="why-bars" title="shortest ${s[k]}${unit ? " m" : ""}, yours ${r[k]}${unit ? " m" : ""}">
+        <div style="width:${100 * s[k] / max}%;background:#7a8794"></div><div style="width:${100 * r[k] / max}%;background:#1a7f37"></div></div></div>`;
+  });
+  why.innerHTML = `<h2>Why this route?</h2><div class="cost">It costs ${dm >= 0 ? "+" : ""}${dm} m (${signed(detour_pct)}%)`
+    + `${dt ? `, ${dt > 0 ? "+" : ""}${dt} min` : ", no extra time"} compared with the shortest route, and in return:</div>` + rows.join("");
+  why.hidden = false;
+}
+
 async function getJSON(path) {
   const a = start.getLatLng(), b = end.getLatLng();
   const q = new URLSearchParams({ from_lat: a.lat, from_lon: a.lng, to_lat: b.lat, to_lon: b.lng, ...Object.fromEntries(settings()) });
-  const res = await fetch(API + path + "?" + q);
+  const res = await fetch(API + path + (path.includes("?") ? "&" : "?") + q);
   const body = await res.json();
   if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail));
   return body;
@@ -566,6 +635,167 @@ async function drawGrade() {
   }
 }
 
+// Slide through the day: /route/day returns one comparison per period of the day with the same sky (shade slot by
+// day, dark at night). The slider has one stop per time the route changes (periods with the same route merged), so
+// moving it only redraws, without asking the server again.
+const dayMode = document.getElementById("dayMode"), dayTime = document.getElementById("dayTime"), dayPlay = document.getElementById("dayPlay");
+let day = null, stops = [], dayShown = null, playing = null;
+dayMode.onchange = () => {
+  document.getElementById("dayControls").hidden = !dayMode.checked;
+  departTime.disabled = dayMode.checked;
+  if (!dayMode.checked) { stopPlaying(); day = null; stops = []; }
+  update();
+};
+const sameRoute = (a, b) => JSON.stringify(a.route.geometry.coordinates) === JSON.stringify(b.route.geometry.coordinates);
+function setDay(d) {
+  const keep = stops[+dayTime.value]?.from;
+  day = d;
+  stops = [];
+  for (const p of d.periods) {
+    if (stops.length && sameRoute(stops.at(-1).period, p)) stops.at(-1).to = p.to;
+    else stops.push({ from: p.from, to: p.to, period: p });
+  }
+  dayTime.max = stops.length - 1;
+  dayTime.disabled = stops.length < 2;
+  // Stay at the same time of day when the settings change.
+  const i = keep ? stops.findIndex(st => keep >= st.from && keep < st.to) : stops.findIndex(st => st.period.route.properties.daylight);
+  dayTime.value = Math.max(0, i);
+  const ticks = document.getElementById("dayTicks");
+  ticks.innerHTML = "";
+  stops.forEach((st, i) => {
+    const b = document.createElement("span");
+    b.textContent = (st.period.route.properties.daylight ? "☀ " : "☾ ") + st.from;
+    b.style.cursor = "pointer";
+    b.onclick = () => { dayTime.value = i; drawDay(); };
+    ticks.append(b);
+  });
+  dayShown = null;
+  drawDay();
+}
+function drawDay() {
+  const st = stops[+dayTime.value];
+  if (!st) return;
+  [...document.getElementById("dayTicks").children].forEach((b, i) => b.style.fontWeight = i === +dayTime.value ? 700 : 400);
+  setText("dayClock", st.from);
+  const before = departTime.value;
+  departTime.value = day.date + "T" + st.from;
+  if (before !== departTime.value && document.getElementById("showShade").checked) drawShade();
+  if (st === dayShown) return;
+  dayShown = st;
+  drawComparison(st.period);
+  drawGrade();  // the grade of this route
+  drawTrip();
+  const r = st.period.route.properties;
+  setText("dayPeriod", `${st.from}–${st.to}: ` + (r.daylight ? `sun up, shade of ${r.shade_slot.slice(11, 16)} counts` : "after dark, lit streets count")
+    + ` · ${stops.length === 1 ? "the same route all day" : `the route changes ${stops.length - 1} times today`}`);
+}
+dayTime.oninput = drawDay;
+function stopPlaying() { clearInterval(playing); playing = null; dayPlay.textContent = "▶"; }
+dayPlay.onclick = () => {
+  if (playing) return stopPlaying();
+  dayPlay.textContent = "❚❚";
+  playing = setInterval(() => { dayTime.value = (+dayTime.value + 1) % stops.length; drawDay(); }, 1500);
+};
+
+function drawComparison({ route, shortest, detour_pct, extra_time_pct, same_path }) {
+  shortestLayer.clearLayers().addData(shortest);
+  routeLayer.clearLayers().addData(route);
+  const s = shortest.properties, r = route.properties;
+  show("s", s); show("r", r);
+  explain(s, r, detour_pct, same_path);
+  setText("sky", r.daylight == null ? "By day shade counts, after dark lighting"
+    : r.daylight ? `Sun is up: shade counts (slot ${r.shade_slot.slice(11, 16)})` : "After dark: lighting counts");
+  setText("summary", same_path ? "Same as the shortest route."
+    : `${signed(detour_pct)}% distance, ${signed(extra_time_pct)}% time, roughness ${s.mean_roughness?.toFixed(1)} → ${r.mean_roughness?.toFixed(1)}, `
+      + `overtaking spots ${s.danger_points} → ${r.danger_points}`);
+  // Streets reported closed (too few reports to close them) that the route still rides, as there was no sensible way round.
+  setText("error", r.reported_closures ? `Your route rides ${r.reported_closures} street${r.reported_closures > 1 ? "s" : ""} `
+    + "riders reported closed (dashed): check before you go." : "");
+}
+
+// Trip with a shared vehicle (/route/sharing), drawn above everything in its own pane: the walks dark grey dotted,
+// the ride in the vehicle's colour (both on a white casing), numbered pins where to pick it up and where to leave it.
+// Under it, Dott's no-parking zones (/sharing/geofencing) for that vehicle: red = no parking, orange = parking zones only.
+// Your own route and the shortest route fade meanwhile.
+const tripMode = document.getElementById("tripMode"), tripVehicle = document.getElementById("tripVehicle");
+map.createPane("trip").style.zIndex = 450;
+map.createPane("fences").style.zIndex = 380;
+const tripLayer = L.layerGroup().addTo(map), fenceLayer = L.layerGroup().addTo(map);
+let fences = null, tripAsked = 0;
+tripMode.onchange = tripVehicle.onchange = () => drawTrip();
+const minutes = s => Math.max(1, Math.round(s / 60));
+// "€1.00 to unlock + €0.44/min" -> the price of riding `s` seconds (started minutes count), or null.
+function priceFor(price, s) {
+  const m = /€([\d.]+) to unlock \+ €([\d.]+)\/min/.exec(price ?? "");
+  return m ? (+m[1] + +m[2] * Math.ceil(s / 60)).toFixed(2) : null;
+}
+const middle = leg => { const c = leg.geometry.coordinates[Math.floor(leg.geometry.coordinates.length / 2)]; return [c[1], c[0]]; };
+const label = (latlng, html) => L.tooltip({ permanent: true, direction: "right", offset: [10, 0], className: "trip-label", pane: "trip" })
+  .setLatLng(latlng).setContent(html);
+function drawLeg(leg, color, dashed) {
+  L.geoJSON(leg, { pane: "trip", style: { color: "#fff", weight: dashed ? 8 : 10, opacity: 0.9 } }).addTo(tripLayer);
+  L.geoJSON(leg, { pane: "trip", style: { color, weight: dashed ? 4 : 6, opacity: 1, dashArray: dashed ? "1 8" : null, lineCap: "round" } }).addTo(tripLayer);
+}
+function pinIcon(text, fill, square) {
+  return L.divIcon({ className: "", iconSize: [28, 28], iconAnchor: [14, 14], html:
+    `<div style="width:24px;height:24px;border:2px solid #fff;border-radius:${square ? "5px" : "50%"};background:${fill};color:#fff;`
+    + `font:700 13px/24px system-ui;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.4)">${text}</div>` });
+}
+async function drawFences(kind) {
+  fenceLayer.clearLayers();
+  try {
+    fences ??= await fetch(API + "/sharing/geofencing").then(r => r.json());
+    L.geoJSON({ type: "FeatureCollection", features: fences.features.filter(f => f.properties[kind] && f.properties[kind] !== "anywhere") }, {
+      pane: "fences", interactive: false,
+      style: f => f.properties[kind] === "no" ? { color: "#c62828", weight: 1, fillColor: "#e53935", fillOpacity: 0.18 }
+                                              : { color: "#ef6c00", weight: 1, fillColor: "#fb8c00", fillOpacity: 0.18 },
+    }).addTo(fenceLayer);
+  } catch { fences = null; }
+}
+async function drawTrip() {
+  const box = document.getElementById("trip"), asked = ++tripAsked;
+  const on = tripMode.checked && start && end;
+  routeLayer.setStyle({ opacity: on ? 0.25 : 0.9 }); shortestLayer.setStyle({ opacity: on ? 0.25 : 0.9 });
+  if (!on) { tripLayer.clearLayers(); fenceLayer.clearLayers(); box.hidden = true; return; }
+  try {
+    const t = await getJSON("/route/sharing?vehicle=" + tripVehicle.value);
+    if (asked !== tripAsked) return;  // a newer request is on its way
+    tripLayer.clearLayers();
+    const [walk1, ride, walk2] = t.legs, v = t.vehicle.properties, color = VEHICLE_COLOR[v.vehicle], name = vehicleName(v.vehicle);
+    drawFences(v.vehicle);
+    drawLeg(walk1, "#37474f", true);
+    drawLeg(walk2, "#37474f", true);
+    drawLeg(ride, color, false);
+    const at = t.vehicle.geometry.coordinates, back = t.return_point.geometry.coordinates, rp = t.return_point.properties;
+    L.marker([at[1], at[0]], { pane: "trip", icon: pinIcon("1", color) }).addTo(tripLayer);
+    L.marker([back[1], back[0]], { pane: "trip", icon: pinIcon("P", "#37474f", true) }).addTo(tripLayer);
+    const where = rp.rule === "parking_zone" ? `at parking zone <b>${rp.name.replace(/^Park(ing)?[- ]?(zone|Area)\s*/i, "")}</b>`
+      : rp.at_destination ? "right at the end" : "here, just outside the no-parking zone";
+    if (walk1.properties.length_m > 20) label(middle(walk1), `🚶 ${Math.round(walk1.properties.length_m)} m`).addTo(tripLayer);
+    label(middle(ride), `${v.vehicle === "scooter" ? "🛴" : "🚲"} ${(ride.properties.length_m / 1000).toFixed(1)} km`).addTo(tripLayer);
+    if (walk2.properties.length_m > 20) label(middle(walk2), `🚶 ${Math.round(walk2.properties.length_m)} m`).addTo(tripLayer);
+    label([at[1], at[0]], `<b>① Pick up</b> ${name}, ${v.battery_pct ?? "?"}%`).addTo(tripLayer);
+    label([back[1], back[0]], `<b>② Leave it</b> ${where.replace(/<\/?b>/g, "")}`).addTo(tripLayer);
+
+    const price = priceFor(v.price, t.ride_s), pushed = ride.properties.pushed_m;
+    box.innerHTML = `<div class="total">${minutes(t.duration_s)} min door to door${price ? `, about €${price}` : ""}</div><ol>
+      <li>🚶 Walk ${Math.round(walk1.properties.length_m)} m (${minutes(walk1.properties.duration_s)} min) to pin ①, the ${name} (battery ${v.battery_pct ?? "?"}%)</li>
+      <li>${v.vehicle === "scooter" ? "🛴" : "🚲"} Ride ${(ride.properties.length_m / 1000).toFixed(1)} km (${minutes(t.ride_s)} min)`
+      + `${pushed ? `, pushing it ${pushed} m on footways where e-scooters may not ride` : ""} and leave it at pin P, ${where}</li>`
+      + (walk2.properties.length_m > 0 ? `<li>🚶 Walk ${Math.round(walk2.properties.length_m)} m (${minutes(walk2.properties.duration_s)} min) to the end</li>` : "")
+      + `</ol>`
+      + `<div><span class="swatch" style="background:#e53935;opacity:.6;height:8px"></span>no parking for ${name}s`
+      + `<span class="swatch" style="background:#fb8c00;opacity:.6;height:8px;margin-left:8px"></span>parking zones only</div>`
+      + (v.rent_url ? `<a href="${v.rent_url}" target="_blank" rel="noopener">Rent it in the ${v.provider} app</a>` : "")
+      + `<div style="color:#7a8794;margin-top:4px">${t.attribution}</div>`;
+    box.hidden = false;
+  } catch (e) {
+    if (asked !== tripAsked) return;
+    tripLayer.clearLayers();
+    box.innerHTML = e.message; box.hidden = false;
+  }
+}
+
 async function update() {
   setText("hint", !start ? "Click the map to set the start." : !end ? "Click the map to set the end."
     : "Drag the pins or click to move the end.");
@@ -573,24 +803,17 @@ async function update() {
   if (!start || !end) return;
   setText("error", "");
   try {
-    const { route, shortest, detour_pct, extra_time_pct, same_path } = await getJSON("/route/compare");
-    shortestLayer.clearLayers().addData(shortest);
-    routeLayer.clearLayers().addData(route);
-    const s = shortest.properties, r = route.properties;
-    show("s", s); show("r", r);
-    setText("sky", r.daylight == null ? "By day shade counts, after dark lighting"
-      : r.daylight ? `Sun is up: shade counts (slot ${r.shade_slot.slice(11, 16)})` : "After dark: lighting counts");
-    setText("summary", same_path ? "Same as the shortest route."
-      : `${signed(detour_pct)}% distance, ${signed(extra_time_pct)}% time, roughness ${s.mean_roughness?.toFixed(1)} → ${r.mean_roughness?.toFixed(1)}, `
-        + `overtaking spots ${s.danger_points} → ${r.danger_points}`);
-    // Streets reported closed (too few reports to close them) that the route still rides, as there was no sensible way round.
-    setText("error", r.reported_closures ? `Your route rides ${r.reported_closures} street${r.reported_closures > 1 ? "s" : ""} `
-      + "riders reported closed (dashed): check before you go." : "");
+    if (dayMode.checked) {
+      setDay(await getJSON("/route/day"));
+    } else {
+      drawComparison(await getJSON("/route/compare"));
+      await drawGrade();
+      drawTrip();
+    }
     askNearby();
-    await drawGrade();
   } catch (e) {
     shortestLayer.clearLayers(); routeLayer.clearLayers(); gradeLayer.clearLayers();
-    show("s", null); show("r", null); setText("summary", "");
+    show("s", null); show("r", null); setText("summary", ""); document.getElementById("why").hidden = true;
     setText("error", e.message);
   }
 }
