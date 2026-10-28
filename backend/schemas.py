@@ -1,5 +1,5 @@
 """GeoJSON response shapes, so /docs shows what the endpoints return. Only used for the OpenAPI schema."""
-from typing import Literal, Optional
+from typing import Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -20,6 +20,7 @@ ROUTE_EXAMPLE = {
         "danger_points": 21, "danger_risk": 17.12, "mean_pm_risk": 0.511, "pm_measured_share": 0.65,
         "mean_stop_go": 0.691, "stop_measured_share": 0.97,
         "mean_shade": None, "shade_known_share": 1.0, "mean_lit": 0.986, "lit_known_share": 0.97, "lifts": 0,
+        "bumpy_m": 97, "bad_air_m": 369, "stop_go_m": 414, "sunny_m": None, "unlit_m": None, "bike_friendly_m": 1266, "pushed_m": 0,
     },
 }
 SHORTEST_EXAMPLE = {
@@ -33,6 +34,7 @@ SHORTEST_EXAMPLE = {
         "danger_points": 10, "danger_risk": 7.94, "mean_pm_risk": 0.524, "pm_measured_share": 0.75,
         "mean_stop_go": 0.665, "stop_measured_share": 0.97,
         "mean_shade": None, "shade_known_share": 1.0, "mean_lit": 0.93, "lit_known_share": 0.99, "lifts": 0,
+        "bumpy_m": 1895, "bad_air_m": 733, "stop_go_m": 481, "sunny_m": None, "unlit_m": None, "bike_friendly_m": 874, "pushed_m": 0,
     },
 }
 
@@ -114,6 +116,13 @@ class RouteProperties(BaseModel):
         description="Chance the streets are lit at night, 0-1, length-weighted over the part with lighting data; null if none")
     lit_known_share: float = Field(description="Share of the route length with lighting data, 0-1")
     lifts: int = Field(description="Lifts (elevators) the route rides through, e.g. onto the Campusbrücke; each one costs stop_penalty x 100 m")
+    bumpy_m: int = Field(description="Metres on bumpy streets: roughness (measured or estimated) 20 or more, the worst tenth of measured street length")
+    bad_air_m: int = Field(description="Metres on streets with bad air: measured air score 0.555 or more, the worst tenth of measured street length")
+    stop_go_m: int = Field(description="Metres on stop-and-go streets: measured stop_go 0.77 or more, the worst tenth of measured street length")
+    sunny_m: Optional[int] = Field(description="By day: metres in the sun at shade_slot (share not in shade, over the streets with shade data); null otherwise")
+    unlit_m: Optional[int] = Field(description="After dark: metres on probably unlit streets (chance not lit, over the streets with lighting data); null otherwise")
+    bike_friendly_m: int = Field(description="Metres on bike paths, bike lanes and bike routes (see /bike-friendly-streets)")
+    pushed_m: int = Field(description="Metres an e-scooter is pushed at walking pace, on footways and pedestrian streets it must not ride on (eKFV); 0 for bikes")
 
 
 class RouteFeature(BaseModel):
@@ -140,6 +149,21 @@ class RouteComparison(BaseModel):
 
     model_config = {"json_schema_extra": {"example": {
         "route": ROUTE_EXAMPLE, "shortest": SHORTEST_EXAMPLE, "detour_pct": 0.9, "extra_time_pct": 0.0, "same_path": False}}}
+
+
+class DayPeriod(RouteComparison):
+    """/route/compare for every departure time in [from, to)."""
+    from_: str = Field(alias="from", description="First departure time of the period, HH:MM local time")
+    to: str = Field(description="End of the period, HH:MM local time (23:59 for the last one)")
+
+    model_config = {"populate_by_name": True}
+
+
+class DayRoutes(BaseModel):
+    """The routes of one day by departure time: by day the route can follow the shade of the time slot, after
+    dark the lit streets. Consecutive periods differ in shade slot or in daylight."""
+    date: str = Field(description="The day, ISO 8601 (that of depart_time, or today)")
+    periods: list[DayPeriod] = Field(min_length=1, description="From 00:00 to 23:59, in order")
 
 
 Severity = Literal["flat", "gentle", "noticeable", "steep", "very_steep"]
@@ -405,6 +429,43 @@ class ZoneCollection(BaseModel):
         "features": [{"type": "Feature", "geometry": {"type": "Point", "coordinates": [9.205396, 49.133834]}, "properties": {
             "provider": "Dott", "name": "Parkingzone Theresienstraße /Badstraße", "bikes_available": 5,
             "scooters_available": 5, "bike_capacity": 5, "scooter_capacity": 5}}]}}}
+
+
+class WalkProperties(BaseModel):
+    mode: Literal["walk"]
+    length_m: float = Field(description="Walking distance in metres")
+    duration_s: int = Field(description="Walking time in seconds at 4.8 km/h")
+
+
+class WalkFeature(BaseModel):
+    type: Literal["Feature"]
+    geometry: LineString
+    properties: WalkProperties
+
+
+class RideProperties(RouteProperties):
+    mode: Literal["bike", "scooter"] = Field(description="Ridden on the rented e-bike or e-scooter")
+
+
+class RideFeature(BaseModel):
+    type: Literal["Feature"]
+    geometry: LineString
+    properties: RideProperties
+
+
+class SharingTrip(BaseModel):
+    """Walk to a free shared vehicle, ride it to a parking zone near the end, walk to the end. The walks follow OSM's
+    walking network (pavements, footways, pedestrian zones; no bike paths), the ride the bike graph with the request's
+    penalties, as /route; an e-scooter is pushed on footways and in pedestrian zones (pushed_m)."""
+    vehicle: VehicleFeature = Field(description="The vehicle to rent, as from /sharing")
+    zone: Optional[ZoneFeature] = Field(description="The parking zone the ride ends at; null when the ride ends at the destination")
+    legs: list[Union[WalkFeature, RideFeature]] = Field(min_length=3, max_length=3, description="Walk, ride, walk")
+    duration_s: int = Field(description="Walking plus riding time in seconds (not counting unlocking)")
+    walk_m: float = Field(description="Metres walked, both walks")
+    ride_m: float = Field(description="Metres ridden")
+    ride_s: int = Field(description="Riding time in seconds, what the per-minute price applies to")
+    updated: str = Field(description=SHARING_UPDATED)
+    attribution: str = Field(description=SHARING_ATTRIBUTION)
 
 
 class Error(BaseModel):

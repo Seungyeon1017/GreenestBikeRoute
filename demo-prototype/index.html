@@ -34,6 +34,17 @@
   #error { color: #b3261e; margin-top: 8px; }
   button { margin-top: 10px; margin-right: 6px; padding: 5px 10px; border: 1px solid #c3ccd5; border-radius: 6px; background: #f5f7f9; cursor: pointer; }
   .legend { margin-top: 10px; font-size: 12px; color: #5b6773; }
+  #why { margin-top: 10px; border: 1px solid #dde3e9; border-radius: 8px; padding: 8px 10px; background: #f8faf9; }
+  #why h2 { font-size: 13px; margin: 0 0 6px; }
+  #why .cost { color: #5b6773; margin-bottom: 6px; }
+  .why-row { display: grid; grid-template-columns: 1fr 90px; gap: 2px 8px; align-items: center; font-size: 12px; margin: 5px 0; }
+  .why-row .delta { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .why-row .better { color: #1a7f37; } .why-row .worse { color: #b3261e; } .why-row .same { color: #7a8794; }
+  .why-bars { grid-column: 1 / -1; display: grid; gap: 2px; }
+  #trip { margin-top: 8px; border: 1px solid #dde3e9; border-radius: 8px; padding: 8px 10px; background: #fbf8fa; font-size: 12px; }
+  #trip ol { margin: 4px 0; padding-left: 18px; } #trip li { margin: 2px 0; }
+  #trip .total { font-weight: 600; font-size: 13px; }
+  .why-bars div { height: 4px; border-radius: 2px; min-width: 1px; }
 </style>
 </head>
 <body>
@@ -69,6 +80,16 @@
   <input id="departTime" type="datetime-local">
   <div class="row"><span id="sky">By day shade counts, after dark lighting</span></div>
 
+  <label><input type="checkbox" id="dayMode"> Slide through the day</label>
+  <div id="dayControls" hidden>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="dayPlay" style="margin:0;width:34px">▶</button>
+      <input id="dayTime" type="range" min="0" max="95" step="1" value="60" style="flex:1">
+      <b id="dayClock" style="font-variant-numeric:tabular-nums;width:42px">15:00</b>
+    </div>
+    <div class="row"><span id="dayPeriod">Set start and end to see how the route changes over the day</span></div>
+  </div>
+
   <label for="shadePenalty">By day, how much do you hate the sun: <span id="shadePenaltyValue">0.5</span></label>
   <input id="shadePenalty" type="range" min="0" max="5" step="0.25" value="0.5">
   <div class="row"><span>0 = ignore</span><span>5 = strongly prefer shade</span></div>
@@ -83,6 +104,13 @@
     <tr><td><span class="swatch" style="background:#1a7f37"></span>Your route</td><td id="rLen">–</td><td id="rTime">–</td><td id="rRough">–</td><td id="rDanger">–</td><td id="rPm">–</td><td id="rStop">–</td><td id="rShade">–</td><td id="rLit">–</td></tr>
   </table>
   <div id="summary"></div>
+  <div id="why" hidden></div>
+
+  <label><input type="checkbox" id="tripMode"> No bike? Rent one:
+    <select id="tripVehicle"><option value="all">quickest e-bike or e-scooter</option><option value="bike">e-bike</option>
+    <option value="scooter">e-scooter</option></select></label>
+  <div class="row"><span>Walk to a free Dott vehicle, ride it to a parking zone near the end, walk on (live)</span></div>
+  <div id="trip" hidden></div>
   <div id="error"></div>
 
   <button id="example">Example trip</button><button id="reset">Reset</button>
@@ -355,9 +383,10 @@ function settings() {
 document.getElementById("reset").onclick = () => {
   [start, end].forEach(m => m && m.remove());
   start = end = null;
-  shortestLayer.clearLayers(); routeLayer.clearLayers(); gradeLayer.clearLayers();
+  shortestLayer.clearLayers(); routeLayer.clearLayers(); gradeLayer.clearLayers(); tripLayer.clearLayers();
+  document.getElementById("trip").hidden = true;
   show("s", null); show("r", null);
-  setText("summary", ""); setText("error", ""); setText("gradeSummary", "");
+  setText("summary", ""); setText("error", ""); setText("gradeSummary", ""); document.getElementById("why").hidden = true;
   update();
 };
 
@@ -386,10 +415,39 @@ function show(prefix, p) {
   setText(prefix + "Lit", p && p.mean_lit != null ? p.mean_lit.toFixed(2) : "–");
 }
 
+// "Why this route?": per factor, the metres on bad streets of the shortest route (grey bar) and of yours (green bar).
+const WHY = [
+  ["bumpy_m", "bumpy streets", "m"],
+  ["danger_points", "close-overtaking spots", ""],
+  ["bad_air_m", "streets with bad air", "m"],
+  ["stop_go_m", "stop-and-go streets", "m"],
+  ["sunny_m", "in the sun", "m"],
+  ["unlit_m", "on unlit streets", "m"],
+  ["bike_friendly_m", "on bike paths and lanes", "m", true],  // more is better
+];
+function explain(s, r, detour_pct, same_path) {
+  const why = document.getElementById("why");
+  if (same_path) { why.hidden = true; return; }
+  const dm = Math.round(r.length_m - s.length_m), dt = Math.round((r.duration_s - s.duration_s) / 60);
+  const rows = WHY.filter(([k]) => r[k] != null && s[k] != null && (r[k] || s[k])).map(([k, what, unit, more]) => {
+    const d = r[k] - s[k], good = more ? d > 0 : d < 0;
+    const cls = Math.abs(d) < (unit ? 20 : 1) ? "same" : good ? "better" : "worse";
+    const amount = Math.abs(d) + (unit ? " m" : "");
+    const text = cls === "same" ? "about the same" : unit ? `${amount} ${d < 0 ? "less" : "more"}` : `${amount} ${d < 0 ? "fewer" : "more"}`;
+    const max = Math.max(r[k], s[k]);
+    return `<div class="why-row"><span>${unit ? "Metres " : ""}${what}</span><span class="delta ${cls}">${text}</span>
+      <div class="why-bars" title="shortest ${s[k]}${unit ? " m" : ""}, yours ${r[k]}${unit ? " m" : ""}">
+        <div style="width:${100 * s[k] / max}%;background:#7a8794"></div><div style="width:${100 * r[k] / max}%;background:#1a7f37"></div></div></div>`;
+  });
+  why.innerHTML = `<h2>Why this route?</h2><div class="cost">It costs ${dm >= 0 ? "+" : ""}${dm} m (${signed(detour_pct)}%)`
+    + `${dt ? `, ${dt > 0 ? "+" : ""}${dt} min` : ", no extra time"} compared with the shortest route, and in return:</div>` + rows.join("");
+  why.hidden = false;
+}
+
 async function getJSON(path) {
   const a = start.getLatLng(), b = end.getLatLng();
   const q = new URLSearchParams({ from_lat: a.lat, from_lon: a.lng, to_lat: b.lat, to_lon: b.lng, ...Object.fromEntries(settings()) });
-  const res = await fetch(API + path + "?" + q);
+  const res = await fetch(API + path + (path.includes("?") ? "&" : "?") + q);
   const body = await res.json();
   if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail));
   return body;
@@ -409,6 +467,98 @@ async function drawGrade() {
   }
 }
 
+// Slide through the day: /route/day returns one comparison per period of the day with the same sky (shade slot by
+// day, dark at night), so moving the slider only redraws, without asking the server again.
+const dayMode = document.getElementById("dayMode"), dayTime = document.getElementById("dayTime"), dayPlay = document.getElementById("dayPlay");
+let day = null, dayShown = null, playing = null;
+const hhmm = step => String(Math.floor(step / 4)).padStart(2, "0") + ":" + String(step % 4 * 15).padStart(2, "0");
+dayMode.onchange = () => {
+  document.getElementById("dayControls").hidden = !dayMode.checked;
+  departTime.disabled = dayMode.checked;
+  if (!dayMode.checked) { stopPlaying(); day = null; }
+  update();
+};
+function drawDay() {
+  const t = hhmm(+dayTime.value);
+  setText("dayClock", t);
+  if (!day) return;
+  const date = day.date;
+  const changed = departTime.value.slice(0, 10) !== date || shadeSlotFor(departTime.value) !== shadeSlotFor(date + "T" + t);
+  departTime.value = date + "T" + t;
+  if (changed && document.getElementById("showShade").checked) drawShade();
+  const p = day.periods.find(p => t >= p.from && t < p.to) ?? day.periods.at(-1);
+  if (p === dayShown) return;
+  dayShown = p;
+  drawComparison(p);
+  drawGrade();  // the grade of this period's route
+  const r = p.route.properties;
+  setText("dayPeriod", (r.daylight ? `☀ ${p.from}–${p.to}: shade of ${r.shade_slot.slice(11, 16)} counts` : `☾ ${p.from}–${p.to}: after dark, lit streets count`)
+    + ` · ${new Set(day.periods.map(p => JSON.stringify(p.route.geometry.coordinates))).size} different routes today`);
+}
+const shadeSlotFor = v => { const keep = departTime.value; departTime.value = v; const i = shadeSlot(); departTime.value = keep; return i; };
+dayTime.oninput = drawDay;
+function stopPlaying() { clearInterval(playing); playing = null; dayPlay.textContent = "▶"; }
+dayPlay.onclick = () => {
+  if (playing) return stopPlaying();
+  dayPlay.textContent = "❚❚";
+  playing = setInterval(() => { dayTime.value = (+dayTime.value + 1) % 96; drawDay(); }, 250);
+};
+
+function drawComparison({ route, shortest, detour_pct, extra_time_pct, same_path }) {
+  shortestLayer.clearLayers().addData(shortest);
+  routeLayer.clearLayers().addData(route);
+  const s = shortest.properties, r = route.properties;
+  show("s", s); show("r", r);
+  explain(s, r, detour_pct, same_path);
+  setText("sky", r.daylight == null ? "By day shade counts, after dark lighting"
+    : r.daylight ? `Sun is up: shade counts (slot ${r.shade_slot.slice(11, 16)})` : "After dark: lighting counts");
+  setText("summary", same_path ? "Same as the shortest route."
+    : `${signed(detour_pct)}% distance, ${signed(extra_time_pct)}% time, roughness ${s.mean_roughness?.toFixed(1)} → ${r.mean_roughness?.toFixed(1)}, `
+      + `overtaking spots ${s.danger_points} → ${r.danger_points}`);
+}
+
+// Trip with a shared vehicle (/route/sharing): the walks dotted grey, the ride in the vehicle's colour.
+const tripMode = document.getElementById("tripMode"), tripVehicle = document.getElementById("tripVehicle");
+const tripLayer = L.layerGroup().addTo(map);
+tripMode.onchange = tripVehicle.onchange = () => drawTrip();
+const minutes = s => Math.max(1, Math.round(s / 60));
+// "€1.00 to unlock + €0.44/min" -> the price of riding `s` seconds (started minutes count), or null.
+function priceFor(price, s) {
+  const m = /€([\d.]+) to unlock \+ €([\d.]+)\/min/.exec(price ?? "");
+  return m ? (+m[1] + +m[2] * Math.ceil(s / 60)).toFixed(2) : null;
+}
+async function drawTrip() {
+  const box = document.getElementById("trip");
+  tripLayer.clearLayers();
+  if (!tripMode.checked || !start || !end) { box.hidden = true; return; }
+  try {
+    const t = await getJSON("/route/sharing?vehicle=" + tripVehicle.value);
+    const [walk1, ride, walk2] = t.legs, v = t.vehicle.properties, color = VEHICLE_COLOR[v.vehicle];
+    L.geoJSON(walk1, { style: { color: "#37474f", weight: 4, dashArray: "2 7", opacity: 0.9 } }).addTo(tripLayer);
+    L.geoJSON(walk2, { style: { color: "#37474f", weight: 4, dashArray: "2 7", opacity: 0.9 } }).addTo(tripLayer);
+    L.geoJSON(ride, { style: { color, weight: 5, opacity: 0.95 } }).addTo(tripLayer);
+    const at = t.vehicle.geometry.coordinates;
+    L.circleMarker([at[1], at[0]], { radius: 8, color: "#fff", weight: 2, fillColor: color, fillOpacity: 1 })
+      .bindTooltip(`${v.provider} ${vehicleName(v.vehicle)}, ${v.battery_pct ?? "?"}%`).addTo(tripLayer);
+    if (t.zone) {
+      const z = t.zone.geometry.coordinates;
+      L.circleMarker([z[1], z[0]], { radius: 9, color: "#37474f", weight: 3, fillColor: "#fff", fillOpacity: 1 })
+        .bindTooltip(t.zone.properties.name).addTo(tripLayer);
+    }
+    const price = priceFor(v.price, t.ride_s), pushed = ride.properties.pushed_m;
+    box.innerHTML = `<div class="total">${minutes(t.duration_s)} min door to door${price ? `, about €${price}` : ""}</div><ol>
+      <li>Walk ${Math.round(walk1.properties.length_m)} m (${minutes(walk1.properties.duration_s)} min) to the ${vehicleName(v.vehicle)}, battery ${v.battery_pct ?? "?"}%</li>
+      <li>Ride ${(ride.properties.length_m / 1000).toFixed(1)} km (${minutes(t.ride_s)} min)${pushed ? `, pushing it ${pushed} m on footways where e-scooters may not ride` : ""}`
+      + `${t.zone ? ` to <b>${t.zone.properties.name.replace(/^Parkingzone\s*/, "")}</b>` : " to the end (no parking zone nearby)"}</li>
+      <li>Walk ${Math.round(walk2.properties.length_m)} m (${minutes(walk2.properties.duration_s)} min) to the end</li></ol>`
+      + (v.rent_url ? `<a href="${v.rent_url}" target="_blank" rel="noopener">Rent it in the ${v.provider} app</a>` : "")
+      + `<div style="color:#7a8794;margin-top:4px">${t.attribution}</div>`;
+    box.hidden = false;
+  } catch (e) {
+    box.innerHTML = e.message; box.hidden = false;
+  }
+}
+
 async function update() {
   setText("hint", !start ? "Click the map to set the start." : !end ? "Click the map to set the end."
     : "Drag the pins or click to move the end.");
@@ -416,20 +566,18 @@ async function update() {
   if (!start || !end) return;
   setText("error", "");
   try {
-    const { route, shortest, detour_pct, extra_time_pct, same_path } = await getJSON("/route/compare");
-    shortestLayer.clearLayers().addData(shortest);
-    routeLayer.clearLayers().addData(route);
-    const s = shortest.properties, r = route.properties;
-    show("s", s); show("r", r);
-    setText("sky", r.daylight == null ? "By day shade counts, after dark lighting"
-      : r.daylight ? `Sun is up: shade counts (slot ${r.shade_slot.slice(11, 16)})` : "After dark: lighting counts");
-    setText("summary", same_path ? "Same as the shortest route."
-      : `${signed(detour_pct)}% distance, ${signed(extra_time_pct)}% time, roughness ${s.mean_roughness?.toFixed(1)} → ${r.mean_roughness?.toFixed(1)}, `
-        + `overtaking spots ${s.danger_points} → ${r.danger_points}`);
-    await drawGrade();
+    if (dayMode.checked) {
+      day = await getJSON("/route/day");
+      dayShown = null;
+      drawDay();
+    } else {
+      drawComparison(await getJSON("/route/compare"));
+      await drawGrade();
+    }
+    drawTrip();
   } catch (e) {
     shortestLayer.clearLayers(); routeLayer.clearLayers(); gradeLayer.clearLayers();
-    show("s", null); show("r", null); setText("summary", "");
+    show("s", null); show("r", null); setText("summary", ""); document.getElementById("why").hidden = true;
     setText("error", e.message);
   }
 }

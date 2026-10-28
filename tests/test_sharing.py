@@ -1,10 +1,12 @@
+import networkx as nx
 import pytest
 import requests
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
-from backend.schemas import VehicleCollection, ZoneCollection
+from backend.schemas import SharingTrip, VehicleCollection, ZoneCollection
 from backend.sharing import CACHE_S, STALE_S, Sharing, SharingUnavailable, distance_m
+from tests.conftest import COORDS, A, B
 
 MARKT = (49.1427, 9.2109)  # Heilbronn Marktplatz (lat, lon)
 
@@ -128,8 +130,18 @@ def feed():
 
 @pytest.fixture
 def client(toy_graph, feed):
-    with TestClient(create_app(graph=toy_graph, sharing=Sharing(fetch=feed))) as c:
+    with TestClient(create_app(graph=toy_graph, sharing=Sharing(fetch=feed), walk_graph=walk_graph())) as c:
         yield c
+
+
+def walk_graph():
+    """A walking street from the toy graph's A to B, both ways."""
+    G = nx.MultiDiGraph(crs="epsg:4326")
+    for n, (lat, lon) in {"wa": COORDS[A], "wb": COORDS[B]}.items():
+        G.add_node(n, y=lat, x=lon)
+    G.add_edge("wa", "wb", length=100.0)
+    G.add_edge("wb", "wa", length=100.0)
+    return G
 
 
 def test_sharing_endpoint(client):
@@ -165,3 +177,32 @@ def test_sharing_is_documented_under_its_own_tag(client):
     spec = client.get("/openapi.json").json()
     assert spec["paths"]["/sharing"]["get"]["tags"] == ["Sharing"]
     assert spec["paths"]["/sharing/zones"]["get"]["tags"] == ["Sharing"]
+
+
+def trip_params(start=COORDS[A], **extra):
+    return {"from_lat": start[0], "from_lon": start[1], "to_lat": COORDS[B][0], "to_lon": COORDS[B][1], **extra}
+
+
+def test_sharing_trip(client, feed, monkeypatch):
+    # The toy graph is ~600 m from the fake feed's vehicles: put a bike and a scooter at the start.
+    monkeypatch.setitem(FEEDS, "vehicle_status", {"data": {"vehicles": [
+        vehicle("bike-at-a", *COORDS[A]), vehicle("scooter-at-a", *COORDS[A], type_id="scooter")]}})
+    r = client.get("/route/sharing", params=trip_params(vehicle="bike"))
+    assert r.status_code == 200, r.text
+    trip = SharingTrip.model_validate(r.json())
+    assert trip.vehicle.properties.vehicle_id == "bike-at-a"
+    assert [leg.properties.mode for leg in trip.legs] == ["walk", "bike", "walk"]
+    assert r.json()["attribution"].startswith("MobiData BW")
+    assert client.get("/route/sharing", params=trip_params(vehicle="scooter")).json()["legs"][1]["properties"]["mode"] == "scooter"
+
+
+def test_sharing_trip_without_a_vehicle_nearby_is_400(client, monkeypatch):
+    monkeypatch.setitem(FEEDS, "vehicle_status", {"data": {"vehicles": [vehicle("far", 49.1600, 9.2100)]}})  # ~2 km north
+    r = client.get("/route/sharing", params=trip_params())
+    assert r.status_code == 400
+    assert "no free e-bike or e-scooter" in r.json()["detail"]
+
+
+def test_sharing_trip_with_the_feed_down_is_503(client, feed):
+    feed.down = True
+    assert client.get("/route/sharing", params=trip_params()).status_code == 503
