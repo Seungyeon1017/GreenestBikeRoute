@@ -1,40 +1,36 @@
-# Green City Dashboard Heilbronn
+# GreenestBikeRoute – Frontend
 
-This is the Green City Dashboard Heilbronn. It provides real time information about climate, environment and mobility for the city of [Heilbronn](https://en.wikipedia.org/wiki/Heilbronn). The application displays the data using different charts and a tile-based layout. The data is sourced from various providers, including openSenseMap, Birdiary, the German Weather Service (DWD), BrightSky, and other data providers.
+Next.js app for GreenestBikeRoute Heilbronn, with three tabs:
 
-## Getting Started
+- **Overview** (`/overview`): map of environmental layers per area, loaded from `public/map-data/`.
+- **Plan trip** (`/plan-trip`): compare the fastest and the greenest bike route.
+- **Highlights** (`/highlights`): green places and experiences around Heilbronn.
 
-To run the Klimadashboard application on your local machine, first clone the repository:
+The UI lives in `app/(greenest)/` and `components/Greenest/`. All calls to the FastAPI backend go through `services/greenestApi.ts`.
 
-> > > git clone https://github.com/your-username/klimadashboard.git
-> > > cd klimadashboard
+## Run with Docker
 
-Then, install the dependencies:
+```bash
+docker compose up --build
+```
 
-> > > npm install
-> > >
-> > > # or
-> > >
-> > > yarn install
+Then open http://localhost:3000. The backend URL is set by `NEXT_PUBLIC_GREENEST_API_URL` in `compose.yml` (default `http://127.0.0.1:8000`).
 
-Finally, start the development server:
+## Run locally
 
-> > > npm run dev
-> > >
-> > > # or
-> > >
-> > > yarn dev
+```bash
+yarn install
+yarn dev
+```
 
-You should now be able to access the application at `http://localhost:3000`.
+## Map data
 
-### Development Workflow
+`scripts/build-map-data.mjs` turns the datasets in `../data` (downloaded by `../download_data.py`) into the GeoJSON files in `public/map-data/`:
 
-1. Create a new branch for your feature or bug fix: `git checkout -b feature/your-feature-name`.
-2. Make your changes and ensure they adhere to the project's coding style.
-3. Commit your changes using [Semantic Commit Messages](https://semantic-release.gitbook.io/semantic-release/#commit-message-format) to ensure clear and consistent commit history.
-4. Push your branch to your forked repository: `git push origin feature/your-feature-name`.
-5. Submit a pull request to the main repository's `main` branch, including a clear description of your changes.
+```bash
+node scripts/build-map-data.mjs
+```
 
-### License
+## License
 
-This project is licensed under the [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.en.html) license.
+Based on the Green City Dashboard Heilbronn (Klimadashboard), licensed under [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.en.html). See `LICENSE`.

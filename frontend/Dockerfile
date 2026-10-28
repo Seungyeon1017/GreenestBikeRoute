@@ -5,7 +5,7 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # Install dependencies based on the preferred package manager
-COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* scripts/ ./
+COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* ./
 RUN \
   if [ -f yarn.lock ]; then yarn --frozen-lockfile --ignore-scripts --network-timeout 1000000000; \
   elif [ -f package-lock.json ]; then npm ci --ignore-scripts; \
@@ -20,44 +20,34 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Install curl and bash
-RUN apk add --no-cache curl bash
-
-RUN npx prisma generate
-
 # Next.js collects completely anonymous telemetry data about general usage.
 # Learn more here: https://nextjs.org/telemetry
-# Uncomment the following line in case you want to disable telemetry during the build.
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN NEXT_PUBLIC_DIRECTUS_URL=NEXT_PUBLIC_DIRECTUS_URL ECOCOUNTER_API_TOKEN=ECOCOUNTER_API_TOKEN yarn build --experimental-build-mode compile
-
-# If using npm comment out above and use below instead
-# RUN npm run build
+# NEXT_PUBLIC_* values are inlined at build time, so build with a placeholder
+# that entrypoint.sh replaces with the real value when the container starts.
+RUN NEXT_PUBLIC_GREENEST_API_URL=NEXT_PUBLIC_GREENEST_API_URL yarn build
 
 # Production image, copy all the files and run next
 FROM node:18-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
-# Uncomment the following line in case you want to disable telemetry during runtime.
 ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+RUN chmod -R u+rwX,go+rX ./public
 
 # Automatically leverage output traces to reduce image size
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/.next/server ./.next/server
-COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 
-#COPY --from=builder /app/entrypoint.sh ./entrypoint.sh
-#RUN ["chmod", "+x", "./entrypoint.sh"]
-
+# Strip Windows line endings so the script also runs when built on Windows.
 COPY --from=builder /app/entrypoint.sh ./entrypoint.sh
 RUN sed -i 's/\r$//' ./entrypoint.sh && chmod +x ./entrypoint.sh
 

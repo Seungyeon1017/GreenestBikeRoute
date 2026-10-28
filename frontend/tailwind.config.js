@@ -11,8 +11,6 @@ module.exports = {
     },
     fontFamily: {
       inter: 'var(--font-inter)',
-      lexend: 'var(--font-lexend)',
-      lora: 'var(--font-lora)',
       // GreenestBikeRoute headings, loaded in app/(greenest)/layout.tsx
       display: 'var(--font-display)',
     },
