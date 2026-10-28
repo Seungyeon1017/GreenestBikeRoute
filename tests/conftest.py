@@ -8,6 +8,12 @@ A, B, C = 1, 2, 3
 COORDS = {A: (49.1400, 9.2100), B: (49.1409, 9.2100), C: (49.1404, 9.2108)}  # (lat, lon)
 
 
+@pytest.fixture(autouse=True)
+def no_reports_file(monkeypatch):
+    """Apps made in tests keep riders' reports in memory, not in data/reports.sqlite3."""
+    monkeypatch.setattr("backend.reports.REPORTS_PATH", ":memory:")
+
+
 @pytest.fixture
 def toy_graph():
     G = nx.MultiDiGraph(crs="epsg:4326")

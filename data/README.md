@@ -18,6 +18,10 @@ Built by us from raw `osem_bike_data`, `osem_home_data_heilbronn` and other sour
 - `shadow_heilbronn`: building and tree shadow per OSM way and time slot (`routing.shadow`)
 - `roughness_estimates_heilbronn.json`: roughness for unmeasured OSM ways near measured streets, from `bumpy_roads` by `estimation/estimate_roughness.py` (see [estimation/README.md](../estimation/README.md))
 - `elevation_heilbronn.json`: height of every bike-graph node (m above sea level) from the LGL DGM1 terrain model, bridges and tunnels interpolated, plus the crests of humped bridges; built by `python -m routing.elevation --download`, used only to show grade (`/route/grade`), not for routing. Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0
+- `rideable_ways.json`: footways without a bicycle tag that cyclists may and do ride (OSM way id: why), hand-picked or approved from riders' reports (`python -m backend.reports approve`); see [routing/README.md](../routing/README.md#which-streets-are-in-the-graph)
 - `bridge_decks.json`: hand-checked deck heights of humped bridges (Erwin-Fuchs-, Karl-Nägele-, Bleichinselbrücke) from the LGL DOM1 surface model, read with `python -m routing.bridge_profile`; see [routing/README.md](../routing/README.md#humped-bridges-datacustombridge_decksjson). Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0
+
+## `reports.sqlite3`
+Riders' reports of closed streets and mapping mistakes (`backend/reports.py`), created on first start. Not in git: it holds live user input.
 
 Details: [routing/README.md](../routing/README.md)
