@@ -14,7 +14,7 @@ ROUTE_EXAMPLE = {
     "geometry": {"type": "LineString",
                  "coordinates": [[9.2268683, 49.148385], [9.2228294, 49.1386103], [9.2243909, 49.1262013]]},
     "properties": {
-        "bump_penalty": 10.0, "danger_penalty": 25.0, "pm_penalty": 0.5, "stop_penalty": 0.5, "prefer_time": False,
+        "bump_penalty": 10.0, "danger_penalty": 25.0, "pm_penalty": 0.5, "stop_penalty": 0.5, "prefer_time": False, "prefer_bike_friendly": 0.0,
         "length_m": 3088.2, "duration_s": 940, "speed_measured_share": 0.97, "mean_roughness": 12.3, "measured_share": 0.97, "estimated_share": 0.0,
         "danger_points": 21, "danger_risk": 17.12, "mean_pm_risk": 0.544, "pm_measured_share": 0.71,
         "mean_stop_go": 0.691, "stop_measured_share": 0.97, "lifts": 0,
@@ -25,7 +25,7 @@ SHORTEST_EXAMPLE = {
     "geometry": {"type": "LineString",
                  "coordinates": [[9.2268683, 49.148385], [9.2294832, 49.1399564], [9.2243909, 49.1262013]]},
     "properties": {
-        "bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0, "prefer_time": False,
+        "bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0, "prefer_time": False, "prefer_bike_friendly": 0.0,
         "length_m": 3061.2, "duration_s": 940, "speed_measured_share": 0.97, "mean_roughness": 24.7, "measured_share": 0.97, "estimated_share": 0.02,
         "danger_points": 10, "danger_risk": 7.94, "mean_pm_risk": 0.604, "pm_measured_share": 0.77,
         "mean_stop_go": 0.665, "stop_measured_share": 0.97, "lifts": 0,
@@ -56,6 +56,7 @@ class RouteProperties(BaseModel):
     pm_penalty: float = Field(description=PLANNED_WITH)
     stop_penalty: float = Field(description=PLANNED_WITH)
     prefer_time: bool = Field(description="Whether the route was planned by riding time instead of length, as requested (false for the shortest route)")
+    prefer_bike_friendly: float = Field(description="How much bike-friendly streets were preferred, as requested (0 for the shortest route)")
     length_m: float = Field(description="Route length in metres")
     duration_s: int = Field(
         description="Expected riding time in seconds from speed_map (measured cyclist speed, waits included; unmeasured streets at 15.7 km/h), lifts included")

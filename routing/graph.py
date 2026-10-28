@@ -16,6 +16,8 @@ CACHE_DIR = Path(__file__).resolve().parent.parent / "cache"
 GRAPH_PATH = CACHE_DIR / "heilbronn_bike_rideable.graphml"
 # Written by estimation/estimate_roughness.py: roughness of unmeasured OSM ways close to measured streets.
 ESTIMATED_ROUGHNESS_PATH = CACHE_DIR.parent / "data" / "custom" / "roughness_estimates_heilbronn.json"
+# Bike paths, bike lanes and bike routes from OSM (Overpass query next to it), for prefer_bike_friendly.
+BIKE_FRIENDLY_PATH = CACHE_DIR.parent / "data" / "custom" / "bike_friendly_streets_heilbronn.geojson"
 PLACE = "Heilbronn, Germany"
 
 # OSMnx's network_type="bike" filter, with three changes:
@@ -122,6 +124,7 @@ def load_graph(path=GRAPH_PATH):
     attach_roughness(G, way_roughness(load_features("bumpy_roads_heilbronn")), load_estimates())
     attach_stop_go(G, way_stop_go(load_features("traffic_flow_heilbronn")))
     attach_speed(G, way_speed(load_features("speed_map_heilbronn")))
+    attach_bike_friendly(G, load_bike_friendly_ways())
     attach_danger(G, point_risks(clean_overtaking(load_features("danger_zones_raw_heilbronn")), "Risk Index Overtaking"),
                   air_ranks(load_features("air_quality_heilbronn")))
     return G
@@ -140,6 +143,21 @@ def load_estimates(path=ESTIMATED_ROUGHNESS_PATH):
     """{OSM way id: estimated roughness} from estimation/estimate_roughness.py, or {} if the file is missing."""
     path = Path(path)
     return {int(k): v for k, v in json.loads(path.read_text()).items()} if path.exists() else {}
+
+
+def load_bike_friendly_ways(path=BIKE_FRIENDLY_PATH):
+    """OSM way ids of the bike-friendly streets ("way/123" -> 123), or an empty set if the file is missing."""
+    path = Path(path)
+    if not path.exists():
+        return set()
+    return {int(f["id"].split("/")[1]) for f in json.loads(path.read_text(encoding="utf-8"))["features"]}
+
+
+def attach_bike_friendly(G, ways):
+    """Set edge attribute `bike_friendly`: whether any OSM way the edge is made of is in `ways`."""
+    for _, _, d in G.edges(data=True):
+        ids = d["osmid"] if isinstance(d["osmid"], list) else [d["osmid"]]
+        d["bike_friendly"] = any(i in ways for i in ids)
 
 
 def attach_roughness(G, way_rough, estimated=None):

@@ -63,6 +63,11 @@ SPEED_PRIOR_POINTS = 5
 # or waiting, and would otherwise cost like a street 3x+ as long.
 MIN_SPEED_KMH = 5.0
 
+# bike_friendly_streets (OSM bike paths, bike lanes and bike routes, data/custom/bike_friendly_streets_heilbronn.*):
+# streets NOT on that list cost this much more per metre, so routes prefer the ones on it.
+# 0 leaves routes as they were; 1 makes other streets feel twice as long.
+DEFAULT_PREFER_BIKE_FRIENDLY = 0.0
+
 
 def osm_way_ids(osmid):
     """`osmid` is a string: either "83738619" or a merged list "[439572396, 401802699]"."""
@@ -168,7 +173,9 @@ def point_risks(features, risk_key):
 def edge_cost(length_m, normalized_roughness=DEFAULT_ROUGHNESS, bump_penalty=DEFAULT_BUMP_PENALTY,
               danger=0.0, danger_penalty=DEFAULT_DANGER_PENALTY,
               pm_risk=DEFAULT_PM_RISK, pm_penalty=DEFAULT_PM_PENALTY,
-              stop_go=DEFAULT_STOP_GO, stop_penalty=DEFAULT_STOP_PENALTY, lift_ends=0, speed_kmh=MEDIAN_SPEED_KMH):
+              stop_go=DEFAULT_STOP_GO, stop_penalty=DEFAULT_STOP_PENALTY, lift_ends=0, speed_kmh=MEDIAN_SPEED_KMH,
+              bike_friendly=False, prefer_bike_friendly=DEFAULT_PREFER_BIKE_FRIENDLY):
+
     """Routing cost: plain length, inflated on rough, polluted and stop-and-go streets, plus a fixed
     `danger_penalty` metres per unit of overtaking risk (`danger` = summed risk on the edge) and a fixed
     `stop_penalty * LIFT_WAIT_M` metres per lift ridden through. A lift sits where two edges meet, so each
@@ -180,5 +187,6 @@ def edge_cost(length_m, normalized_roughness=DEFAULT_ROUGHNESS, bump_penalty=DEF
     Normalized Roughness is 0-100 in the live data (not 0-1 as the docs table says).
     """
     base = length_m * (MEDIAN_SPEED_KMH / speed_kmh)
-    return (base * (1 + bump_penalty * normalized_roughness / 100 + pm_penalty * pm_risk + stop_penalty * stop_go)
+    return (base * (1 + bump_penalty * normalized_roughness / 100 + pm_penalty * pm_risk + stop_penalty * stop_go
+                    + (0 if bike_friendly else prefer_bike_friendly))
             + danger_penalty * danger + stop_penalty * LIFT_WAIT_M * lift_ends / 2)

@@ -1,6 +1,6 @@
 import pytest
 
-from routing.graph import attach_danger, attach_roughness, attach_speed, attach_stop_go
+from routing.graph import attach_bike_friendly, attach_danger, attach_roughness, attach_speed, attach_stop_go
 from routing.route import RouteError, compare_routes, find_route
 from tests.conftest import COORDS, A, B, C
 
@@ -166,3 +166,12 @@ def test_route_reports_estimated_share_apart_from_measured(toy_graph):
     assert p["length_m"] == 140  # A -> C (estimated) -> B (measured)
     assert (p["measured_share"], p["estimated_share"]) == (0.5, 0.5)
     assert p["mean_roughness"] == 0  # over the measured part only
+
+
+def test_prefer_bike_friendly_detours_onto_bike_friendly_streets(toy_graph):
+    attach_bike_friendly(toy_graph, {12, 13})  # A->C and C->B (osmid [13, 14]) are bike lanes, A->B is not
+    zero = {"bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0}
+    assert find_route(toy_graph, COORDS[A], COORDS[B], **zero)["features"][0]["properties"]["length_m"] == 100
+    f = find_route(toy_graph, COORDS[A], COORDS[B], **zero, prefer_bike_friendly=1)["features"][0]
+    assert f["properties"]["length_m"] == 140
+    assert f["properties"]["prefer_bike_friendly"] == 1

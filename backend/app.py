@@ -1,4 +1,5 @@
 """HTTP API for the bike router. From the repo root: uvicorn backend.app:app"""
+import json
 from contextlib import asynccontextmanager
 from functools import cache
 
@@ -8,9 +9,9 @@ from fastapi.responses import JSONResponse
 
 from backend.schemas import EXAMPLE_TRIP, AirCollection, DangerCollection, Error, FlowCollection, RouteCollection, \
     RouteComparison, RoughnessCollection, SpeedCollection
-from download_data import load_features
+from download_data import DATA_DIR, load_features
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_PM_PENALTY, DEFAULT_STOP_PENALTY, air_ranks, \
-    clean_overtaking
+    DEFAULT_PREFER_BIKE_FRIENDLY, clean_overtaking
 from routing.graph import load_graph
 from routing.route import RouteError, compare_routes, find_route
 
@@ -70,6 +71,20 @@ def speed_collection():
     return {"type": "FeatureCollection", "features": features}
 
 
+BIKE_FRIENDLY_PATH = DATA_DIR / "custom" / "bike_friendly_streets_heilbronn.geojson"
+
+
+@cache
+def bike_friendly_collection():
+    """Bike paths, bike lanes and bike routes from OSM (Overpass query next to the file), trimmed to geometry + osm_id."""
+    data = json.loads(BIKE_FRIENDLY_PATH.read_text(encoding="utf-8"))
+    features = [
+        {"type": "Feature", "geometry": f["geometry"], "properties": {"osm_id": int(f["id"].split("/")[1])}}
+        for f in data["features"] if f["geometry"]["type"] == "LineString"
+    ]
+    return {"type": "FeatureCollection", "features": features}
+
+
 API_DESCRIPTION = """
 Bike routes through **Heilbronn** that avoid bumpy streets, close-overtaking spots, bad air and stop-and-go,
 based on ATRAI bike sensor data, optionally the fastest one by measured cyclist speed.
@@ -113,9 +128,12 @@ def route_query(
     prefer_time: bool = Query(False, description=(
         "Time matters, not distance: weigh each street by its riding time at the measured cyclist speed "
         "(unmeasured streets at the median, 15.7 km/h) instead of its length. The penalties still apply")),
+    prefer_bike_friendly: float = Query(DEFAULT_PREFER_BIKE_FRIENDLY, ge=0, le=5, description=(
+        "How much do you prefer bike-friendly streets (bike paths, bike lanes, bike routes; see /bike-friendly-streets). "
+        "0 = ignore; 1 makes other streets feel twice as long")),
 ):
     """The query parameters shared by /route and /route/compare."""
-    return (from_lat, from_lon), (to_lat, to_lon), (bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time)
+    return (from_lat, from_lon), (to_lat, to_lon), (bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, prefer_bike_friendly)
 
 
 ROUTE_ERRORS = {400: {"description": "Start or end is outside Heilbronn, or no route exists",
@@ -182,6 +200,12 @@ def create_app(graph=None):
              response_description="LineStrings with `speed_kmh` (mean measured cyclist speed, waits included; higher = faster); unmeasured streets are left out")
     def speed():
         return GeoJSONResponse(speed_collection())
+
+    @app.get("/bike-friendly-streets", summary="Streets that suit bikes (bike paths, bike lanes, bike routes), as GeoJSON for a map overlay",
+             response_class=GeoJSONResponse,
+             response_description="LineStrings with `osm_id` (OpenStreetMap way id)")
+    def bike_friendly_streets():
+        return GeoJSONResponse(bike_friendly_collection())
 
     return app
 
