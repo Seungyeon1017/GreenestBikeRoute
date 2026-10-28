@@ -1,62 +1,43 @@
-# GreenestBikeRoute: Spatial Machine Learning Imputation
+# GreenestBikeRoute: Physical & Spatial Feature Imputation
 
-## 🎯 The Hackathon Problem
-Heilbronn has **34,243 road segments** across **11,011 unique OpenStreetMap ways**. However, IoT bike sensor coverage is inherently sparse:
-* **Measured with Physical Sensors**: 3,873 ways (35.2% of city network).
-* **Unmeasured (Missing Data)**: 7,138 ways (64.8% of city network).
+## The Problem
+Heilbronn's road network (`data/road_network_heilbronn.geojson`) has **34,243 segments** across **11,011 OSM ways**, while ATRAI bike sensor measurements only cover part of the city:
+* **Road Roughness (`bumpy_roads_heilbronn`)**: 9,599 measured segments (28.0% of segments).
+* **Traffic Flow (`traffic_flow_heilbronn`)**: 7,153 measured segments (20.9% of segments).
 
-Previously, any unmeasured street defaulted to a flat fallback of `10.0`, blinding the routing engine to unmeasured cobblestone streets, gravel paths, or smooth cycleways.
+## Methodology: Highway-Aware Feature Engineering & Random Forest
+Instead of collapsing predictions into an overly smoothed average, we use OpenStreetMap's physical road infrastructure hierarchy to anchor predictions:
+1. **Official OSM Tags Retrieval** (`ml/fetch_osm_highways.py`):
+   - Queries `api.openstreetmap.org/api/0.6/ways` for all 11,011 unique ways in the Heilbronn network.
+   - Retrieves official `highway` (primary, secondary, residential, service, track, path...) and `surface` tags.
+   - Saved locally to `data/osm_tags_cache.json`.
+2. **Domain-Rule Surface Imputation (FillNA)**:
+   - When `surface` is unspecified, it is imputed using international cycling routing criteria:
+     `track` -> gravel, `path` -> ground, `primary/secondary/residential` -> asphalt, `living_street` -> paving stones.
+   - Reduces unknown surfaces across the 34,243 segments from 26.5% down to under 2.0%.
+3. **Random Forest Regression with Preserved Dynamic Range**:
+   - Features: `highway` (one-hot), `surface` (one-hot), `length`, `sinuosity`, `oneway`, `has_cycleway`, `is_weg`, `is_gasse`, `c_lat`, `c_lon`, and spatial neighbour signals.
+   - Restores the natural contrast needed for route planning:
+     - **Roughness**: spans from **2.68** (smooth asphalt/cycleway) up to **61.50** (rough cobblestone/track).
+     - **Traffic Flow**: spans from **0.08** (quiet paths/living streets) up to **0.96** (busy major arterial roads).
 
----
+## Validation Results (5-Fold Group Cross-Validation on Unseen Streets)
 
-## 🤖 The ML Solution: Spatial Random Forest Imputer
-We implemented a spatial regression pipeline using **Random Forest Regressor** trained on the 9,599 measured sensor segments from ATRAI (`data/bumpy_roads_heilbronn.geojson`) cross-referenced with OpenStreetMap road geometry and attributes (`data/road_network_heilbronn.geojson`).
+| Target | Sample Size | Baseline Default MAE | Random Forest MAE | Held-Out $R^2$ | Dynamic Range (Min - Max) |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Roughness** (0–100) | `n=9,599` | 6.13 | **5.91** | 0.148 | **2.68 – 61.50** |
+| **Traffic Flow** (0–1) | `n=7,153` | 0.127 | **0.105** | **0.315** | **0.08 – 0.96** |
 
-### Extracted Features:
-1. **Pavement & Infrastructure**:
-   - `surface`: Asphalt, paving stones, sett, gravel, fine gravel, grass, concrete, cobblestone, etc.
-   - `cycleway`: Dedicated bike lane, shared lane, none, etc.
-   - `junction`: Roundabouts, standard junctions.
-   - `oneway`: Directional constraints.
-2. **Road Geometry & Sinuosity**:
-   - `length_m`: Accurate geodesic road length.
-   - `num_pts`: Vertex count / geometry complexity.
-   - `sinuosity`: Curviness ratio (actual path length / straight line endpoint distance).
-3. **Spatial Location**:
-   - `c_lat`, `c_lon`: Geographic centroid.
-   - `dist_center`: Distance to Heilbronn city center.
-4. **German Street Semantics**:
-   - `is_weg`: Flag for paths/trails ("Weg", "Pfad" - frequently gravel/unpaved).
-   - `is_strasse`: Flag for urban streets ("Straße").
-   - `is_gasse`: Flag for narrow historic alleys ("Gasse" - frequently historic paving).
-   - `is_platz`: Public plazas / town squares.
-   - `is_brucke`: Bridges and footbridges.
-5. **Traffic & Dynamics (where available)**:
-   - `avg_traffic_flow` & `avg_speed[km/h]` from ATRAI monitoring.
+## Outputs
+* `data/osm_tags_cache.json`: Cached OSM highway & surface tags for all 11,011 ways.
+* `data/ml_predicted_roughness.json`: Roughness estimates for 7,138 unmeasured OSM ways.
+* `data/ml_predicted_traffic_flow.json`: Traffic flow estimates for 6,784 unmeasured OSM ways.
+* `data/road_network_enriched_heilbronn.geojson`: Complete 34,243-segment GeoJSON with `highway`, `surface`, `roughness`, `traffic_flow`, and provenance sources (`measured` / `estimated`).
+* `ml/roughness_performance.png` & `ml/traffic_flow_performance.png`: Validation plots on unseen held-out streets.
+* `ml/roughness_feature_importance.png` & `ml/traffic_flow_feature_importance.png`: Feature importance breakdown charts.
 
----
-
-## 📊 Model Evaluation (5-Fold Cross Validation)
-* **$R^2$ Score**: `0.3345` (explains 1/3 of sensor roughness variance purely from OSM attributes).
-* **Mean Absolute Error (MAE)**: `5.04` (on a 0-100 scale, meaning predictions are on average within ±5 points of actual sensor readings).
-* **Root Mean Squared Error (RMSE)**: `7.60`.
-
-### Presentation Assets Generated:
-* `ml/feature_importance.png`: Feature importance breakdown chart (ready for pitch slide).
-* `ml/model_performance.png`: Scatter plot of actual vs. predicted roughness and error residuals.
-* `ml/metrics.json`: Machine-readable summary for API or dashboards.
-* `data/ml_predicted_roughness.json`: Precomputed roughness for all 11,011 city ways.
-
----
-
-## 🤝 GitHub Collaboration & Compatibility
-* **Zero Overhead for Teammates**: The precomputed results are stored in `data/ml_predicted_roughness.json` (229 KB). Teammates pulling from GitHub do **not** need to retrain or install heavy ML libraries if they are only working on frontend/backend.
-* **Graceful Fallback**: `routing/graph.py` automatically loads ML predictions if available, falls back to physical measurements, and retains `DEFAULT_ROUGHNESS` as a safety net.
-* **100% Passing Tests**: All existing unit tests pass without breakage.
-
----
-
-## 🚀 How to Retrain (Optional)
+## Retraining & Re-exporting
 ```bash
-python ml/train_imputer.py
+.venv/bin/python ml/train_imputer.py
+.venv/bin/python ml/export_enriched_geojson.py
 ```

@@ -47,9 +47,9 @@
   <div class="row"><span>0 = shortest</span><span>50 = avoid at all costs</span></div>
 
   <table>
-    <tr><th></th><th>Length</th><th>Roughness</th><th>Measured</th></tr>
-    <tr><td><span class="swatch" style="background:#7a8794"></span>Shortest</td><td id="sLen">–</td><td id="sRough">–</td><td id="sMeas">–</td></tr>
-    <tr><td><span class="swatch" style="background:#1a7f37"></span>Your route</td><td id="rLen">–</td><td id="rRough">–</td><td id="rMeas">–</td></tr>
+    <tr><th></th><th>Length</th><th>Roughness</th><th>Measured</th><th>Estimated</th></tr>
+    <tr><td><span class="swatch" style="background:#7a8794"></span>Shortest</td><td id="sLen">–</td><td id="sRough">–</td><td id="sMeas">–</td><td id="sEst">–</td></tr>
+    <tr><td><span class="swatch" style="background:#1a7f37"></span>Your route</td><td id="rLen">–</td><td id="rRough">–</td><td id="rMeas">–</td><td id="rEst">–</td></tr>
   </table>
   <div id="summary"></div>
   <div id="error"></div>
@@ -124,6 +124,8 @@ function show(prefix, p) {
   setText(prefix + "Len", p ? (p.length_m / 1000).toFixed(2) + " km" : "–");
   setText(prefix + "Rough", p && p.mean_roughness != null ? p.mean_roughness.toFixed(1) : "–");
   setText(prefix + "Meas", p ? Math.round(p.measured_share * 100) + "%" : "–");
+  // Share of the route priced with ML-estimated roughness (not shown in the Roughness column).
+  setText(prefix + "Est", p ? Math.round((p.ml_share ?? 0) * 100) + "%" : "–");
 }
 
 async function getRoute(penalty) {
