@@ -211,8 +211,10 @@
       "en": "English"
     },
     "footer": {
-      "basedOn": "Basierend auf",
-      "mapData": "Kartendaten"
+      "basedOn": "Basierend auf dem",
+      "sourceCode": "Quellcode",
+      "data": "Daten",
+      "osm": "© OpenStreetMap-Mitwirkende"
     },
     "availability": {
       "measured": "Gemessen",
@@ -294,7 +296,6 @@
         "length": "{{km}} km gemessene Straßen",
         "manoeuvres": "aus {{count}} gemessenen Überholvorgängen"
       },
-      "eyebrow": "Heilbronn · Umwelt",
       "loadingLayer": "Ebene wird geladen…",
       "layerError": "Diese Ebene konnte nicht geladen werden."
     },
@@ -349,7 +350,6 @@
       "appliedDark": "Abfahrt nach Einbruch der Dunkelheit: beleuchtete Straßen wurden bevorzugt.",
       "emptyState": "Lege Start und Ziel fest, um Routen zu vergleichen. Werte erscheinen nur, wenn sie aus echten Daten stammen.",
       "mapLabel": "Routenkarte",
-      "eyebrow": "Heilbronn · Routenplaner",
       "hills": {
         "title": "Steigungen",
         "show": "Steigungen auf der Route zeigen",
@@ -400,8 +400,7 @@
           "title": "Naturentdecker-Route",
           "text": "Hinaus an die grünen Ränder der Stadt."
         }
-      },
-      "eyebrow": "Heilbronn · Grüne Orte"
+      }
     }
   }
 }

@@ -59,7 +59,6 @@ export default function OverviewView() {
       data-workspace
     >
       <PageIntro
-        eyebrow={t('greenest.overview.eyebrow')}
         subtitle={t('greenest.overview.subtitle')}
         title={t('greenest.overview.title')}
       />

@@ -211,8 +211,10 @@
       "en": "English"
     },
     "footer": {
-      "basedOn": "Based on",
-      "mapData": "Map data"
+      "basedOn": "Based on the",
+      "sourceCode": "Source code",
+      "data": "Data",
+      "osm": "© OpenStreetMap contributors"
     },
     "availability": {
       "measured": "Measured",
@@ -294,7 +296,6 @@
         "length": "{{km}} km of measured streets",
         "manoeuvres": "based on {{count}} measured overtaking manoeuvres"
       },
-      "eyebrow": "Heilbronn · Environment",
       "loadingLayer": "Loading layer…",
       "layerError": "Could not load this layer."
     },
@@ -349,7 +350,6 @@
       "appliedDark": "Departure after dark: lit streets were preferred.",
       "emptyState": "Set a start and destination to compare routes. Values only appear when they come from real data.",
       "mapLabel": "Route map",
-      "eyebrow": "Heilbronn · Route planner",
       "hills": {
         "title": "Hills",
         "show": "Show hills on the route",
@@ -400,8 +400,7 @@
           "title": "Nature Discovery Route",
           "text": "Out to the green edges of the city."
         }
-      },
-      "eyebrow": "Heilbronn · Green places"
+      }
     }
   }
 }

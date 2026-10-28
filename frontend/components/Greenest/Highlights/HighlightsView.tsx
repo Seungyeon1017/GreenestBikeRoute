@@ -53,9 +53,6 @@ export default function HighlightsView() {
           className="pointer-events-none absolute -bottom-32 right-1/3 h-80 w-80 rounded-full bg-leaf-sage/20 blur-3xl"
         />
         <div className="relative flex flex-col justify-center gap-5">
-          <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-leaf-sage">
-            {t('greenest.highlights.eyebrow')}
-          </p>
           <h1 className="font-display text-4xl font-medium leading-tight tracking-tight md:text-5xl">
             {t('greenest.highlights.title')}
           </h1>

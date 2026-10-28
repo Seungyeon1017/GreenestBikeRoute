@@ -225,7 +225,6 @@ export default function PlanTripView() {
   return (
     <div className="mx-auto flex w-full max-w-[1920px] flex-1 flex-col gap-4 px-4 py-4 md:px-8">
       <PageIntro
-        eyebrow={t('greenest.planTrip.eyebrow')}
         subtitle={t('greenest.planTrip.subtitle')}
         title={t('greenest.planTrip.title')}
       />
@@ -271,8 +270,6 @@ export default function PlanTripView() {
     </div>
   )
 }
-
-
 
 /* 'use client'
 
@@ -437,7 +434,6 @@ export default function PlanTripView() {
   return (
     <div className="mx-auto flex w-full max-w-[1920px] flex-1 flex-col gap-4 px-4 py-4 md:px-8">
       <PageIntro
-        eyebrow={t('greenest.planTrip.eyebrow')}
         subtitle={t('greenest.planTrip.subtitle')}
         title={t('greenest.planTrip.title')}
       />
