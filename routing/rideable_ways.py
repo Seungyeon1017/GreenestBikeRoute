@@ -6,5 +6,5 @@ Planned: users report streets in the app and, once checked, they are added here 
 replaces this file).
 """
 RIDEABLE_WAYS = {
-    286359672: "Allee, Heilbronn: footway beside the bus/tram lane and the car lane, which cyclists use instead",
+    286359672: "Allee, Heilbronn: footway beside the bus/tram lane and the car lane, which cyclists use instead; its neighbours 164208993, 262195720 and 286359696 are tagged bicycle=yes, this one only lacks the tag in OSM",
 }
