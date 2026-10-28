@@ -318,5 +318,77 @@ class ScoreCollection(BaseModel):
     model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"score": 72.4}})
 
 
+class VehicleProperties(BaseModel):
+    provider: str = Field(description="Sharing provider, e.g. Dott")
+    vehicle: Literal["bike", "scooter"] = Field(description="bike (incl. cargo bikes) or scooter (e-scooter)")
+    vehicle_id: str
+    electric: bool = Field(description="True for e-scooters, pedelecs (pedal assist) and other electric bikes")
+    battery_pct: Optional[int] = Field(description="Battery level 0-100, null if the provider doesn't say")
+    range_m: Optional[float] = Field(description="Distance the battery still lasts, in metres, as the provider estimates")
+    price: Optional[str] = Field(description="Price as the provider publishes it, e.g. \"€1.00 to unlock + €0.44/min\"")
+    rent_url: Optional[str] = Field(description="Link that opens this vehicle in the provider's app (or its web page) to rent it")
+    last_reported: Optional[str] = Field(description="When the provider last reported this vehicle (ISO 8601)")
+    distance_m: Optional[int] = Field(None, description="Metres from the near_lat/near_lon point, when one was given")
+
+
+class VehicleFeature(BaseModel):
+    type: Literal["Feature"]
+    geometry: Point
+    properties: VehicleProperties
+
+
+SHARING_UPDATED = "When this snapshot was read from the feed (ISO 8601, UTC); it is at most a minute old unless the feed is down"
+SHARING_ATTRIBUTION = "Data credit to show with the layer"
+
+
+class VehicleCollection(BaseModel):
+    """Shared e-bikes and e-scooters free to rent right now (live, not reserved or broken).
+    Heilbronn: Dott, about 140 pedelecs and 350 e-scooters."""
+    type: Literal["FeatureCollection"]
+    features: list[VehicleFeature]
+    updated: str = Field(description=SHARING_UPDATED)
+    attribution: str = Field(description=SHARING_ATTRIBUTION)
+
+    model_config = {"json_schema_extra": {"example": {
+        "type": "FeatureCollection", "updated": "2026-10-28T15:51:58+00:00",
+        "attribution": "MobiData BW (dl-de/by-2-0), sharing data by the providers",
+        "features": [{"type": "Feature", "geometry": {"type": "Point", "coordinates": [9.2131, 49.1478]}, "properties": {
+            "provider": "Dott", "vehicle": "bike", "vehicle_id": "DOU:Vehicle:9909176a-3cf4-44a8-85c7-7cd6728e77dc", "electric": True,
+            "battery_pct": 73, "range_m": 26800.0, "price": "€1.00 to unlock + €0.44/min",
+            "rent_url": "https://go.ridedott.com/vehicles/9909176a-3cf4-44a8-85c7-7cd6728e77dc?platform=android",
+            "last_reported": "2026-10-28T15:38:14.000+00:00", "distance_m": 614}}]}}}
+
+
+class ZoneProperties(BaseModel):
+    provider: str
+    name: str
+    bikes_available: int = Field(description="E-bikes parked in the zone right now")
+    scooters_available: int = Field(description="E-scooters parked in the zone right now")
+    bike_capacity: Optional[int] = Field(description="How many bikes the zone is meant for, null if unknown")
+    scooter_capacity: Optional[int] = Field(description="How many scooters the zone is meant for, null if unknown")
+    distance_m: Optional[int] = Field(None, description="Metres from the near_lat/near_lon point, when one was given")
+
+
+class ZoneFeature(BaseModel):
+    type: Literal["Feature"]
+    geometry: Point
+    properties: ZoneProperties
+
+
+class ZoneCollection(BaseModel):
+    """Parking zones where shared bikes and scooters are picked up and left (Dott: about 35 in Heilbronn), with live counts."""
+    type: Literal["FeatureCollection"]
+    features: list[ZoneFeature]
+    updated: str = Field(description=SHARING_UPDATED)
+    attribution: str = Field(description=SHARING_ATTRIBUTION)
+
+    model_config = {"json_schema_extra": {"example": {
+        "type": "FeatureCollection", "updated": "2026-10-28T15:51:58+00:00",
+        "attribution": "MobiData BW (dl-de/by-2-0), sharing data by the providers",
+        "features": [{"type": "Feature", "geometry": {"type": "Point", "coordinates": [9.205396, 49.133834]}, "properties": {
+            "provider": "Dott", "name": "Parkingzone Theresienstraße /Badstraße", "bikes_available": 5,
+            "scooters_available": 5, "bike_capacity": 5, "scooter_capacity": 5}}]}}}
+
+
 class Error(BaseModel):
     detail: str = Field(description="What went wrong, readable enough to show to the user")

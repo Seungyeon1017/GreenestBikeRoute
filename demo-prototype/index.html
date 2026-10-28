@@ -111,6 +111,16 @@
       <span class="swatch" style="background:#d63b3b"></span>10%+
       <div id="gradeSummary"></div>
     </div>
+    <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showSharing"> Show
+      <select id="sharingVehicle"><option value="all">e-bikes and e-scooters</option><option value="bike">e-bikes</option>
+      <option value="scooter">e-scooters</option></select> to rent (Dott, live)</label>
+    <div id="sharingInfo" hidden>
+      <span class="swatch" style="background:#00838f;height:8px;width:8px;border-radius:50%"></span>e-bike
+      <span class="swatch" style="background:#d81b60;height:8px;width:8px;border-radius:50%;margin-left:8px"></span>e-scooter
+      <span class="swatch" style="background:#fff;border:2px solid #37474f;height:6px;width:6px;border-radius:50%;margin-left:8px"></span>parking zone
+      <span style="margin-left:8px">faded = battery under 20%</span>
+      <div id="sharingSummary"></div>
+    </div>
   </div>
 </div>
 
@@ -241,6 +251,48 @@ fetch(API + "/lighting").then(r => r.json()).then(data => {
 });
 document.getElementById("showLighting").onchange = e => e.target.checked ? lighting.addTo(map) : lighting.remove();
 
+// Shared e-bikes and e-scooters free to rent now (/sharing) and their parking zones (/sharing/zones). With a
+// start pin, vehicles come closest first and the nearest one is named in the panel. Colour = vehicle type
+// (teal e-bike, pink e-scooter; not the purple/blue of the danger and air layers), faded = battery under 20%.
+const sharing = L.layerGroup();
+const VEHICLE_COLOR = { bike: "#00838f", scooter: "#d81b60" };
+const vehicleName = v => v === "scooter" ? "e-scooter" : "e-bike";
+async function drawSharing() {
+  if (!showSharing.checked) return;
+  const q = new URLSearchParams({ vehicle: sharingVehicle.value });
+  if (start) { q.set("near_lat", start.getLatLng().lat); q.set("near_lon", start.getLatLng().lng); }
+  try {
+    const [vehicles, zones] = await Promise.all([fetch(API + "/sharing?" + q), fetch(API + "/sharing/zones")]
+      .map(p => p.then(async r => { const b = await r.json(); if (!r.ok) throw new Error(b.detail); return b; })));
+    sharing.clearLayers();
+    L.geoJSON(zones, { pointToLayer: (f, latlng) => L.circleMarker(latlng, {
+        radius: 7, color: "#37474f", weight: 2, fillColor: "#fff", fillOpacity: 0.9 })
+      .bindTooltip(`${f.properties.name}: ${f.properties.bikes_available} e-bikes, ${f.properties.scooters_available} e-scooters`) }).addTo(sharing);
+    L.geoJSON(vehicles, { pointToLayer: (f, latlng) => {
+      const p = f.properties, low = p.battery_pct != null && p.battery_pct < 20;
+      return L.circleMarker(latlng, { radius: 5, color: "#fff", weight: 1, opacity: low ? 0.4 : 1,
+                                      fillColor: VEHICLE_COLOR[p.vehicle], fillOpacity: low ? 0.35 : 0.95 })
+        .bindPopup(`<b>${p.provider} ${vehicleName(p.vehicle)}</b><br>Battery ${p.battery_pct ?? "?"}%, about ${Math.round((p.range_m ?? 0) / 1000)} km left`
+          + (p.distance_m != null ? `<br>${p.distance_m} m from your start` : "") + (p.price ? `<br>${p.price}` : "")
+          + (p.rent_url ? `<br><a href="${p.rent_url}" target="_blank" rel="noopener">Rent in the ${p.provider} app</a>` : ""));
+    } }).addTo(sharing);
+    const count = v => vehicles.features.filter(f => f.properties.vehicle === v).length;
+    const first = vehicles.features[0]?.properties;
+    setText("sharingSummary", `${count("bike")} e-bikes, ${count("scooter")} e-scooters free`
+      + (start && first ? `; nearest: ${vehicleName(first.vehicle)} ${first.distance_m} m from your start (${first.battery_pct}%)` : "")
+      + `. ${vehicles.attribution}`);
+  } catch (e) {
+    sharing.clearLayers();
+    setText("sharingSummary", e.message);
+  }
+}
+const showSharing = document.getElementById("showSharing"), sharingVehicle = document.getElementById("sharingVehicle");
+showSharing.onchange = () => {
+  document.getElementById("sharingInfo").hidden = !showSharing.checked;
+  if (showSharing.checked) { sharing.addTo(map); drawSharing(); } else sharing.remove();
+};
+sharingVehicle.onchange = drawSharing;
+
 const shortestLayer =L.geoJSON(null, { style: { color: "#7a8794", weight: 5, opacity: 0.9, dashArray: "6 8" } }).addTo(map);
 const routeLayer = L.geoJSON(null, { style: { color: "#1a7f37", weight: 6, opacity: 0.9 } }).addTo(map);
 
@@ -347,6 +399,7 @@ async function drawGrade() {
 async function update() {
   setText("hint", !start ? "Click the map to set the start." : !end ? "Click the map to set the end."
     : "Drag the pins or click to move the end.");
+  drawSharing();  // distances from the (moved) start pin
   if (!start || !end) return;
   setText("error", "");
   try {
