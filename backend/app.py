@@ -5,21 +5,24 @@ from datetime import datetime
 from functools import cache
 from typing import Literal, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.schemas import EXAMPLE_TRIP, AirCollection, BikeFriendlyCollection, DangerCollection, Error, FlowCollection, GradeCollection, \
-    LightingCollection, RouteCollection, RouteComparison, RoughnessCollection, ScoreCollection, ShadeCollection, \
+from backend.reports import SNAP_M, ReportError, Reports
+from backend.schemas import EXAMPLE_TRIP, AirCollection, BikeFriendlyCollection, ClosureAnswer, ClosureCollection, ClosureFeature, ClosureReport, \
+    DangerCollection, Error, FlowCollection, GradeCollection, LightingCollection, MappingCollection, MappingFeature, \
+    MappingReport, RouteCollection, RouteComparison, RoughnessCollection, ScoreCollection, ShadeCollection, \
     SpeedCollection, VehicleCollection, ZoneCollection
 from backend.sharing import Sharing, SharingUnavailable
 from download_data import DATA_DIR, load_features
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_PM_PENALTY, \
-    DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, air_scores, clean_overtaking
+    DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, air_scores, clean_overtaking, osm_way_ids
 from routing.elevation import attach_elevation, load_crests, load_elevation
 from routing.grade import NoElevationError, route_grade
 from routing.graph import load_graph
-from routing.route import RouteError, compare_routes, edge_coords, find_route, sky, street_scores
+from routing.route import RouteError, compare_routes, edge_coords, find_route, nearest_street, set_closures, sky, \
+    street_scores
 
 
 class GeoJSONResponse(JSONResponse):
@@ -92,6 +95,25 @@ def bike_friendly_collection():
     return {"type": "FeatureCollection", "features": features}
 
 
+def closure_feature(G, segment, state):
+    """One segment of Reports.closure_states as a GeoJSON LineString, or None if the graph no longer has it."""
+    u, v = segment
+    a, b = (u, v) if G.has_edge(u, v) else (v, u)
+    if not G.has_edge(a, b):
+        return None
+    d = next(iter(G[a][b].values()))
+    return {"type": "Feature",
+            "geometry": {"type": "LineString", "coordinates": [[round(x, 6), round(y, 6)] for x, y in edge_coords(G, a, b, d)]},
+            "properties": {"segment": f"{u}-{v}", **state}}
+
+
+def mapping_feature(report):
+    """One report of Reports.mapping_reports as a GeoJSON Point."""
+    properties = {k: v for k, v in report.items() if k not in ("lon", "lat")}
+    return {"type": "Feature", "geometry": {"type": "Point", "coordinates": [report["lon"], report["lat"]]},
+            "properties": properties}
+
+
 def street_collection(G, key):
     """The graph's streets with a value for edge attribute `key`, each street once (a two-way street is two edges),
     trimmed to geometry + that value."""
@@ -137,6 +159,16 @@ grade doesn't change which route is picked).
   value is 0-1 (roughness 0-100), and higher is always worse. `/speed` gives km/h, where higher is faster.
   `/shade` (share in shade per time slot) and `/lighting` (chance a street is lit at night) are 0-1 where higher
   is better. `/bike-friendly-streets` shows the bike paths, bike lanes and bike routes `prefer_bike_friendly` favours.
+- **Closures:** riders report closed streets with `POST /reports/closures`, optionally with `until` (the last day,
+  e.g. from the sign; else the report counts for 24 h, at most 30 days). Three live independent reports close the
+  street segment for every route; with fewer, routes avoid it if the detour is at most 4x its length, and
+  `reported_closures` counts the ones a route still rides. Since nobody reports a closure they already see, riders
+  answer with one tap instead: `POST /reports/closures/{segment}/confirm` (still closed, or open again: two such
+  answers lift it). When all reports lapse it stays `unconfirmed` for 3 days (routes still avoid it): ask riders
+  whose trip starts or ends near it. `GET /reports/closures` shows them on a map.
+- **Mapping mistakes:** `POST /reports/mapping` with `kind=rideable` reports a footway bikes ride on that routing
+  leaves out (OSM lacks bicycle=yes). A maintainer checks it (`python -m backend.reports`); approved ways are routed
+  from the next server start.
 - **Overall score:** `/score` puts every street on one 0-100 scale (higher = better): its percentile, by length, among
   Heilbronn streets ranked by routing cost per metre. It takes the same penalties, `prefer_time`, `prefer_bike_friendly` and `depart_time` as
   `/route`, so it shows the streets the way that route request weighs them. Overtaking spots and air points count for
@@ -208,13 +240,15 @@ ROUTE_ERRORS = {400: {"description": "Start or end is outside Heilbronn, or no r
                           "detail": "start point is 812 m from the nearest Heilbronn street"}}}}}
 
 
-ROUTING, OVERLAYS, SHARING = "Routing", "Map overlays", "Sharing"
+ROUTING, OVERLAYS, SHARING, REPORTS = "Routing", "Map overlays", "Sharing", "Reports"
 TAGS_METADATA = [
     {"name": ROUTING, "description": "Plan a bike route from A to B, compare it with the shortest one, "
                                        "or show its grade."},
     {"name": OVERLAYS, "description": "Static GeoJSON layers of the measured data, to draw on a map."},
     {"name": SHARING, "description": "Shared e-bikes and e-scooters free to rent right now and their parking zones, "
                                        "live from MobiData BW (Heilbronn: Dott). Each vehicle links to the provider's app."},
+    {"name": REPORTS, "description": "Riders report closed streets (routing uses them right away) and mapping mistakes "
+                                       "(checked by a maintainer first)."},
 ]
 
 
@@ -232,9 +266,10 @@ def near_query(
 SHARING_ERRORS = {503: {"description": "The sharing feed can't be read right now", "model": Error}}
 
 
-def create_app(graph=None, sharing=None):
-    """`graph` and `sharing` let tests pass a small graph and a fake feed; by default the Heilbronn graph is
-    loaded at startup and bike and scooter sharing is read live from MobiData BW."""
+def create_app(graph=None, sharing=None, reports=None):
+    """`graph`, `sharing` and `reports` let tests pass a small graph, a fake feed and an in-memory report store; by
+    default the Heilbronn graph is loaded at startup, bike and scooter sharing is read live from MobiData BW and
+    reports are kept in data/reports.sqlite3."""
 
     @asynccontextmanager
     async def lifespan(app):
@@ -245,8 +280,10 @@ def create_app(graph=None, sharing=None):
 
     app = FastAPI(title="Greenest Bike Route", description=API_DESCRIPTION, lifespan=lifespan,
                   openapi_tags=TAGS_METADATA)
-    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"])
+    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST"],
+                       allow_headers=["Content-Type"])
     sharing = sharing if sharing is not None else Sharing()
+    reports = reports if reports is not None else Reports()
 
     def shared(kind, query, vehicle="all"):
         near, limit = query
@@ -257,6 +294,7 @@ def create_app(graph=None, sharing=None):
 
     def routed(route_fn, query):
         origin, destination, penalties = query
+        set_closures(app.state.graph, reports.closures())
         try:
             return route_fn(app.state.graph, origin, destination, *penalties)
         except RouteError as e:
@@ -364,6 +402,65 @@ def create_app(graph=None, sharing=None):
              response_description="Points with the zone name, `bikes_available` and `scooters_available`")
     def sharing_zones(query=Depends(near_query)):
         return GeoJSONResponse(shared("zones", query))
+
+    def client(request):
+        return request.client.host if request.client else ""
+
+    @app.post("/reports/closures", tags=[REPORTS], summary="Report that a street is closed right now",
+              status_code=201, response_model=ClosureFeature,
+              responses={400: {"description": "No street within 50 m of the point, or `until` is in the past", "model": Error}},
+              response_description="The street segment the report went to, with how many reports it has now")
+    def report_closure(report: ClosureReport, request: Request):
+        G = app.state.graph
+        u, v, d, dist = nearest_street(G, report.lat, report.lon)
+        if dist > SNAP_M:
+            raise HTTPException(status_code=400, detail=f"no street within {SNAP_M} m: the nearest is {dist:.0f} m away")
+        try:
+            state = reports.report_closure(u, v, osm_way_ids(d["osmid"]), (report.lon, report.lat), report.reporter_id,
+                                           client(request), report.note, report.until)
+        except ReportError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return closure_feature(G, (min(u, v), max(u, v)), state)
+
+    @app.post("/reports/closures/{segment}/confirm", tags=[REPORTS],
+              summary="Answer whether a reported street is still closed (one tap)", response_model=ClosureFeature,
+              responses={404: {"description": "No closure on this segment", "model": Error}},
+              response_description="The segment with the answer counted; status `open` if the answers lifted it")
+    def confirm_closure(segment: str, answer: ClosureAnswer, request: Request):
+        G = app.state.graph
+        try:
+            key = tuple(map(int, segment.split("-")))
+        except ValueError:
+            key = None
+        state = reports.closure_states().get(key)
+        feature = state and closure_feature(G, key, state)
+        if not feature:
+            raise HTTPException(status_code=404, detail=f"no closure on segment {segment}")
+        coords = feature["geometry"]["coordinates"]
+        state = reports.report_closure(*key, state["osm_way_ids"], coords[len(coords) // 2], answer.reporter_id,
+                                       client(request), still_closed=answer.still_closed)
+        return closure_feature(G, key, state)
+
+    @app.get("/reports/closures", tags=[REPORTS], summary="Streets riders reported closed, as GeoJSON for a map overlay",
+             response_class=GeoJSONResponse, response_model=ClosureCollection,
+             response_description="LineStrings with `status` (closed / reported / unconfirmed) and how many reports")
+    def closures():
+        features = [closure_feature(app.state.graph, segment, state) for segment, state in reports.closure_states().items()]
+        return GeoJSONResponse({"type": "FeatureCollection", "features": [f for f in features if f]})
+
+    @app.post("/reports/mapping", tags=[REPORTS], summary="Report a mapping mistake, e.g. a footway bikes ride on",
+              status_code=201, response_model=MappingFeature, response_description="The stored report, pending")
+    def report_mapping(report: MappingReport, request: Request):
+        stored = reports.report_mapping(report.kind, (report.lon, report.lat), report.reporter_id, client(request),
+                                        report.osm_way_id, report.note)
+        return mapping_feature(stored)
+
+    @app.get("/reports/mapping", tags=[REPORTS], summary="Riders' mapping reports, as GeoJSON points",
+             response_class=GeoJSONResponse, response_model=MappingCollection)
+    def mapping(status: Literal["pending", "approved", "rejected", "all"] = Query(
+            "pending", description="Only reports with this status")):
+        return GeoJSONResponse({"type": "FeatureCollection",
+                                "features": [mapping_feature(r) for r in reports.mapping_reports(status)]})
 
     return app
 

@@ -13,6 +13,7 @@ cost = length × (1 + bump_penalty × roughness / 100 + pm_penalty × pm_risk + 
 - A lift (`highway=elevator` node, e.g. onto the Campusbrücke) is a stop too: riding through one costs `stop_penalty` × 100 m (waiting plus getting in and out, about 25 s), a **fixed amount per lift**. At the default 0.5 that is 50 m of detour, at 5 it is 500 m. The route reports its `lifts`.
 - All penalties at 0 give the shortest route.
 - With `prefer_time`, `length` becomes riding time: `length × 15.7 km/h / speed`, i.e. metres ridden at the median cyclist speed (see [speed_map](#speed_map_heilbronn-cyclist-speed-per-street-for-prefer_time)). The other terms keep their meaning in metres.
+- **Riders' closure reports** (`backend/reports.py`): a street reported closed by too few riders yet, or whose reports lapsed without confirmation, costs 4× as much (`REPORTED_CLOSED_FACTOR`), so routes take a detour up to 4× its length but still ride it when there is none. A closed street (3 live independent reports) isn't ridden at all, except the piece up to a start or end point on it. This applies to the shortest route in `/route/compare` too, but not to `/score`, which rates streets, not today's closures.
 
 ## Which streets are in the graph
 
@@ -20,8 +21,8 @@ OSMnx's bike network, with these changes:
 
 - **Left out:** roads tagged `bicycle=use_sidepath` (~23 km, mostly the B 39 around Europaplatz). Those have a mandatory bike path beside them (StVO §2 Abs. 4, signs 237/240/241), so cycling on the road is illegal; the path itself is mapped as its own way and stays in. Roads with an optional bike path beside them stay in too: riding on the road is legal there, so smoothness or overtaking data may pick either. Ways tagged `bicycle=dismount` are left out as well.
 - **Added:** footways and paths tagged `bicycle=yes|designated|permissive`, which OSMnx drops. Untagged footways stay out (no bikes in Germany), except `bridge=yes` ones and ones touching a lift (`highway=elevator` node): bikes reach the Campusbrücke and BUGA-Brücke by lift. Street crossings (`footway=crossing`) are in even when tagged `bicycle=no`: cyclists push their bike across the lights. Footways tagged `bicycle=no` or without a tag stay out, with two exceptions where cyclists push their bike a short way: a footway up to 30 m long that links two places the graph already reaches (a crossing to a bike path), and an untagged footway up to 150 m long that fills a gap between two `bicycle=yes` ways (path 694954948 next to the Hauptbahnhof). Steps stay out.
-- **Hand-picked ways:** footways without a bicycle tag that cyclists use anyway are listed in [rideable_ways.py](rideable_ways.py) and count as `bicycle=yes` (e.g. the Allee footway 286359672, beside the bus and car lanes). Add a way id and a reason there, then delete the graph file. Planned: users report streets and, once checked, they are added to this list.
-- **Graph file:** `cache/heilbronn_bike_rideable.graphml`, built from OSM on first start (~2 min). Delete it to pick up newer OSM edits.
+- **Hand-picked ways:** footways without a bicycle tag that cyclists use anyway are listed in `data/custom/rideable_ways.json` (way id: why) and count as `bicycle=yes` (e.g. the Allee footway 286359672, beside the bus and car lanes). Add one by hand, or approve a rider's report (`POST /reports/mapping`) with `python -m backend.reports approve ID`, which writes the same file.
+- **Graph file:** `cache/heilbronn_bike_rideable.graphml`, built from OSM on first start (~2 min). It records the hand-picked ways it was built with and is built again by itself when the list changed. Delete it to pick up newer OSM edits.
 
 ## Datasets
 

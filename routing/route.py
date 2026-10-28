@@ -25,6 +25,9 @@ _GRAPH_LOCK = threading.Lock()
 LOCAL_TZ = ZoneInfo("Europe/Berlin")
 # Sunrise and sunset: the top of the sun on the horizon, refraction included (the usual -0.833 deg).
 SUNSET_ALTITUDE = -0.833
+# A street users reported closed, by too few people yet to close it (backend/reports.py), costs this many times as
+# much: routes ride up to this much further to avoid it, but still use it when there is no sensible way round.
+REPORTED_CLOSED_FACTOR = 4
 
 
 class RouteError(ValueError):
@@ -311,8 +314,11 @@ def _route_feature(G, a, b, penalties):
     shade_len, shade_known_len, lit_len, lit_known_len = 0.0, 0.0, 0.0, 0.0
     # Riding time from speed_map, plus waiting for each lift at the median speed.
     duration, speed_measured_len = lifts * LIFT_WAIT_M / (MEDIAN_SPEED_KMH / 3.6), 0.0
+    closures = set()
     for u, v in zip(path[:-1], path[1:]):
         d = _edge(G, u, v, plan)
+        if d.get("closure"):
+            closures.add(str(d["osmid"]))
         pts = edge_coords(G, u, v, d)
         coords.extend(pts if not coords else pts[1:])
         edge_len = float(d["length"])  # numpy float when loaded from GraphML
@@ -380,15 +386,56 @@ def _route_feature(G, a, b, penalties):
         "lit_known_share": round(lit_known_len / length, 2),
         # Lifts the route rides through; each costs stop_penalty * LIFT_WAIT_M metres.
         "lifts": lifts,
+        # Streets on the route that users reported closed (backend/reports.py) and that it still rides.
+        "reported_closures": len(closures),
     }
     return {"type": "Feature", "geometry": {"type": "LineString", "coordinates": coords}, "properties": properties}
 
 
+def nearest_street(G, lat, lon):
+    """The street of the main network nearest to (lat, lon): (u, v, data, metres away)."""
+    with _GRAPH_LOCK:
+        (u, v, _, d), dist, _ = _nearest_edge(G, _snap_index(G), lat, lon)
+    return u, v, d, dist
+
+
+def set_closures(G, closures):
+    """Set edge attribute `closure` ("closed", or "reported" / "unconfirmed", which only cost more) on the streets in
+    `closures`, {(u, v): status}, in both directions, and remove it from every other street. Streets no longer in G
+    are skipped."""
+    closures = dict(closures)
+    with _GRAPH_LOCK:
+        if G.graph.get("closures") == closures:
+            return
+        for u, v in G.graph.get("closures", {}):
+            for a, b in ((u, v), (v, u)):
+                for d in (G.get_edge_data(a, b) or {}).values():
+                    d.pop("closure", None)
+        for (u, v), status in closures.items():
+            for a, b in ((u, v), (v, u)):
+                for d in (G.get_edge_data(a, b) or {}).values():
+                    d["closure"] = status
+        G.graph["closures"] = closures
+
+
+def _snapped(n):
+    return isinstance(n, str) and n.startswith("snap-")
+
+
+def _route_cost(u, v, d, plan):
+    """_cost, REPORTED_CLOSED_FACTOR times as much on a street reported closed; None (can't be ridden) on a closed
+    street, except its piece up to a start or end point on it, so places on a closed street can still be reached."""
+    closure = d.get("closure")
+    if closure == "closed" and not (_snapped(u) or _snapped(v)):
+        return None
+    return _cost(d, plan) * (REPORTED_CLOSED_FACTOR if closure else 1)
+
+
 def _path(G, a, b, plan):
     """The nodes of the cheapest route between graph nodes a and b for `plan` (see _plan)."""
-    # MultiDiGraph: between two nodes there can be parallel edges; use the cheapest.
+    # MultiDiGraph: between two nodes there can be parallel edges; use the cheapest. None hides a closed street.
     def weight(u, v, parallel):
-        return min(_cost(d, plan) for d in parallel.values())
+        return min((c for d in parallel.values() if (c := _route_cost(u, v, d, plan)) is not None), default=None)
 
     try:
         return nx.shortest_path(G, a, b, weight=weight)
@@ -397,8 +444,9 @@ def _path(G, a, b, plan):
 
 
 def _edge(G, u, v, plan):
-    """The cheapest of the parallel edges from u to v."""
-    return min(G[u][v].values(), key=lambda d: _cost(d, plan))
+    """The cheapest of the parallel edges from u to v that can be ridden."""
+    return min((d for d in G[u][v].values() if _route_cost(u, v, d, plan) is not None),
+               key=lambda d: _route_cost(u, v, d, plan))
 
 
 def edge_coords(G, u, v, d):

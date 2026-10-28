@@ -34,6 +34,8 @@
   #error { color: #b3261e; margin-top: 8px; }
   button { margin-top: 10px; margin-right: 6px; padding: 5px 10px; border: 1px solid #c3ccd5; border-radius: 6px; background: #f5f7f9; cursor: pointer; }
   .legend { margin-top: 10px; font-size: 12px; color: #5b6773; }
+  #ask { margin-top: 10px; padding: 8px 10px; border-radius: 6px; background: #fff4e5; }
+  #ask button, .leaflet-popup button { margin: 6px 6px 0 0; }
 </style>
 </head>
 <body>
@@ -86,8 +88,24 @@
   <div id="error"></div>
 
   <button id="example">Example trip</button><button id="reset">Reset</button>
+  <label for="clickMode">A map click</label>
+  <select id="clickMode">
+    <option value="route">sets the route start and end</option>
+    <option value="closure">reports the street there as closed</option>
+    <option value="rideable">reports a footway there that bikes ride on</option>
+  </select>
+  <div id="reportStatus" class="row"></div>
+  <div id="ask" hidden></div>
   <div class="legend">
-    <label style="font-weight:400;margin:0"><input type="checkbox" id="showScore"> Show overall score (all factors, for your settings)</label>
+    <label style="font-weight:400;margin:0 0 6px"><input type="checkbox" id="showReports" checked> Show riders' reports</label>
+    <div id="reportsLegend">
+      <span class="swatch" style="background:#b3261e"></span>closed
+      <span class="swatch" style="background:#f2994a"></span>reported, routes avoid it
+      <span class="swatch" style="background:#9e9e9e"></span>not confirmed lately
+      <br>Click a closure to say whether it is still closed.
+      <span class="swatch" style="background:#fff;border:2px solid #5e35b1;height:6px;width:6px;border-radius:50%;margin-left:8px"></span>footway waiting for review
+    </div>
+    <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showScore"> Show overall score (all factors, for your settings)</label>
     <div id="scoreLegend" hidden>
       <span class="swatch" style="background:#d63b3b"></span>worst 25%
       <span class="swatch" style="background:#f2994a"></span>25–50%
@@ -320,12 +338,147 @@ showGrade.onchange = () => {
   if (showGrade.checked) update(); else { gradeLayer.remove(); routeLayer.setStyle({ opacity: 0.9 }); setText("gradeSummary", ""); }
 };
 
+// Riders' reports: streets reported closed (/reports/closures; red = closed, orange = too few reports yet, grey = no
+// report lately; routes avoid all three) and footways reported rideable, waiting for a maintainer (/reports/mapping).
+// Nobody reports a closure they already see, so a click on one asks "still closed?", and so does the panel when the
+// trip starts or ends near one.
+const reportsLayer = L.layerGroup().addTo(map);
+map.createPane("reports").style.zIndex = 450;  // above the routes (overlay pane, 400): a closure on the route must show
+const showReports = document.getElementById("showReports");
+const clickMode = document.getElementById("clickMode");
+const CLOSURE_COLOR = { closed: "#b3261e", reported: "#f2994a", unconfirmed: "#9e9e9e" };
+const CLOSURE_LABEL = { closed: "Closed", reported: "Reported closed", unconfirmed: "Maybe still closed (no report lately)" };
+const when = iso => new Date(iso).toLocaleString([], { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+let closureData = { features: [] };
+// "until Thu 5 Nov 14:00", or "through Mon 2 Nov" when it ends at midnight (a reporter's end date).
+function until(iso) {
+  const t = new Date(iso);
+  if (t.getHours() || t.getMinutes()) return `until ${when(iso)}`;
+  return "through " + new Date(t - 1).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+}
+function closureText(p) {
+  return `${CLOSURE_LABEL[p.status]}${p.note ? `: ${p.note}` : ""}. `
+    + (p.status === "unconfirmed" ? "" : `${p.reports} report${p.reports > 1 ? "s" : ""}, ${until(p.expires)}. `)
+    + (p.open_reports ? `${p.open_reports} rider${p.open_reports > 1 ? "s say" : " says"} it is open again. ` : "");
+}
+const answerButtons = segment => `<button onclick="answer('${segment}', true)">Still closed</button>`
+  + `<button onclick="answer('${segment}', false)">Open again</button>`;
+async function drawReports() {
+  const [closures, mapping] = await Promise.all(["/reports/closures", "/reports/mapping"].map(p => fetch(API + p).then(r => r.json())));
+  closureData = closures;
+  reportsLayer.clearLayers();
+  L.geoJSON(closures, {
+    pane: "reports", bubblingMouseEvents: false,  // a click opens the popup, it doesn't move the route pins
+    style: f => ({ color: CLOSURE_COLOR[f.properties.status], weight: 9, opacity: 0.95, dashArray: "10 6" }),
+    onEachFeature: (f, layer) => layer.bindPopup(`${closureText(f.properties)}<br>${answerButtons(f.properties.segment)}`),
+  }).addTo(reportsLayer);
+  L.geoJSON(mapping, {
+    pointToLayer: (f, latlng) => L.circleMarker(latlng, { pane: "reports", radius: 6, color: "#5e35b1", weight: 2, fillColor: "#fff", fillOpacity: 0.9 })
+      .bindTooltip(`Footway bikes ride on (waiting for review)${f.properties.note ? ": " + f.properties.note : ""}`),
+  }).addTo(reportsLayer);
+}
+drawReports();
+showReports.onchange = () => {
+  document.getElementById("reportsLegend").hidden = !showReports.checked;
+  showReports.checked ? reportsLayer.addTo(map) : reportsLayer.remove();
+};
+
+// An anonymous id per browser, so one rider's repeated reports count once.
+function reporterId() {
+  try {
+    let id = localStorage.getItem("reporterId");
+    if (!id) localStorage.setItem("reporterId", id = crypto.randomUUID());
+    return id;
+  } catch { return undefined; }
+}
+
+// A local date as YYYY-MM-DD, `days` from today.
+function dayFromToday(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+async function report(latlng) {
+  const closure = clickMode.value === "closure";
+  const note = prompt(closure ? "What is closed? (optional, e.g. Baustelle)"
+                              : "Why may bikes ride here? (e.g. signed for bikes, Zeichen 240)");
+  if (note === null) return;  // cancelled
+  const body = { lat: latlng.lat, lon: latlng.lng, reporter_id: reporterId(), note: note || undefined };
+  if (closure) {
+    const until = prompt("Until when? The date on the sign (e.g. 2026-11-15), a number of days, "
+                         + "or leave empty if you don't know (it then counts for a day).", "");
+    if (until === null) return;
+    if (/^\d+$/.test(until.trim())) body.until = dayFromToday(+until.trim());
+    else if (until.trim()) body.until = until.trim();
+  } else body.kind = "rideable";
+  try {
+    const res = await fetch(API + (closure ? "/reports/closures" : "/reports/mapping"),
+                            { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const r = await res.json();
+    if (!res.ok) throw new Error(typeof r.detail === "string" ? r.detail : JSON.stringify(r.detail));
+    const p = r.properties;
+    setText("reportStatus", closure
+      ? `Thanks! ${p.reports} report${p.reports > 1 ? "s" : ""} on this street: ${p.status === "closed" ? "closed for routing" : "routes avoid it; 3 close it"}.`
+      : "Thanks! A maintainer will check it; once approved, routes can use it.");
+    await drawReports();
+    if (closure) update();  // reroute around it
+  } catch (e) {
+    setText("reportStatus", e.message);
+  }
+}
+
+// One tap on a known closure: still closed (counts as a new report) or open again (two riders lift it).
+async function answer(segment, stillClosed) {
+  remember(segment);
+  map.closePopup();
+  document.getElementById("ask").hidden = true;
+  try {
+    const res = await fetch(API + `/reports/closures/${segment}/confirm`, { method: "POST", headers: { "Content-Type": "application/json" },
+                                                                         body: JSON.stringify({ still_closed: stillClosed, reporter_id: reporterId() }) });
+    const r = await res.json();
+    if (!res.ok) throw new Error(r.detail);
+    setText("reportStatus", r.properties.status === "open" ? "Thanks! The street is open again for routing."
+      : stillClosed ? "Thanks! Routes keep avoiding it." : "Thanks! One more rider saying it is open lifts it.");
+    await drawReports();
+    update();
+  } catch (e) {
+    setText("reportStatus", e.message);
+  }
+}
+
+// Closures this browser already answered, so the panel doesn't ask twice about the same one.
+function answered() {
+  try { return JSON.parse(localStorage.getItem("answeredClosures") || "{}"); } catch { return {}; }
+}
+function remember(segment) {
+  try { localStorage.setItem("answeredClosures", JSON.stringify({ ...answered(), [segment]: Date.now() })); } catch {}
+}
+
+// Ask about a closure within ASK_M of the trip's start or end that this browser hasn't answered in the last day:
+// riders there know whether it is still closed, and nobody else rides past it.
+const ASK_M = 300;
+function askNearby() {
+  const box = document.getElementById("ask");
+  box.hidden = true;
+  if (!start || !end || !showReports.checked) return;
+  const done = answered();
+  const near = closureData.features.find(f => (Date.now() - (done[f.properties.segment] ?? 0)) > 864e5
+    && f.geometry.coordinates.some(([lon, lat]) => [start, end].some(m => map.distance(m.getLatLng(), [lat, lon]) <= ASK_M)));
+  if (!near) return;
+  box.innerHTML = `Near your trip: ${closureText(near.properties)}<b>Is it still closed?</b><br>`
+    + `${answerButtons(near.properties.segment)}<button onclick="remember('${near.properties.segment}'); `
+    + `document.getElementById('ask').hidden = true">Don't know</button>`;
+  box.hidden = false;
+}
+
 let start = null, end = null;
 const pin = (latlng, label) => L.marker(latlng, { draggable: true, title: label })
   .bindTooltip(label, { permanent: true, direction: "top", offset: [-15, -12] })
   .on("dragend", update).addTo(map);
 
 map.on("click", e => {
+  if (clickMode.value !== "route") return report(e.latlng);
   if (!start) start = pin(e.latlng, "Start");
   else if (!end) end = pin(e.latlng, "End");
   else end.setLatLng(e.latlng);
@@ -426,6 +579,10 @@ async function update() {
     setText("summary", same_path ? "Same as the shortest route."
       : `${signed(detour_pct)}% distance, ${signed(extra_time_pct)}% time, roughness ${s.mean_roughness?.toFixed(1)} → ${r.mean_roughness?.toFixed(1)}, `
         + `overtaking spots ${s.danger_points} → ${r.danger_points}`);
+    // Streets reported closed (too few reports to close them) that the route still rides, as there was no sensible way round.
+    setText("error", r.reported_closures ? `Your route rides ${r.reported_closures} street${r.reported_closures > 1 ? "s" : ""} `
+      + "riders reported closed (dashed): check before you go." : "");
+    askNearby();
     await drawGrade();
   } catch (e) {
     shortestLayer.clearLayers(); routeLayer.clearLayers(); gradeLayer.clearLayers();

@@ -23,9 +23,11 @@ Map overlays: `/roughness` (streets), `/danger` (overtaking spots), `/air` (air-
 
 Sharing: `/sharing` lists the shared e-bikes and e-scooters free to rent right now (Heilbronn: Dott, about 140 pedelecs and 350 e-scooters), with `vehicle` (bike/scooter), battery, range, price and a link that opens the vehicle in the provider's app; `vehicle=bike` or `vehicle=scooter` shows one kind, and `near_lat`/`near_lon` (e.g. the route start) sort them closest first. `/sharing/zones` lists the provider's parking zones with how many bikes and scooters stand there (the provider's own counts, so they can differ slightly from `/sharing`). Both are live from [MobiData BW](https://mobidata-bw.de/dataset/bikesh) (GBFS, dl-de/by-2-0), cached for a minute; if the feed is down the last snapshot is served for up to 30 minutes, then 503. Routes are still planned for bikes: e-scooters must not ride on footways even where bikes may.
 
+Reports: riders report closed streets (`POST /reports/closures`) and footways bikes ride on that OSM doesn't mark for bikes (`POST /reports/mapping`). Closures steer routes right away and stay until riders say they are open again or stop confirming them; mapping reports wait for a maintainer (`python -m backend.reports list`, then `approve ID`), and approved ways go into `data/custom/rideable_ways.json` and are routed from the next server start. The rules are in `/docs`; reports are kept in `data/reports.sqlite3`.
+
 Danger points come from `danger_zones_raw_heilbronn` (one row per overtake, with device id and exact distance) and are snapped to the nearest street within 25 m. [routing/README.md](routing/README.md) explains how route planning works and why readings of 25 cm or less are ignored.
 
-For a clickable demo map, start the API, run `python -m http.server 5500 -d demo-prototype` and open http://127.0.0.1:5500. It is a throwaway prototype kept outside `frontend/`.
+For a clickable demo map, start the API, run `python -m http.server 5500 -d demo-prototype` and open http://127.0.0.1:5500. It also shows riders' reports and takes new ones (pick what a map click does). It is a throwaway prototype kept outside `frontend/`.
 
 ## Backend Setup and Usage
 
