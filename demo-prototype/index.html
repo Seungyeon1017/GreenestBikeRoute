@@ -74,7 +74,7 @@
   <div class="row"><span>0 = ignore</span><span>5 = strongly prefer lit</span></div>
 
   <table>
-    <tr><th></th><th>Length</th><th title="expected riding time from measured cyclist speeds">Time</th><th title="mean roughness of the measured part; hover a value for how much is measured / estimated">Rough</th><th title="close-overtaking spots passed">Overtakes</th><th title="mean air rank, 0.5 = typical">PM</th><th title="mean stop-and-go, 0-1">Stops</th><th title="share in shade at the departure time (by day only)">Shade</th><th title="chance the streets are lit at night">Lit</th></tr>
+    <tr><th></th><th>Length</th><th title="expected riding time from measured cyclist speeds">Time</th><th title="mean roughness of the measured part; hover a value for how much is measured / estimated">Rough</th><th title="close-overtaking spots passed">Overtakes</th><th title="mean air score, 0.5 = typical">PM</th><th title="mean stop-and-go, 0-1">Stops</th><th title="share in shade at the departure time (by day only)">Shade</th><th title="chance the streets are lit at night">Lit</th></tr>
     <tr><td><span class="swatch" style="background:#7a8794"></span>Shortest</td><td id="sLen">–</td><td id="sTime">–</td><td id="sRough">–</td><td id="sDanger">–</td><td id="sPm">–</td><td id="sStop">–</td><td id="sShade">–</td><td id="sLit">–</td></tr>
     <tr><td><span class="swatch" style="background:#1a7f37"></span>Your route</td><td id="rLen">–</td><td id="rTime">–</td><td id="rRough">–</td><td id="rDanger">–</td><td id="rPm">–</td><td id="rStop">–</td><td id="rShade">–</td><td id="rLit">–</td></tr>
   </table>
@@ -176,7 +176,7 @@ fetch(API + "/danger").then(r => r.json()).then(data => {
 });
 document.getElementById("showDanger").onchange = e => e.target.checked ? dangers.addTo(map) : dangers.remove();
 
-// Air quality from air_quality_heilbronn, ranked within each ride, darker = worse.
+// Air quality from air_quality_heilbronn, 0.5 = usual, darker = worse.
 const air = L.layerGroup();
 fetch(API + "/air").then(r => r.json()).then(data => {
   L.geoJSON(data, {

@@ -2,6 +2,8 @@ from datetime import datetime, timezone
 
 import pytest
 
+from routing import graph
+from routing.costs import AIR_HOTSPOT_OFFSET, AIR_PRIOR_RIDES
 from routing.graph import attach_danger, attach_lighting, attach_roughness, attach_shade, attach_speed, attach_stop_go
 from routing.route import RouteError, compare_routes, find_route, sky
 from tests.conftest import COORDS, A, B, C
@@ -125,24 +127,58 @@ FAR = (9.25, 49.2)
 
 
 def test_attach_danger_snaps_points_to_the_nearest_street(toy_graph):
-    attach_danger(toy_graph, ([ON_AB, ON_AB, FAR], [0.5, 0.75, 1.0]), ([NEAR_CB, NEAR_CB], [0.2, 0.4]))
+    attach_danger(toy_graph, ([ON_AB, ON_AB, FAR], [0.5, 0.75, 1.0]), ([NEAR_CB, NEAR_CB], [0.2, 0.4], ["r1", "r2"]))
     ab, ac, cb = (toy_graph.edges[e] for e in ((A, B, 0), (A, C, 0), (C, B, 0)))
     assert (ab["danger"], ab["danger_points"], ab["pm_risk"]) == (1.25, 2, None)
     assert (ac["danger"], ac["danger_points"], ac["pm_risk"]) == (0, 0, None)
-    assert cb["danger_points"] == 0 and cb["pm_risk"] == pytest.approx(0.3)
+    assert cb["danger_points"] == 0 and cb["pm_rides"] == 2
+    assert cb["pm_risk"] == pytest.approx((0.2 + 0.4 + AIR_PRIOR_RIDES * 0.5) / (2 + AIR_PRIOR_RIDES))
+
+
+def test_attach_danger_counts_each_ride_once_and_pulls_few_rides_towards_typical(toy_graph):
+    # r1 passed with three readings, r2 with one: two rides, each worth the same
+    attach_danger(toy_graph, ([], []), ([NEAR_CB] * 4, [0.2, 0.3, 0.4, 0.9], ["r1", "r1", "r1", "r2"]))
+    cb = toy_graph.edges[C, B, 0]
+    assert cb["pm_rides"] == 2
+    assert cb["pm_risk"] == pytest.approx((0.3 + 0.9 + AIR_PRIOR_RIDES * 0.5) / (2 + AIR_PRIOR_RIDES))
+    attach_danger(toy_graph, ([], []), ([NEAR_CB], [1.0], ["r1"]))
+    assert toy_graph.edges[C, B, 0]["pm_risk"] == pytest.approx(0.5 + 0.5 / (1 + AIR_PRIOR_RIDES))  # one ride: barely moves
 
 
 def test_attach_danger_covers_both_directions_of_a_street(toy_graph):
     toy_graph.add_edge(B, A, osmid=11, length=100.0, roughness=80.0,
                        geometry=toy_graph.edges[A, B, 0]["geometry"].reverse())
-    attach_danger(toy_graph, ([ON_AB], [1.0]), ([], []))
+    attach_danger(toy_graph, ([ON_AB], [1.0]), ([], [], []))
     assert toy_graph.edges[A, B, 0]["danger"] == toy_graph.edges[B, A, 0]["danger"] == 1.0
+
+
+def test_attach_danger_starts_streets_along_a_hotspot_road_above_typical(toy_graph):
+    along_cb = [(9.2108, 49.14042), (9.2100, 49.14092)]  # 3 m beside C->B
+    attach_danger(toy_graph, ([], []), ([NEAR_CB], [0.9], ["r1"]), [along_cb])
+    ab, cb = toy_graph.edges[A, B, 0], toy_graph.edges[C, B, 0]
+    assert ab["pm_prior"] == 0.5 and ab["pm_risk"] is None
+    assert cb["pm_prior"] == 0.5 + AIR_HOTSPOT_OFFSET
+    assert cb["pm_risk"] == pytest.approx((0.9 + AIR_PRIOR_RIDES * (0.5 + AIR_HOTSPOT_OFFSET)) / (1 + AIR_PRIOR_RIDES))
+
+
+def test_attach_danger_does_not_mark_streets_that_only_cross_a_hotspot_road(toy_graph):
+    crossing_ab = [(9.2094, 49.1404), (9.2106, 49.1404)]
+    attach_danger(toy_graph, ([], []), ([], [], []), [crossing_ab])
+    assert toy_graph.edges[A, B, 0]["pm_prior"] == 0.5
+
+
+def test_unmeasured_streets_cost_their_prior(toy_graph):
+    for d in toy_graph.edges.values():
+        d["roughness"] = 0.0
+    attach_danger(toy_graph, ([], []), ([], [], []))
+    toy_graph.edges[A, B, 0]["pm_prior"] = 5.0  # unmeasured, but a bad prior: worth a 40 m detour at pm_penalty 1
+    assert find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 1, 0)["features"][0]["properties"]["length_m"] == 140
 
 
 def test_danger_penalty_detours_around_overtaking_spots(toy_graph):
     for d in toy_graph.edges.values():
         d["roughness"] = 0.0
-    attach_danger(toy_graph, ([ON_AB], [1.0]), ([], []))
+    attach_danger(toy_graph, ([ON_AB], [1.0]), ([], [], []))
     shortest = find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 0, 0)["features"][0]["properties"]
     assert (shortest["length_m"], shortest["danger_points"], shortest["danger_risk"]) == (100, 1, 1.0)
     # 1 risk x 50 m outweighs the 40 m detour
@@ -150,10 +186,11 @@ def test_danger_penalty_detours_around_overtaking_spots(toy_graph):
     assert (safe["length_m"], safe["danger_points"], safe["danger_penalty"]) == (140, 0, 50)
 
 
-def test_pm_penalty_detours_around_polluted_streets(toy_graph):
+def test_pm_penalty_detours_around_polluted_streets(toy_graph, monkeypatch):
+    monkeypatch.setattr(graph, "AIR_PRIOR_RIDES", 0)  # take the readings as they are
     for d in toy_graph.edges.values():
         d["roughness"] = 0.0
-    attach_danger(toy_graph, ([], []), ([ON_AB, NEAR_CB], [0.9, 0.1]))
+    attach_danger(toy_graph, ([], []), ([ON_AB, NEAR_CB], [0.9, 0.1], ["r1", "r1"]))
     assert find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 0)["features"][0]["properties"]["length_m"] == 100
     f = find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 10, 0)["features"][0]
     assert f["properties"]["length_m"] == 140

@@ -17,7 +17,7 @@ ROUTE_EXAMPLE = {
         "bump_penalty": 10.0, "danger_penalty": 25.0, "pm_penalty": 0.5, "stop_penalty": 0.5, "prefer_time": False,
         "shade_penalty": 0.5, "dark_penalty": 1.0, "depart_time": None, "daylight": None, "shade_slot": None,
         "length_m": 3088.2, "duration_s": 940, "speed_measured_share": 0.97, "mean_roughness": 12.3, "measured_share": 0.97, "estimated_share": 0.0,
-        "danger_points": 21, "danger_risk": 17.12, "mean_pm_risk": 0.544, "pm_measured_share": 0.71,
+        "danger_points": 21, "danger_risk": 17.12, "mean_pm_risk": 0.511, "pm_measured_share": 0.65,
         "mean_stop_go": 0.691, "stop_measured_share": 0.97,
         "mean_shade": None, "shade_known_share": 1.0, "mean_lit": 0.986, "lit_known_share": 0.97, "lifts": 0,
     },
@@ -30,7 +30,7 @@ SHORTEST_EXAMPLE = {
         "bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0, "prefer_time": False,
         "shade_penalty": 0, "dark_penalty": 0, "depart_time": None, "daylight": None, "shade_slot": None,
         "length_m": 3061.2, "duration_s": 940, "speed_measured_share": 0.97, "mean_roughness": 24.7, "measured_share": 0.97, "estimated_share": 0.02,
-        "danger_points": 10, "danger_risk": 7.94, "mean_pm_risk": 0.604, "pm_measured_share": 0.77,
+        "danger_points": 10, "danger_risk": 7.94, "mean_pm_risk": 0.524, "pm_measured_share": 0.75,
         "mean_stop_go": 0.665, "stop_measured_share": 0.97,
         "mean_shade": None, "shade_known_share": 1.0, "mean_lit": 0.93, "lit_known_share": 0.99, "lifts": 0,
     },
@@ -101,7 +101,7 @@ class RouteProperties(BaseModel):
     danger_points: int = Field(description="Close-overtaking spots (danger_zones) on the route")
     danger_risk: float = Field(description="Summed Risk Index Overtaking of those spots")
     mean_pm_risk: Optional[float] = Field(
-        description="Air rank 0-1 from air_quality (0.5 = typical for its ride), length-weighted over the measured part; null if none was measured")
+        description="Air score 0-1 from air_quality (0.5 = typical, see `/air`), length-weighted over the measured part; null if none was measured")
     pm_measured_share: float = Field(description="Share of the route length with air_quality measurements, 0-1")
     mean_stop_go: Optional[float] = Field(
         description="Stop-and-go 0-1 from traffic_flow (1 - avg_traffic_flow; higher = more slowing and stopping), length-weighted over the measured part; null if none was measured")
@@ -214,11 +214,14 @@ class AirFeature(BaseModel):
     type: Literal["Feature"]
     geometry: Point
     properties: dict[Literal["air"], float] = Field(
-        description="How much worse than usual the air is, 0-1: compared with the rest of the same bike trip, where 0.5 is typical and higher is worse. Not an absolute PM value")
+        description="How much worse than usual the air is, 0-1, where 0.5 is typical and higher is worse. Not an absolute PM value: "
+                    "each bike reading is divided by the fine dust the senseBox:home stations measured in that hour "
+                    "(so weather and the time of day drop out), then compared with the rest of the same bike trip "
+                    "(so the bike sensor's own offset drops out). 1 = about 1.35x the trip's usual, 0 = as far below")
 
 
 class AirCollection(BaseModel):
-    """Air readings about every 20 m of every ride (~166,000 points, ~21 MB): load it only when the layer is shown."""
+    """Air readings about every 20 m of every ride (~165,000 points, ~21 MB): load it only when the layer is shown."""
     type: Literal["FeatureCollection"]
     features: list[AirFeature]
 

@@ -184,7 +184,7 @@ def _roughness(d):
 
 
 def _pm_risk(d):
-    return DEFAULT_PM_RISK if d.get("pm_risk") is None else d["pm_risk"]
+    return d.get("pm_prior", DEFAULT_PM_RISK) if d.get("pm_risk") is None else d["pm_risk"]
 
 
 def _stop_go(d):
