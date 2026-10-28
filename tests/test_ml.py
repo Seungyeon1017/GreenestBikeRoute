@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from ml.train_imputer import (
-    MIN_NEIGHBOURS, HIGHWAY_TO_SURFACE, line_geometry, measured_values, neighbour_estimates, neighbour_features,
+    HIGHWAY_TO_SURFACE, line_geometry, measured_values, neighbour_estimates, neighbour_features,
     segment_table, way_estimates,
 )
 from routing.costs import way_means

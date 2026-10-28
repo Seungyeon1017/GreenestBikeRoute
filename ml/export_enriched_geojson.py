@@ -13,25 +13,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 DATA = ROOT / "data"
 
+from ml.train_imputer import HIGHWAY_TO_SURFACE
 from routing.costs import way_means
-
-HIGHWAY_TO_SURFACE = {
-    "motorway": "asphalt", "motorway_link": "asphalt",
-    "trunk": "asphalt", "trunk_link": "asphalt",
-    "primary": "asphalt", "primary_link": "asphalt",
-    "secondary": "asphalt", "secondary_link": "asphalt",
-    "tertiary": "asphalt", "tertiary_link": "asphalt",
-    "unclassified": "asphalt",
-    "residential": "asphalt",
-    "living_street": "paving_stones",
-    "service": "asphalt",
-    "cycleway": "asphalt",
-    "pedestrian": "paving_stones",
-    "track": "gravel",
-    "path": "ground",
-    "footway": "paving_stones",
-    "steps": "concrete",
-}
 
 def parse_ways(osmid_val):
     s = str(osmid_val).strip()
