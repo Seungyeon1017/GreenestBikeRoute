@@ -123,6 +123,13 @@ ROUTE_ERRORS = {400: {"description": "Start or end is outside Heilbronn, or no r
                           "detail": "start point is 812 m from the nearest Heilbronn street"}}}}}
 
 
+ROUTING, OVERLAYS = "Routing", "Map overlays"
+TAGS_METADATA = [
+    {"name": ROUTING, "description": "Plan a bike route from A to B."},
+    {"name": OVERLAYS, "description": "Static GeoJSON layers of the measured data, to draw on a map."},
+]
+
+
 def create_app(graph=None):
     """`graph` lets tests pass a small graph; by default the Heilbronn graph is loaded at startup."""
 
@@ -131,7 +138,8 @@ def create_app(graph=None):
         app.state.graph = graph if graph is not None else load_graph()
         yield
 
-    app = FastAPI(title="Greenest Bike Route", description=API_DESCRIPTION, lifespan=lifespan)
+    app = FastAPI(title="Greenest Bike Route", description=API_DESCRIPTION, lifespan=lifespan,
+                  openapi_tags=TAGS_METADATA)
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"])
 
     def routed(route_fn, query):
@@ -141,43 +149,43 @@ def create_app(graph=None):
         except RouteError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @app.get("/route", summary="Bike route from A to B as GeoJSON", response_class=GeoJSONResponse,
+    @app.get("/route", tags=[ROUTING], summary="Bike route from A to B as GeoJSON", response_class=GeoJSONResponse,
              response_model=RouteCollection, response_description="One LineString feature: the route",
              responses=ROUTE_ERRORS)
     def route(query=Depends(route_query)):
         return GeoJSONResponse(routed(find_route, query))
 
-    @app.get("/route/compare", summary="Bike route from A to B next to the shortest route",
+    @app.get("/route/compare", tags=[ROUTING], summary="Bike route from A to B next to the shortest route",
              response_model=RouteComparison, responses=ROUTE_ERRORS,
              response_description="The route, the shortest route, and how much they differ")
     def route_compare(query=Depends(route_query)):
         return JSONResponse(routed(compare_routes, query))
 
-    @app.get("/roughness", summary="Measured street roughness as GeoJSON, e.g. for a map overlay",
+    @app.get("/roughness", tags=[OVERLAYS], summary="Measured street roughness as GeoJSON, e.g. for a map overlay",
              response_class=GeoJSONResponse, response_model=RoughnessCollection,
              response_description="LineStrings with `roughness` 0-100 (higher = bumpier); unmeasured streets are left out")
     def roughness():
         return GeoJSONResponse(roughness_collection())
 
-    @app.get("/danger", summary="Spots where cars overtook bikes closely, as GeoJSON points for a map overlay",
+    @app.get("/danger", tags=[OVERLAYS], summary="Spots where cars overtook bikes closely, as GeoJSON points for a map overlay",
              response_class=GeoJSONResponse, response_model=DangerCollection,
              response_description="Points with `risk` 0-1 (higher = closer, more certain overtake)")
     def danger():
         return GeoJSONResponse(danger_collection())
 
-    @app.get("/air", summary="Air quality (worse than usual for its bike trip) as GeoJSON points for a map overlay",
+    @app.get("/air", tags=[OVERLAYS], summary="Air quality (worse than usual for its bike trip) as GeoJSON points for a map overlay",
              response_class=GeoJSONResponse, response_model=AirCollection,
              response_description="Points with `air` 0-1 (0.5 = usual for that bike trip, higher = worse). About 21 MB")
     def air():
         return GeoJSONResponse(air_collection())
 
-    @app.get("/flow", summary="How often bikes have to slow down or stop per street, as GeoJSON for a map overlay",
+    @app.get("/flow", tags=[OVERLAYS], summary="How often bikes have to slow down or stop per street, as GeoJSON for a map overlay",
              response_class=GeoJSONResponse, response_model=FlowCollection,
              response_description="LineStrings with `stop_go` 0-1 (higher = more slowing and stopping); unmeasured streets are left out")
     def flow():
         return GeoJSONResponse(flow_collection())
 
-    @app.get("/speed", summary="How fast bikes ride per street, as GeoJSON for a map overlay",
+    @app.get("/speed", tags=[OVERLAYS], summary="How fast bikes ride per street, as GeoJSON for a map overlay",
              response_class=GeoJSONResponse, response_model=SpeedCollection,
              response_description="LineStrings with `speed_kmh` (mean measured cyclist speed, waits included; higher = faster); unmeasured streets are left out")
     def speed():
