@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.schemas import EXAMPLE_TRIP, AirCollection, BikeFriendlyCollection, DangerCollection, DayRoutes, Error, FlowCollection, GradeCollection, \
+from backend.schemas import EXAMPLE_TRIP, AirCollection, BikeFriendlyCollection, DangerCollection, DayRoutes, Error, FlowCollection, GeofencingCollection, GradeCollection, \
     LightingCollection, RouteCollection, RouteComparison, RoughnessCollection, ScoreCollection, ShadeCollection, \
     SharingTrip, SpeedCollection, VehicleCollection, ZoneCollection
 from backend.sharing import ATTRIBUTION, Sharing, SharingUnavailable
@@ -300,11 +300,12 @@ def create_app(graph=None, sharing=None, walk_graph=None):
              response_description="The vehicle to rent, the parking zone to leave it at, and the three legs")
     def route_sharing(query=Depends(route_query), vehicle: Literal["all", "bike", "scooter"] = Query(
             "all", description="Rent only an e-bike (bike), only an e-scooter (scooter), or whichever is quicker (all)"),
-            park_in_zone: bool = Query(True, description=(
-                "End the ride at the parking zone that gets you to the end soonest (if one is within 1 km walk of it), "
-                "else ride to the end"))):
+            park_in_zone: bool = Query(False, description=(
+                "Always end the ride at a parking zone. Off: at the end itself, unless parking is not allowed there "
+                "(see /sharing/geofencing); then wherever allowed that gets you to the end soonest"))):
         """The quickest trip with a vehicle free to rent now within 1 km walk of the start, with enough battery.
-        400 when there is none, 503 when the sharing feed can't be read."""
+        Dott is free-floating: the ride ends at the destination, or where its no-parking zones send you.
+        400 when there is no vehicle or nowhere to leave it, 503 when the sharing feed can't be read."""
         origin, destination, penalties = query
         try:
             snap = sharing.snapshot()
@@ -314,7 +315,7 @@ def create_app(graph=None, sharing=None, walk_graph=None):
             app.state.walk = WalkNetwork(walk_graph if walk_graph is not None else load_walk_graph())
         try:
             trip = plan_sharing_trip(app.state.graph, app.state.walk, snap["vehicles"], snap["zones"], origin, destination,
-                                     penalties, vehicle, park_in_zone)
+                                     penalties, vehicle, park_in_zone, snap["geofencing"])
         except RouteError as e:
             raise HTTPException(status_code=400, detail=str(e))
         return JSONResponse({**trip, "updated": snap["updated"], "attribution": ATTRIBUTION})
@@ -398,6 +399,14 @@ def create_app(graph=None, sharing=None, walk_graph=None):
              response_description="Points with the zone name, `bikes_available` and `scooters_available`")
     def sharing_zones(query=Depends(near_query)):
         return GeoJSONResponse(shared("zones", query))
+
+    @app.get("/sharing/geofencing", tags=[SHARING], summary="Where shared vehicles may be left: the provider's geofencing zones",
+             response_class=GeoJSONResponse, response_model=GeofencingCollection, responses=SHARING_ERRORS,
+             response_description="Polygons in feed order (an earlier zone wins where zones overlap) with the end rule per vehicle kind")
+    def sharing_geofencing():
+        """Dott's no-parking zones (pedestrian zones, parks, ...), zones where vehicles may only be left at a parking
+        zone, exceptions inside them, and last its whole Heilbronn area, where a ride may end anywhere."""
+        return GeoJSONResponse(shared("geofencing", (None, None)))
 
     return app
 

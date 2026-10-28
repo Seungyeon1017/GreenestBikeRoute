@@ -1,8 +1,10 @@
 """Shared e-bikes and e-scooters free to rent in Heilbronn, live from MobiData BW's bundled GBFS feeds.
 
 Heilbronn has one sharing provider in the feed: Dott (free-floating pedelecs and e-scooters). Each vehicle
-comes with its battery level, range and a link that opens it in the provider's app. Dott also has parking
-zones (virtual stations) where vehicles should be left; /sharing/zones lists them.
+comes with its battery level, range and a link that opens it in the provider's app. Dott is free-floating: a ride
+may end anywhere in its Heilbronn area except in the no-parking zones of its geofencing feed (pedestrian zones,
+parks, ...), and in a few zones only at a parking zone (virtual station). /sharing/zones lists the parking zones,
+/sharing/geofencing the geofencing zones.
 
 Data: MobiData BW, "Gebündelte Daten Bikesharing Baden-Württemberg" (https://mobidata-bw.de/dataset/bikesh)
 and its scooter counterpart, Datenlizenz Deutschland – Namensnennung – 2.0. Positions refresh about every
@@ -59,7 +61,9 @@ def _price(plan):
 
 
 def read_system(system, fetch=fetch_json):
-    """(vehicles, zones) of one GBFS system, as GeoJSON Features inside Heilbronn."""
+    """(vehicles, zones, geofencing) of one GBFS system, as GeoJSON Features: the vehicles and zones inside Heilbronn,
+    and all its geofencing zones in feed order (an earlier zone's rules win where zones overlap, GBFS v3), each with
+    the end rule per vehicle kind (`bike`, `scooter`: see _end_rule); geofencing is None if the system has no feed."""
     provider = _text(fetch(system, "system_information")["data"].get("operator")) or system
     types = {t["vehicle_type_id"]: t for t in fetch(system, "vehicle_types")["data"]["vehicle_types"]}
     kind = {i: VEHICLES[t["form_factor"]] for i, t in types.items() if t.get("form_factor") in VEHICLES}
@@ -89,6 +93,21 @@ def read_system(system, fetch=fetch_json):
             "last_reported": v.get("last_reported"),
         }})
 
+    geofencing = []
+    try:
+        fences = fetch(system, "geofencing_zones")["data"]["geofencing_zones"]["features"]
+    except (requests.RequestException, KeyError):
+        fences = None
+    for i, f in enumerate(fences or []):
+        rules = {}
+        for rule in f["properties"].get("rules") or []:
+            for type_id in rule.get("vehicle_type_ids") or kind:
+                if type_id in kind and kind[type_id] not in rules:
+                    rules[kind[type_id]] = _end_rule(rule)
+        if rules:
+            geofencing.append({"type": "Feature", "geometry": f["geometry"], "properties": {
+                "provider": provider, "name": _text(f["properties"].get("name")) or None, "order": i, **rules}})
+
     zones = []
     status = {s["station_id"]: s for s in fetch(system, "station_status")["data"]["stations"]}
     for s in fetch(system, "station_information")["data"]["stations"]:
@@ -112,7 +131,14 @@ def read_system(system, fetch=fetch_json):
             "bike_capacity": room("bike"),
             "scooter_capacity": room("scooter"),
         }})
-    return vehicles, zones
+    return vehicles, zones, (geofencing if fences is not None else None)
+
+
+def _end_rule(rule):
+    """Where a ride may end inside a geofencing zone: "anywhere", "parking_zone" (only at a station) or "no"."""
+    if rule.get("station_parking"):
+        return "parking_zone"
+    return "anywhere" if rule.get("ride_end_allowed") else "no"
 
 
 def distance_m(lat1, lon1, lat2, lon2):
@@ -144,25 +170,26 @@ class Sharing:
         if self._snapshot is not None and now - self._taken < CACHE_S:
             return self._snapshot
         try:
-            vehicles, zones = [], []
+            vehicles, zones, geofencing = [], [], []
             for system in self.systems:
-                v, z = read_system(system, self.fetch)
+                v, z, g = read_system(system, self.fetch)
                 vehicles += v
                 zones += z
+                geofencing = None if g is None or geofencing is None else geofencing + g
         except (requests.RequestException, KeyError, ValueError) as e:
             if self._snapshot is not None and now - self._taken < STALE_S:
                 return self._snapshot
             raise SharingUnavailable(f"sharing data unavailable ({type(e).__name__}), try again later") from e
-        self._snapshot = {"vehicles": vehicles, "zones": zones,
+        self._snapshot = {"vehicles": vehicles, "zones": zones, "geofencing": geofencing,
                           "updated": datetime.now(timezone.utc).isoformat(timespec="seconds")}
         self._taken = now
         return self._snapshot
 
     def collection(self, kind, near=None, limit=None, vehicle="all"):
-        """A FeatureCollection of "vehicles" (all, or only vehicle="bike" / "scooter") or "zones";
+        """A FeatureCollection of "vehicles" (all, or only vehicle="bike" / "scooter"), "zones" or "geofencing";
         with near=(lat, lon), the closest `limit` first."""
         snap = self.snapshot()
-        features = snap[kind]
+        features = snap[kind] or []
         if kind == "vehicles" and vehicle != "all":
             features = [f for f in features if f["properties"]["vehicle"] == vehicle]
         if near is not None:

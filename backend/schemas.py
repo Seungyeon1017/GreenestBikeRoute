@@ -431,6 +431,43 @@ class ZoneCollection(BaseModel):
             "scooters_available": 5, "bike_capacity": 5, "scooter_capacity": 5}}]}}}
 
 
+EndRule = Literal["anywhere", "parking_zone", "no"]
+
+
+class GeofencingProperties(BaseModel):
+    provider: str
+    name: Optional[str] = Field(description="The zone's name, if the provider gives one (Dott: only its whole area)")
+    order: int = Field(description="Position in the provider's feed: where zones overlap, the lowest order decides")
+    bike: Optional[EndRule] = Field(None, description="Where an e-bike ride may end in this zone: anywhere, only at a parking zone, or not at all; null if the zone has no rule for e-bikes")
+    scooter: Optional[EndRule] = Field(None, description="The same for e-scooters")
+
+
+class GeofencingFeature(BaseModel):
+    type: Literal["Feature"]
+    geometry: dict = Field(description="GeoJSON Polygon or MultiPolygon")
+    properties: GeofencingProperties
+
+
+class GeofencingCollection(BaseModel):
+    """The provider's geofencing zones in feed order. Outside every zone a ride may not end."""
+    type: Literal["FeatureCollection"]
+    features: list[GeofencingFeature]
+    updated: str = Field(description=SHARING_UPDATED)
+    attribution: str = Field(description=SHARING_ATTRIBUTION)
+
+
+class ReturnPointProperties(BaseModel):
+    rule: Literal["anywhere", "parking_zone"] = Field(description="Left where free parking is allowed, or at a parking zone")
+    at_destination: bool = Field(description="True when the vehicle can be left at the destination itself")
+    name: Optional[str] = Field(description="The parking zone's name, null elsewhere")
+
+
+class ReturnPoint(BaseModel):
+    type: Literal["Feature"]
+    geometry: Point
+    properties: ReturnPointProperties
+
+
 class WalkProperties(BaseModel):
     mode: Literal["walk"]
     length_m: float = Field(description="Walking distance in metres")
@@ -454,11 +491,13 @@ class RideFeature(BaseModel):
 
 
 class SharingTrip(BaseModel):
-    """Walk to a free shared vehicle, ride it to a parking zone near the end, walk to the end. The walks follow OSM's
+    """Walk to a free shared vehicle, ride it to the end (or, where the end is a no-parking zone, to the nearest place
+    it may be left), walk to the end. The walks follow OSM's
     walking network (pavements, footways, pedestrian zones; no bike paths), the ride the bike graph with the request's
     penalties, as /route; an e-scooter is pushed on footways and in pedestrian zones (pushed_m)."""
     vehicle: VehicleFeature = Field(description="The vehicle to rent, as from /sharing")
-    zone: Optional[ZoneFeature] = Field(description="The parking zone the ride ends at; null when the ride ends at the destination")
+    zone: Optional[ZoneFeature] = Field(description="The parking zone the ride ends at; null when it ends elsewhere")
+    return_point: ReturnPoint = Field(description="Where to leave the vehicle")
     legs: list[Union[WalkFeature, RideFeature]] = Field(min_length=3, max_length=3, description="Walk, ride, walk")
     duration_s: int = Field(description="Walking plus riding time in seconds (not counting unlocking)")
     walk_m: float = Field(description="Metres walked, both walks")

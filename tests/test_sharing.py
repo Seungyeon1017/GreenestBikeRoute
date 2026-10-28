@@ -4,7 +4,7 @@ import requests
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
-from backend.schemas import SharingTrip, VehicleCollection, ZoneCollection
+from backend.schemas import GeofencingCollection, SharingTrip, VehicleCollection, ZoneCollection
 from backend.sharing import CACHE_S, STALE_S, Sharing, SharingUnavailable, distance_m
 from tests.conftest import COORDS, A, B
 
@@ -37,6 +37,14 @@ FEEDS = {
     "station_information": {"data": {"stations": [
         {"station_id": "z1", "name": [{"text": "Parking Zone HBF", "language": "en"}], "lat": 49.1420, "lon": 9.2070,
          "vehicle_types_capacity": [{"vehicle_type_ids": ["bike"], "count": 5}, {"vehicle_type_ids": ["scooter"], "count": 5}]}]}},
+    "geofencing_zones": {"data": {"geofencing_zones": {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {"rules": [  # no e-scooters parked here, e-bikes only at a parking zone
+            {"vehicle_type_ids": ["scooter"], "ride_end_allowed": False, "station_parking": False},
+            {"vehicle_type_ids": ["bike"], "ride_end_allowed": False, "station_parking": True}]},
+         "geometry": {"type": "Polygon", "coordinates": [[[9.21, 49.142], [9.212, 49.142], [9.212, 49.144], [9.21, 49.142]]]}},
+        {"type": "Feature", "properties": {"name": [{"text": "Heilbronn", "language": "en"}], "rules": [
+            {"vehicle_type_ids": ["bike", "scooter"], "ride_end_allowed": True, "station_parking": False}]},
+         "geometry": {"type": "Polygon", "coordinates": [[[9.1, 49.1], [9.3, 49.1], [9.3, 49.2], [9.1, 49.1]]]}}]}}},
     "station_status": {"data": {"stations": [
         {"station_id": "z1", "vehicle_types_available": [{"vehicle_type_id": "bike", "count": 3},
                                                          {"vehicle_type_id": "scooter", "count": 7}]}]}},
@@ -206,3 +214,17 @@ def test_sharing_trip_without_a_vehicle_nearby_is_400(client, monkeypatch):
 def test_sharing_trip_with_the_feed_down_is_503(client, feed):
     feed.down = True
     assert client.get("/route/sharing", params=trip_params()).status_code == 503
+
+
+def test_geofencing_keeps_the_feed_order_and_the_end_rule_per_vehicle(client):
+    r = client.get("/sharing/geofencing")
+    assert r.status_code == 200
+    body = GeofencingCollection.model_validate(r.json())
+    assert [(f.properties.order, f.properties.bike, f.properties.scooter, f.properties.name) for f in body.features] == [
+        (0, "parking_zone", "no", None), (1, "anywhere", "anywhere", "Heilbronn")]
+
+
+def test_without_a_geofencing_feed_there_are_no_zones(monkeypatch):
+    feeds = {k: v for k, v in FEEDS.items() if k != "geofencing_zones"}
+    snap = Sharing(fetch=lambda system, feed: feeds[feed]).snapshot()  # KeyError for the missing feed, like a 404
+    assert snap["geofencing"] is None
