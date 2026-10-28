@@ -190,6 +190,11 @@
       "planTrip": "Plan a Trip",
       "highlights": "Highlights"
     },
+  "language": {
+  "label": "Language",
+  "de": "Deutsch",
+  "en": "English"
+},
     "footer": {
       "basedOn": "Based on",
       "mapData": "Map data"
@@ -256,6 +261,17 @@
       "title": "Find your greenest route",
       "subtitle": "Compare the fastest route with a route that favours greenery, quiet streets and good cycling infrastructure.",
       "formTitle": "Your trip",
+      "clickHint": "Click the map to set the start, then the destination.",
+      "startPoint": "Start",
+      "endPoint": "Destination",
+      "notSet": "Not set",
+      "penalties": {
+        "bump": "Dislike bumps",
+        "danger": "Dislike close overtaking",
+        "pm": "Dislike bad air"
+      },
+      "loading": "Calculating route…",
+      "reset": "Reset",
       "start": "Start",
       "startPlaceholder": "e.g. Heilbronn Hbf",
       "destination": "Destination",
@@ -269,19 +285,20 @@
       "notConnected": "Route search is not connected yet. Address search and the routing service follow in the next step.",
       "comparisonTitle": "Route comparison",
       "routes": {
-        "fastest": "Fastest route",
-        "fastestHint": "Optimised for travel time.",
-        "greenest": "Greenest route",
-        "greenestHint": "Optimised for environmental comfort."
+        "shortest": "Shortest route",
+        "shortestHint": "The most direct path, ignoring comfort.",
+        "greenest": "Your route",
+        "greenestHint": "Planned with your slider settings."
       },
       "metrics": {
-        "duration": "Travel time",
         "distance": "Distance",
-        "greenScore": "Green Route Score",
-        "greenery": "Greenery exposure",
-        "noise": "Noise exposure",
-        "airQuality": "Air quality exposure"
+        "roughness": "Roughness (0–100)",
+        "overtaking": "Close overtakes",
+        "airQuality": "Air (0.5 = typical)",
+        "stopGo": "Stop-and-go (0–1)"
       },
+      "sameAsShortest": "Your route is the same as the shortest route.",
+      "detour": "{{pct}}% longer than the shortest route.",
       "emptyState": "Enter a start and destination to compare routes. Values only appear when they come from real data.",
       "mapLabel": "Route map",
       "eyebrow": "Heilbronn · Route planner"

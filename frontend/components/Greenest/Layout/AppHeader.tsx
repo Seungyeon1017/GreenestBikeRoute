@@ -5,6 +5,7 @@ import { Leaf } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
+import LanguageSwitcher from './LanguageSwitcher'
 import { NAV_TABS } from './navigation'
 
 export default function AppHeader() {
@@ -31,7 +32,8 @@ export default function AppHeader() {
           </span>
         </Link>
 
-        <nav aria-label={t('greenest.nav.label')}>
+        <div>
+                  <nav aria-label={t('greenest.nav.label')}>
           <ul className="grid grid-cols-3 gap-1 rounded-full border border-leaf-sand bg-white/70 p-1 shadow-soft">
             {NAV_TABS.map(({ href, key, icon: Icon }) => {
               const active =
@@ -56,6 +58,8 @@ export default function AppHeader() {
             })}
           </ul>
         </nav>
+        <LanguageSwitcher />
+        </div>
       </div>
     </header>
   )

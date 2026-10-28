@@ -7,5 +7,5 @@ services:
       - "3000:3000"
     environment:
       # URL the browser uses to reach the FastAPI backend.
-      NEXT_PUBLIC_GREENEST_API_URL: http://127.0.0.1:8000
+      NEXT_PUBLIC_GREENEST_API_URL: http://127.0.0.1:8001
     restart: unless-stopped

@@ -190,6 +190,11 @@
       "planTrip": "Route planen",
       "highlights": "Highlights"
     },
+      "language": {
+      "label": "Sprache",
+      "de": "Deutsch",
+      "en": "English"
+    },
     "footer": {
       "basedOn": "Basierend auf",
       "mapData": "Kartendaten"
@@ -256,6 +261,17 @@
       "title": "Finde deine grünste Route",
       "subtitle": "Vergleiche die schnellste Route mit einer Route, die Grün, ruhige Straßen und gute Radinfrastruktur bevorzugt.",
       "formTitle": "Deine Fahrt",
+      "clickHint": "Klicke auf die Karte, um zuerst den Start und dann das Ziel festzulegen.",
+      "startPoint": "Start",
+      "endPoint": "Ziel",
+      "notSet": "Nicht gesetzt",
+      "penalties": {
+        "bump": "Unebenheiten meiden",
+        "danger": "Enges Überholen meiden",
+        "pm": "Schlechte Luft meiden"
+      },
+      "loading": "Route wird berechnet…",
+      "reset": "Zurücksetzen",
       "start": "Start",
       "startPlaceholder": "z. B. Heilbronn Hbf",
       "destination": "Ziel",
@@ -269,19 +285,20 @@
       "notConnected": "Die Routensuche ist noch nicht angebunden. Adresssuche und Routing-Dienst folgen im nächsten Schritt.",
       "comparisonTitle": "Routenvergleich",
       "routes": {
-        "fastest": "Schnellste Route",
-        "fastestHint": "Optimiert auf Fahrzeit.",
-        "greenest": "Grünste Route",
-        "greenestHint": "Optimiert auf Umweltkomfort."
+        "shortest": "Kürzeste Route",
+        "shortestHint": "Der direkteste Weg, ohne Rücksicht auf Komfort.",
+        "greenest": "Deine Route",
+        "greenestHint": "Geplant mit deinen Schieberegler-Einstellungen."
       },
       "metrics": {
-        "duration": "Fahrzeit",
         "distance": "Distanz",
-        "greenScore": "Green Route Score",
-        "greenery": "Grünanteil",
-        "noise": "Lärmbelastung",
-        "airQuality": "Luftbelastung"
+        "roughness": "Unebenheit (0–100)",
+        "overtaking": "Enge Überholungen",
+        "airQuality": "Luft (0,5 = typisch)",
+        "stopGo": "Stop-and-go (0–1)"
       },
+      "sameAsShortest": "Deine Route ist identisch mit der kürzesten Route.",
+      "detour": "{{pct}} % länger als die kürzeste Route.",
       "emptyState": "Gib Start und Ziel ein, um Routen zu vergleichen. Werte erscheinen nur, wenn sie aus echten Daten stammen.",
       "mapLabel": "Routenkarte",
       "eyebrow": "Heilbronn · Routenplaner"

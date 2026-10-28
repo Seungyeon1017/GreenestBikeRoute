@@ -41,26 +41,44 @@ export type AreaProperties = {
   roughness_measured_m: number
 }
 
-export type RouteKind = 'fastest' | 'greenest'
-
 /** Properties of the route feature returned by the FastAPI `/route` endpoint. */
 export type RouteProperties = {
-  penalty: number
-  length_m: number
+  bump_penalty: number
+  danger_penalty: number
+  pm_penalty: number
+  stop_penalty: number
+
   /** Length-weighted over the measured part of the route; null if nothing was measured. */
+  length_m: number
   mean_roughness: number | null
-  /** Share of the route length with a roughness measurement, 0..1. */
   measured_share: number
+  danger_points: number
+  danger_risk: number
+  mean_pm_risk: number | null
+  /** Share of the route length with a roughness measurement, 0..1. */
+  pm_measured_share: number
+  mean_stop_go: number | null
+  stop_measured_share: number
+  
 }
 
 export type RouteFeature = Feature<LineString, RouteProperties>
 export type RouteCollection = FeatureCollection<LineString, RouteProperties>
 
+export type RouteComparison = {
+  route: RouteFeature
+  shortest: RouteFeature
+  detour_pct: number
+  same_path: boolean
+}
+
+/** The three sliders. Values match the backend limits: 0–50, 0–100, 0–5. */
+export type Penalties = { bump: number; danger: number; pm: number }
+
 export type RouteRequest = {
   from: LngLat
   to: LngLat
-  /** 0 gives the shortest route; higher values avoid rough streets more. */
-  penalty?: number
+  penalties?: Partial<Penalties>
 }
 
 export type RoutePreferences = {
@@ -70,6 +88,8 @@ export type RoutePreferences = {
   /** Extra minutes the user accepts compared with the fastest route. */
   maxExtraMinutes: number
 }
+
+export type RouteKind = 'shortest' | 'greenest'
 
 export type HighlightPlace = {
   id: string

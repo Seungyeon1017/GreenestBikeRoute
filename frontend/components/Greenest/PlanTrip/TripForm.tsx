@@ -1,9 +1,8 @@
 'use client'
 
-import { Navigation } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import Card, { CardTitle } from '@/components/Greenest/ui/Card'
-import type { RoutePreferences } from '@/types/greenest'
+import type { LngLat, Penalties, RoutePreferences } from '@/types/greenest'
 
 export type TripFormValues = {
   start: string
@@ -12,13 +11,97 @@ export type TripFormValues = {
 }
 
 type TripFormProps = {
-  values: TripFormValues
-  onChange: (_values: TripFormValues) => void
-  onSubmit: () => void
+  start: LngLat | null
+  end: LngLat | null
+  penalties: Penalties
+  onPenaltiesChange: (_penalties: Penalties) => void
+  onReset: () => void
   loading?: boolean
 }
 
-const PREFERENCE_KEYS = [
+/** One slider per penalty. Min, max and step match the backend limits. */
+const SLIDERS = [
+  { key: 'bump', min: 0, max: 50, step: 1 },
+  { key: 'danger', min: 0, max: 100, step: 5 },
+  { key: 'pm', min: 0, max: 5, step: 0.25 },
+] as const
+
+/** Shows a point as "lat, lng" rounded to five decimals, or a placeholder. */
+function formatPoint(point: LngLat | null, notSet: string): string {
+  return point ? `${point[1].toFixed(5)}, ${point[0].toFixed(5)}` : notSet
+}
+
+export default function TripForm({
+  start,
+  end,
+  penalties,
+  onPenaltiesChange,
+  onReset,
+  loading = false,
+}: TripFormProps) {
+  const { t } = useTranslation()
+  const notSet = t('greenest.planTrip.notSet')
+
+  return (
+    <Card>
+      <div className="flex flex-col gap-4">
+        <CardTitle>{t('greenest.planTrip.formTitle')}</CardTitle>
+        <p className="text-xs text-leaf-muted">{t('greenest.planTrip.clickHint')}</p>
+
+        <dl className="flex flex-col gap-1 text-sm text-leaf-ink/80">
+          <div className="flex justify-between gap-2">
+            <dt>{t('greenest.planTrip.startPoint')}</dt>
+            <dd className="tabular-nums">{formatPoint(start, notSet)}</dd>
+          </div>
+          <div className="flex justify-between gap-2">
+            <dt>{t('greenest.planTrip.endPoint')}</dt>
+            <dd className="tabular-nums">{formatPoint(end, notSet)}</dd>
+          </div>
+        </dl>
+
+        {SLIDERS.map(({ key, min, max, step }) => (
+          <label
+            className="flex flex-col gap-1 text-sm text-leaf-ink/80"
+            htmlFor={`penalty-${key}`}
+            key={key}
+          >
+            <span>
+              {t(`greenest.planTrip.penalties.${key}`)}: {penalties[key]}
+            </span>
+            <input
+              className="accent-leaf-forest"
+              id={`penalty-${key}`}
+              max={max}
+              min={min}
+              onChange={e =>
+                onPenaltiesChange({ ...penalties, [key]: Number(e.target.value) })
+              }
+              step={step}
+              type="range"
+              value={penalties[key]}
+            />
+          </label>
+        ))}
+
+        {loading && (
+          <p className="text-xs text-leaf-muted" role="status">
+            {t('greenest.planTrip.loading')}
+          </p>
+        )}
+
+        <button
+          className="rounded-full border border-leaf-sand px-4 py-2 text-sm text-leaf-ink hover:bg-leaf-cream"
+          onClick={onReset}
+          type="button"
+        >
+          {t('greenest.planTrip.reset')}
+        </button>
+      </div>
+    </Card>
+  )
+}
+
+/* const PREFERENCE_KEYS = [
   'preferGreener',
   'preferQuieter',
   'preferCycleLanes',
@@ -26,8 +109,8 @@ const PREFERENCE_KEYS = [
 
 const inputClass =
   'w-full rounded-xl border border-leaf-sand bg-white px-3 py-2 text-sm text-leaf-ink placeholder:text-leaf-muted/70 focus:border-leaf-moss focus:outline-none focus:ring-2 focus:ring-leaf-moss/20'
-
-export default function TripForm({
+ */
+/* export default function TripForm({
   values,
   onChange,
   onSubmit,
@@ -142,4 +225,4 @@ export default function TripForm({
       </form>
     </Card>
   )
-}
+} */
