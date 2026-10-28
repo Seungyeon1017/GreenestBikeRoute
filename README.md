@@ -155,7 +155,16 @@ npx yarn@1.22.22 dev
 
 Then open http://localhost:3000 (`/overview`, `/plan-trip`, `/highlights`). Stop the server with `Ctrl+C`. Use yarn, not `npm install`: npm ignores `yarn.lock` and fails with a peer-dependency error.
 
-Without a database (`DATABASE_URL`) the site still runs and falls back to German texts. For route search, also start the routing API above; the frontend calls `NEXT_PUBLIC_GREENEST_API_URL` (default `http://127.0.0.1:8000`).
+Without a database (`DATABASE_URL`) the site still runs and falls back to German texts. For route search, also start the routing API above; the frontend calls `NEXT_PUBLIC_GREENEST_API_URL` (default `http://127.0.0.1:8001`).
+
+Or run the production build with Docker Compose (start the backend first, either way above):
+
+```powershell
+cd frontend
+docker compose up --build -d
+```
+
+It serves on http://localhost:3000 and reaches the backend at `http://127.0.0.1:8001`. There is no hot reload, so rebuild after changes; for frontend work, use `yarn dev`.
 
 The Overview map reads small files from `frontend/public/map-data/`. After downloading new data, rebuild them with `node frontend/scripts/build-map-data.mjs`.
 
