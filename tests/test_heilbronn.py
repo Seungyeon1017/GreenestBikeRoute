@@ -173,9 +173,13 @@ def test_grade_docs_example_is_a_real_response(client):
 
 @needs_elevation
 def test_neckar_bridge_has_no_grade_spike(client):
-    """Karlsruher Straße crosses the Neckar on a bridge whose middle node is a junction. The terrain model
-    under that node is the river (151 m, 8 m below the deck), which made a fake -6.5 % / +16.6 % dip."""
-    trip = {"from_lat": 49.1381, "from_lon": 9.2045, "to_lat": 49.1384, "to_lon": 9.1960}
-    grade = client.get("/route/grade", params={**trip, **ZERO}).json()
+    """Kaiserstraße crosses the Neckar on three bridge edges. The terrain model under the two middle nodes is
+    about 4 m below the deck, which made a fake -11.3 %, -1.9 %, +8.8 % on the way east."""
+    G = client.app.state.graph
+    west, middle, east = G.nodes[392616596], G.nodes[393412335], G.nodes[817445456]
+    assert min(west["elevation"], east["elevation"]) <= middle["elevation"] <= max(west["elevation"], east["elevation"])
+    trip = {"from_lat": 49.1422, "from_lon": 9.2120, "to_lat": 49.1426, "to_lon": 9.2190}
+    grade = client.get("/route/grade", params=trip).json()
+    assert [middle["x"], middle["y"]] in joined(grade["features"])  # the route does cross the bridge
     assert grade["summary"]["max_grade_pct"] < 4 and grade["summary"]["max_descent_grade_pct"] > -4
     assert all(f["properties"]["severity"] in ("flat", "gentle") for f in grade["features"])

@@ -32,7 +32,7 @@ SHORTEST_EXAMPLE = {
     },
 }
 
-# /route/grade for the example trip, shortened to its first 2 of 8 pieces; tests/test_heilbronn.py checks them and the summary.
+# /route/grade for the example trip, shortened to its first 2 of 12 pieces; tests/test_heilbronn.py checks them and the summary.
 GRADE_EXAMPLE = {
     "type": "FeatureCollection",
     "features": [
@@ -49,9 +49,9 @@ GRADE_EXAMPLE = {
                         "start_m": 110.4}},
     ],
     "summary": {
-        "length_m": 3249.2, "climb_m": 24.1, "descent_m": 6.0, "start_elevation_m": 162.7, "end_elevation_m": 180.8,
-        "max_grade_pct": 2.9, "max_descent_grade_pct": -2.8,
-        "length_by_severity_m": {"flat": 2908.8, "gentle": 340.4, "noticeable": 0.0, "steep": 0.0, "very_steep": 0.0},
+        "length_m": 3088.2, "climb_m": 24.6, "descent_m": 6.4, "start_elevation_m": 162.7, "end_elevation_m": 180.8,
+        "max_grade_pct": 4.1, "max_descent_grade_pct": -3.0,
+        "length_by_severity_m": {"flat": 2735.3, "gentle": 343.3, "noticeable": 9.6, "steep": 0.0, "very_steep": 0.0},
     },
 }
 
