@@ -1,0 +1,11 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bike-backend
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./data:/app/data
+      - ./cache:/app/cache

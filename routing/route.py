@@ -3,7 +3,7 @@ import networkx as nx
 import numpy as np
 import osmnx as ox
 
-from routing.costs import DEFAULT_PENALTY, DEFAULT_ROUGHNESS, edge_cost
+from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_PM_PENALTY, DEFAULT_PM_RISK,     DEFAULT_ROUGHNESS, edge_cost
 
 # Start/end points further than this from any street are treated as outside Heilbronn.
 MAX_SNAP_M = 500
@@ -27,15 +27,18 @@ def _roughness(d):
     return DEFAULT_ROUGHNESS if d["roughness"] is None else d["roughness"]
 
 
-def _cost(d, penalty):
-    return edge_cost(d["length"], _roughness(d), penalty)
+def _pm_risk(d):
+    return DEFAULT_PM_RISK if d.get("pm_risk") is None else d["pm_risk"]
 
 
-def find_route(G, origin, destination, penalty=DEFAULT_PENALTY):
-    """Cheapest route from origin to destination, both (lat, lon), as a GeoJSON FeatureCollection.
+def _cost(d, penalties):
+    bump_penalty, danger_penalty, pm_penalty = penalties
+    return edge_cost(d["length"], _roughness(d), bump_penalty,
+                     d.get("danger", 0.0), danger_penalty, _pm_risk(d), pm_penalty)
 
-    penalty=0 gives the shortest route; higher values take longer detours to avoid rough streets.
-    """
+
+def _snap(G, origin, destination):
+    """The graph nodes for origin and destination, both (lat, lon)."""
     ends = []
     for label, (lat, lon) in (("start", origin), ("end", destination)):
         node, dist = nearest_node(G, lat, lon)
@@ -45,10 +48,16 @@ def find_route(G, origin, destination, penalty=DEFAULT_PENALTY):
     a, b = ends
     if a == b:
         raise RouteError("start and end snap to the same street corner")
+    return a, b
+
+
+def _route_feature(G, a, b, penalties):
+    """The cheapest route between graph nodes a and b for `penalties`, as one GeoJSON Feature."""
+    bump_penalty, danger_penalty, pm_penalty = penalties
 
     # MultiDiGraph: between two nodes there can be parallel edges; use the cheapest.
     def weight(u, v, parallel):
-        return min(_cost(d, penalty) for d in parallel.values())
+        return min(_cost(d, penalties) for d in parallel.values())
 
     try:
         path = nx.shortest_path(G, a, b, weight=weight)
@@ -56,8 +65,9 @@ def find_route(G, origin, destination, penalty=DEFAULT_PENALTY):
         raise RouteError("no bike route between these points") from None
 
     coords, length, rough_len, measured_len = [], 0.0, 0.0, 0.0
+    danger, danger_points, pm_len, pm_measured_len = 0.0, 0, 0.0, 0.0
     for u, v in zip(path[:-1], path[1:]):
-        d = min(G[u][v].values(), key=lambda d: _cost(d, penalty))
+        d = min(G[u][v].values(), key=lambda d: _cost(d, penalties))
         if "geometry" in d:  # OSMnx edge geometries run from u to v
             pts = [[float(x), float(y)] for x, y in d["geometry"].coords]
         else:
@@ -68,13 +78,52 @@ def find_route(G, origin, destination, penalty=DEFAULT_PENALTY):
         if d["roughness"] is not None:
             measured_len += edge_len
             rough_len += d["roughness"] * edge_len
+        danger += d.get("danger", 0.0)
+        danger_points += d.get("danger_points", 0)
+        if d.get("pm_risk") is not None:
+            pm_measured_len += edge_len
+            pm_len += d["pm_risk"] * edge_len
 
     properties = {
-        "penalty": penalty,
+        "bump_penalty": bump_penalty,
+        "danger_penalty": danger_penalty,
+        "pm_penalty": pm_penalty,
         "length_m": round(length, 1),
         # Length-weighted over the measured part of the route only.
         "mean_roughness": round(rough_len / measured_len, 1) if measured_len else None,
         "measured_share": round(measured_len / length, 2),
+        # Overtaking spots (danger_zones) on the route and their summed Risk Index Overtaking.
+        "danger_points": danger_points,
+        "danger_risk": round(danger, 2),
+        # Length-weighted over the part of the route with air_quality measurements.
+        "mean_pm_risk": round(pm_len / pm_measured_len, 3) if pm_measured_len else None,
+        "pm_measured_share": round(pm_measured_len / length, 2),
     }
-    feature = {"type": "Feature", "geometry": {"type": "LineString", "coordinates": coords}, "properties": properties}
+    return {"type": "Feature", "geometry": {"type": "LineString", "coordinates": coords}, "properties": properties}
+
+
+def find_route(G, origin, destination, bump_penalty=DEFAULT_BUMP_PENALTY,
+               danger_penalty=DEFAULT_DANGER_PENALTY, pm_penalty=DEFAULT_PM_PENALTY):
+    """Cheapest route from origin to destination, both (lat, lon), as a GeoJSON FeatureCollection.
+
+    All penalties 0 give the shortest route; higher values take longer detours to avoid rough
+    streets (bump_penalty), spots where cars overtook closely (danger_penalty) and streets with bad
+    air (pm_penalty).
+    """
+    a, b = _snap(G, origin, destination)
+    feature = _route_feature(G, a, b, (bump_penalty, danger_penalty, pm_penalty))
     return {"type": "FeatureCollection", "features": [feature]}
+
+
+def compare_routes(G, origin, destination, bump_penalty=DEFAULT_BUMP_PENALTY,
+                   danger_penalty=DEFAULT_DANGER_PENALTY, pm_penalty=DEFAULT_PM_PENALTY):
+    """The route from find_route next to the shortest route, with how much they differ."""
+    a, b = _snap(G, origin, destination)
+    route = _route_feature(G, a, b, (bump_penalty, danger_penalty, pm_penalty))
+    shortest = _route_feature(G, a, b, (0, 0, 0))
+    return {
+        "route": route,
+        "shortest": shortest,
+        "detour_pct": round((route["properties"]["length_m"] / shortest["properties"]["length_m"] - 1) * 100, 1),
+        "same_path": route["geometry"] == shortest["geometry"],
+    }

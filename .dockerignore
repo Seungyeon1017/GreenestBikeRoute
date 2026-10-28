@@ -1,0 +1,14 @@
+.venv
+__pycache__
+*.py[cod]
+.git
+.env
+.pytest_cache
+README.md
+.gitignore
+.vscode
+.github
+*.db
+*.db-*
+.env.local
+.env.*.local
