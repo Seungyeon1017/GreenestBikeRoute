@@ -233,3 +233,6 @@ __marimo__/
 
 # Riders' reports (backend/reports.py)
 /data/reports.sqlite3
+
+# Claude Code local settings
+/.claude/
