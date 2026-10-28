@@ -87,9 +87,15 @@ grade doesn't change which route is picked).
 - **prefer_time:** weighs each street by its riding time at the speed bikes were measured at (`speed_map`) instead
   of its length. Every route reports its expected `duration_s` either way.
 - **Errors:** 400 with a readable `detail` when a point is more than 500 m from a Heilbronn street or no
-  route exists; 422 when a parameter is missing or out of range.
+  route exists; 422 when a parameter is missing or out of range; 503 from `/route/grade` when the server
+  has no elevation data (`python -m routing.elevation`).
+- **Grade:** each piece has `grade_pct` (positive uphill in the travel direction), `severity` (flat < 2 %,
+  gentle 2-4, noticeable 4-6, steep 6-10, very_steep 10 % and more) and a suggested `color`; `summary` has
+  climb, descent and the steepest pieces. Very short steep pieces can be terrain-model noise.
 - **Map overlays:** `/roughness`, `/danger`, `/air` and `/flow` are static GeoJSON layers. Each
   value is 0-1 (roughness 0-100), and higher is always worse. `/speed` gives km/h, where higher is faster.
+
+Heights for `/route/grade`: Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0 (DGM1).
 """
 
 
@@ -129,7 +135,8 @@ ROUTE_ERRORS = {400: {"description": "Start or end is outside Heilbronn, or no r
 
 ROUTING, OVERLAYS = "Routing", "Map overlays"
 TAGS_METADATA = [
-    {"name": ROUTING, "description": "Plan a bike route from A to B."},
+    {"name": ROUTING, "description": "Plan a bike route from A to B, compare it with the shortest one, "
+                                       "or show its grade."},
     {"name": OVERLAYS, "description": "Static GeoJSON layers of the measured data, to draw on a map."},
 ]
 
