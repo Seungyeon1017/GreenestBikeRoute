@@ -134,3 +134,10 @@ def test_hand_picked_footways_are_in_the_graph(client):
     G = client.app.state.graph
     in_graph = {w for *_, d in G.edges(data=True) for w in osm_way_ids(d["osmid"])}
     assert set(RIDEABLE_WAYS) <= in_graph
+
+
+def test_route_from_next_to_a_cut_off_service_road_snaps_to_the_main_network(client):
+    """Way 130334034 is an island (its only link, path 33921308, is not rideable): the start snaps past it."""
+    r = client.get("/route", params={"from_lat": 49.13584495682357, "from_lon": 9.204933623254533,
+                                     "to_lat": 49.14384658453482, "to_lon": 9.220619201660158})
+    assert r.status_code == 200

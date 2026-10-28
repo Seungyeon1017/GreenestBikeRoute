@@ -48,9 +48,14 @@ def _edge_line(G, u, v, d):
 
 
 def _nearest_edge(G, lat, lon):
-    """The edge (u, v, key, data) closest to (lat, lon), its distance in metres and the point on it."""
+    """The edge (u, v, key, data) closest to (lat, lon), its distance in metres and the point on it.
+
+    Only streets of the main network count: a point next to a cut-off island (say a service road whose
+    only link is a footway bikes may not use) snaps to the nearest street that can be routed from.
+    """
     plane = _Plane(lat)
-    edges = list(G.edges(keys=True, data=True))
+    main = max(nx.weakly_connected_components(G), key=len)
+    edges = [e for e in G.edges(keys=True, data=True) if e[0] in main and e[1] in main]
     lines = [plane.to_m(_edge_line(G, u, v, d)) for u, v, _, d in edges]
     point = Point(plane.to_m_point(lon, lat))
     i = int(STRtree(lines).query_nearest(point)[0])
