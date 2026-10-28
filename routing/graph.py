@@ -11,19 +11,50 @@ from routing.costs import SNAP_M, air_ranks, clean_overtaking, edge_roughness, p
 
 CACHE_DIR = Path(__file__).resolve().parent.parent / "cache"
 # Renamed when the filter below changes, so an old cached graph isn't reused.
-GRAPH_PATH = CACHE_DIR / "heilbronn_bike_legal.graphml"
+GRAPH_PATH = CACHE_DIR / "heilbronn_bike_footways.graphml"
 PLACE = "Heilbronn, Germany"
 
-# OSMnx's network_type="bike" filter, plus: leave out roads tagged bicycle=use_sidepath.
-# They have a mandatory bike path beside them (StVO signs 237/240/241), so cycling on the road is
-# illegal; that path is mapped as its own way and stays in the graph.
+# OSMnx's network_type="bike" filter, with three changes:
+# - leave out roads tagged bicycle=use_sidepath. They have a mandatory bike path beside them (StVO signs
+#   237/240/241), so cycling on the road is illegal; that path is mapped as its own way and stays in the graph.
+# - leave out bicycle=dismount ways, which can't be ridden.
+# - let footways in; keep_rideable_footways then drops the ones bikes may not use.
 BIKE_FILTER = (
     '["highway"]["area"!~"yes"]["access"!~"private"]'
     '["highway"!~"abandoned|bus_guideway|construction|corridor|elevator|'
-    'escalator|footway|motor|no|planned|platform|proposed|raceway|razed|'
+    'escalator|motor|no|planned|platform|proposed|raceway|razed|'
     'rest_area|services|steps"]'
-    '["bicycle"!~"no|use_sidepath"]["service"!~"private"]'
+    '["bicycle"!~"no|use_sidepath|dismount"]["service"!~"private"]'
 )
+# A footway or path is rideable with one of these bicycle tags. Without a tag, bikes are not allowed on it.
+BIKE_ALLOWED = {"yes", "designated", "permissive"}
+FOOTWAY_TYPES = {"footway", "path"}
+
+
+def _tags(value):
+    """OSMnx merges tags of joined ways into lists; always a list."""
+    return value if isinstance(value, list) else [value]
+
+
+def keep_rideable_footways(G):
+    """Remove footway/path edges that bikes may not use, from the graph.
+
+    A footway or path stays if tagged bicycle=yes|designated|permissive. Untagged ones stay only if they
+    are bridge=yes ways or touch an elevator (highway=elevator node): bikes reach those bridges by lift
+    (Campusbrücke) and the lift is marked on the map. Edges mixing footway with other highway types stay.
+    """
+    lifts = {n for n, d in G.nodes(data=True) if "elevator" in _tags(d.get("highway"))}
+    drop = []
+    for u, v, k, d in G.edges(keys=True, data=True):
+        if not set(_tags(d["highway"])) <= FOOTWAY_TYPES:
+            continue
+        if set(_tags(d.get("bicycle"))) & BIKE_ALLOWED:
+            continue
+        if "yes" in _tags(d.get("bridge")) or u in lifts or v in lifts:
+            continue
+        drop.append((u, v, k))
+    G.remove_edges_from(drop)
+    G.remove_nodes_from([n for n in list(G) if G.degree(n) == 0])
 
 
 def load_graph(path=GRAPH_PATH):
@@ -36,7 +67,11 @@ def load_graph(path=GRAPH_PATH):
         G = ox.load_graphml(path)
     else:
         ox.settings.cache_folder = CACHE_DIR
-        G = ox.graph_from_place(PLACE, network_type="bike", custom_filter=BIKE_FILTER)
+        ox.settings.useful_tags_way = sorted({*ox.settings.useful_tags_way, "bicycle"})  # keep_rideable_footways needs it
+        G = ox.graph_from_place(PLACE, network_type="bike", custom_filter=BIKE_FILTER, simplify=False)
+        # Elevator nodes must survive simplification, as the footways only count as rideable near them.
+        G = ox.simplify_graph(G, node_attrs_include=["highway"])
+        keep_rideable_footways(G)
         ox.save_graphml(G, path)
     attach_roughness(G, way_roughness(load_features("bumpy_roads_heilbronn")))
     attach_stop_go(G, way_stop_go(load_features("traffic_flow_heilbronn")))

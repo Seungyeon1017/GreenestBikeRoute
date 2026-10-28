@@ -10,25 +10,25 @@ LonLat = tuple[float, float]  # GeoJSON order: [longitude, latitude]
 EXAMPLE_TRIP = {"from_lat": 49.14838, "from_lon": 9.22687, "to_lat": 49.1262, "to_lon": 9.22439}
 ROUTE_EXAMPLE = {
     "type": "Feature",
-    # Shortened: the real line has 146 points.
+    # Shortened: the real line has 150 points.
     "geometry": {"type": "LineString",
-                 "coordinates": [[9.2268683, 49.148385], [9.2227619, 49.139049], [9.2243909, 49.1262013]]},
+                 "coordinates": [[9.2268683, 49.148385], [9.2227209, 49.1391848], [9.2243909, 49.1262013]]},
     "properties": {
         "bump_penalty": 10.0, "danger_penalty": 25.0, "pm_penalty": 0.5, "stop_penalty": 0.5,
-        "length_m": 3249.2, "mean_roughness": 11.8, "measured_share": 1.0,
-        "danger_points": 26, "danger_risk": 21.52, "mean_pm_risk": 0.492, "pm_measured_share": 0.77,
-        "mean_stop_go": 0.69, "stop_measured_share": 1.0,
+        "length_m": 3133.9, "mean_roughness": 12.0, "measured_share": 0.97,
+        "danger_points": 23, "danger_risk": 18.82, "mean_pm_risk": 0.532, "pm_measured_share": 0.71,
+        "mean_stop_go": 0.691, "stop_measured_share": 0.98,
     },
 }
 SHORTEST_EXAMPLE = {
     "type": "Feature",
     "geometry": {"type": "LineString",
-                 "coordinates": [[9.2268683, 49.148385], [9.2293593, 49.1388933], [9.2243909, 49.1262013]]},
+                 "coordinates": [[9.2268683, 49.148385], [9.2294717, 49.1398473], [9.2243909, 49.1262013]]},
     "properties": {
         "bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0,
-        "length_m": 3145.9, "mean_roughness": 24.0, "measured_share": 0.98,
-        "danger_points": 10, "danger_risk": 7.94, "mean_pm_risk": 0.588, "pm_measured_share": 0.79,
-        "mean_stop_go": 0.661, "stop_measured_share": 0.96,
+        "length_m": 3064.9, "mean_roughness": 24.7, "measured_share": 0.96,
+        "danger_points": 10, "danger_risk": 7.94, "mean_pm_risk": 0.598, "pm_measured_share": 0.78,
+        "mean_stop_go": 0.665, "stop_measured_share": 0.96,
     },
 }
 
@@ -91,7 +91,7 @@ class RouteComparison(BaseModel):
     same_path: bool = Field(description="True if the route follows the same streets as the shortest route")
 
     model_config = {"json_schema_extra": {"example": {
-        "route": ROUTE_EXAMPLE, "shortest": SHORTEST_EXAMPLE, "detour_pct": 3.3, "same_path": False}}}
+        "route": ROUTE_EXAMPLE, "shortest": SHORTEST_EXAMPLE, "detour_pct": 2.3, "same_path": False}}}
 
 
 class RoughnessFeature(BaseModel):

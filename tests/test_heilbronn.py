@@ -85,3 +85,10 @@ def test_roads_with_a_mandatory_bike_path_are_left_out(client):
     europaplatz_and_b39 = {142234373, 387411678, 387411679, 142234381, 148821228, 165419181}
     G = client.app.state.graph
     assert not any(europaplatz_and_b39 & set(osm_way_ids(d["osmid"])) for *_, d in G.edges(data=True))
+
+
+def test_bike_paths_and_bridges_are_in_the_graph(client):
+    """Rosenbergbrücke cycleway, Campusbrücke, a campus footway with bicycle=yes and the BUGA-Brücke."""
+    G = client.app.state.graph
+    in_graph = {w for *_, d in G.edges(data=True) for w in osm_way_ids(d["osmid"])}
+    assert {33498928, 443802903, 739824168, 795115713} <= in_graph

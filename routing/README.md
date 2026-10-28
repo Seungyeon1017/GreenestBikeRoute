@@ -1,6 +1,6 @@
 # How route planning works
 
-The Heilbronn street map (OpenStreetMap, ~34k street pieces) is a graph. Every street piece gets a **cost**, and route planning picks the path with the lowest total cost. Bad streets "feel longer", so a detour wins when it's cheaper than riding through.
+The Heilbronn street map (OpenStreetMap, ~42k street pieces) is a graph. Every street piece gets a **cost**, and route planning picks the path with the lowest total cost. Bad streets "feel longer", so a detour wins when it's cheaper than riding through.
 
 ```
 cost = length × (1 + bump_penalty × roughness / 100 + pm_penalty × pm_risk + stop_penalty × stop_go)
@@ -13,7 +13,11 @@ cost = length × (1 + bump_penalty × roughness / 100 + pm_penalty × pm_risk + 
 
 ## Which streets are in the graph
 
-OSMnx's bike network, minus roads tagged `bicycle=use_sidepath` (~23 km, mostly the B 39 around Europaplatz). Those have a mandatory bike path beside them (StVO §2 Abs. 4, signs 237/240/241), so cycling on the road is illegal; the path itself is mapped as its own way and stays in. Roads with an optional bike path beside them stay in too: riding on the road is legal there, so smoothness or overtaking data may pick either.
+OSMnx's bike network, with these changes:
+
+- **Left out:** roads tagged `bicycle=use_sidepath` (~23 km, mostly the B 39 around Europaplatz). Those have a mandatory bike path beside them (StVO §2 Abs. 4, signs 237/240/241), so cycling on the road is illegal; the path itself is mapped as its own way and stays in. Roads with an optional bike path beside them stay in too: riding on the road is legal there, so smoothness or overtaking data may pick either. Ways tagged `bicycle=dismount` are left out as well.
+- **Added:** footways and paths tagged `bicycle=yes|designated|permissive`, which OSMnx drops. Untagged footways stay out (no bikes in Germany), except `bridge=yes` ones and ones touching a lift (`highway=elevator` node): bikes reach the Campusbrücke and BUGA-Brücke by lift. Steps stay out.
+- **Graph file:** `cache/heilbronn_bike_footways.graphml`, built from OSM on first start (~2 min). Delete it to pick up newer OSM edits.
 
 ## Datasets
 
@@ -81,9 +85,9 @@ From 49.14838, 9.22687 to 49.1262, 9.22439:
 
 | Penalties (bump / danger / PM / stop) | Length  | Roughness | Overtaking spots | Stop-and-go |
 |---------------------------------------|---------|-----------|------------------|-------------|
-| 0 / 0 / 0 / 0 (shortest)              | 3.15 km | 24        | 10               | 0.66        |
-| 10 / 25 / 0.5 / 0.5 (defaults)        | 3.25 km | 11.8      | 26               | 0.69        |
-| 10 / 100 / 0.5 / 0.5                  | 3.33 km | 12.5      | 7                | 0.69        |
-| 0 / 0 / 0 / 5                         | 3.16 km | 23.6      | 12               | 0.66        |
+| 0 / 0 / 0 / 0 (shortest)              | 3.06 km | 24.7      | 10               | 0.67        |
+| 10 / 25 / 0.5 / 0.5 (defaults)        | 3.13 km | 12.0      | 23               | 0.69        |
+| 10 / 100 / 0.5 / 0.5                  | 3.35 km | 12.2      | 8                | 0.69        |
+| 0 / 0 / 0 / 5                         | 3.08 km | 24.3      | 12               | 0.66        |
 
 On this trip the defaults pick the smooth street, which has more overtaking spots than the shortest route, and 25 is too weak to change that. At 100 the route avoids both. The default `stop_penalty` doesn't change any of these routes, and even 5 only swaps a few short pieces.
