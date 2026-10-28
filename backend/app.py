@@ -6,9 +6,11 @@ from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.schemas import AirCollection, DangerCollection, Error, RouteCollection, RouteComparison, RoughnessCollection
+from backend.schemas import AirCollection, DangerCollection, Error, FlowCollection, RouteCollection, RouteComparison, \
+    RoughnessCollection
 from download_data import load_features
-from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_PM_PENALTY, air_ranks, clean_overtaking
+from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_PM_PENALTY, DEFAULT_STOP_PENALTY, air_ranks, \
+    clean_overtaking
 from routing.graph import load_graph
 from routing.route import RouteError, compare_routes, find_route
 
@@ -48,6 +50,16 @@ def air_collection():
     return {"type": "FeatureCollection", "features": features}
 
 
+@cache
+def flow_collection():
+    """The measured streets from traffic_flow_heilbronn, trimmed to geometry + stop_go (0-1, 1 - avg_traffic_flow)."""
+    features = [
+        {"type": "Feature", "geometry": f["geometry"], "properties": {"stop_go": 1 - f["properties"]["avg_traffic_flow"]}}
+        for f in load_features("traffic_flow_heilbronn") if f["properties"].get("avg_traffic_flow") is not None
+    ]
+    return {"type": "FeatureCollection", "features": features}
+
+
 def route_query(
     from_lat: float = Query(..., ge=-90, le=90),
     from_lon: float = Query(..., ge=-180, le=180),
@@ -57,9 +69,11 @@ def route_query(
     danger_penalty: float = Query(DEFAULT_DANGER_PENALTY, ge=0, le=100,
                                   description="How much do you hate close overtaking (metres of detour per spot)"),
     pm_penalty: float = Query(DEFAULT_PM_PENALTY, ge=0, le=5, description="How much do you hate bad air (fine dust)"),
+    stop_penalty: float = Query(DEFAULT_STOP_PENALTY, ge=0, le=5,
+                                description="How much do you hate stop-and-go (traffic lights, congestion)"),
 ):
     """The query parameters shared by /route and /route/compare."""
-    return (from_lat, from_lon), (to_lat, to_lon), (bump_penalty, danger_penalty, pm_penalty)
+    return (from_lat, from_lon), (to_lat, to_lon), (bump_penalty, danger_penalty, pm_penalty, stop_penalty)
 
 
 ROUTE_ERRORS = {400: {"description": "Start or end is outside Heilbronn, or no route exists",
@@ -110,6 +124,11 @@ def create_app(graph=None):
              response_class=GeoJSONResponse, response_model=AirCollection)
     def air():
         return GeoJSONResponse(air_collection())
+
+    @app.get("/flow", summary="How often bikes have to slow down or stop per street, as GeoJSON for a map overlay",
+             response_class=GeoJSONResponse, response_model=FlowCollection)
+    def flow():
+        return GeoJSONResponse(flow_collection())
 
     return app
 

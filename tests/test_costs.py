@@ -2,8 +2,8 @@ import pytest
 
 from download_data import overtaking_risk
 from routing import costs
-from routing.costs import DEFAULT_PM_RISK, DEFAULT_ROUGHNESS, MIN_RIDE_POINTS, air_ranks, air_risks, clean_overtaking, edge_cost, edge_roughness, \
-    osm_way_ids, point_risks, way_roughness
+from routing.costs import DEFAULT_PM_RISK, DEFAULT_ROUGHNESS, DEFAULT_STOP_GO, FLOW_PRIOR_POINTS, MEDIAN_FLOW, MIN_RIDE_POINTS, \
+    air_ranks, air_risks, clean_overtaking, edge_cost, edge_roughness, osm_way_ids, point_risks, way_roughness, way_stop_go
 
 
 def test_osm_way_ids_single_and_merged():
@@ -28,19 +28,38 @@ def test_edge_roughness_handles_int_list_and_unmeasured():
 
 
 def test_edge_cost():
-    assert edge_cost(100, 50, bump_penalty=0, pm_penalty=0) == 100
-    assert edge_cost(100, 50, bump_penalty=2, pm_penalty=0) == 200
-    assert edge_cost(100, bump_penalty=10, pm_penalty=0) == 100 * (1 + 10 * DEFAULT_ROUGHNESS / 100)
+    assert edge_cost(100, 50, bump_penalty=0, pm_penalty=0, stop_penalty=0) == 100
+    assert edge_cost(100, 50, bump_penalty=2, pm_penalty=0, stop_penalty=0) == 200
+    assert edge_cost(100, bump_penalty=10, pm_penalty=0, stop_penalty=0) == 100 * (1 + 10 * DEFAULT_ROUGHNESS / 100)
 
 
 def test_edge_cost_danger_adds_metres_per_risk():
-    assert edge_cost(100, 0, danger=1.5, danger_penalty=40, pm_penalty=0) == 160
-    assert edge_cost(10, 0, danger=1.5, danger_penalty=40, pm_penalty=0) == 70  # regardless of edge length
+    assert edge_cost(100, 0, danger=1.5, danger_penalty=40, pm_penalty=0, stop_penalty=0) == 160
+    assert edge_cost(10, 0, danger=1.5, danger_penalty=40, pm_penalty=0, stop_penalty=0) == 70  # regardless of edge length
 
 
 def test_edge_cost_pm_scales_length():
-    assert edge_cost(100, 0, danger_penalty=0, pm_risk=0.5, pm_penalty=2) == 200
-    assert edge_cost(100, 0, danger_penalty=0, pm_penalty=1) == 100 * (1 + DEFAULT_PM_RISK)
+    assert edge_cost(100, 0, danger_penalty=0, pm_risk=0.5, pm_penalty=2, stop_penalty=0) == 200
+    assert edge_cost(100, 0, danger_penalty=0, pm_penalty=1, stop_penalty=0) == 100 * (1 + DEFAULT_PM_RISK)
+
+
+def test_edge_cost_stop_go_scales_length():
+    assert edge_cost(100, 0, danger_penalty=0, pm_penalty=0, stop_go=0.5, stop_penalty=2) == 200
+    assert edge_cost(100, 0, danger_penalty=0, pm_penalty=0, stop_penalty=1) == pytest.approx(100 * (1 + DEFAULT_STOP_GO))
+
+
+def flow(osmid, value, n):
+    return {"properties": {"osmid": osmid, "avg_traffic_flow": value, "points_in_segment": n}}
+
+
+def test_way_stop_go_weights_by_points_and_pulls_sparse_ways_to_the_median():
+    k = FLOW_PRIOR_POINTS
+    stop = way_stop_go([flow("1", 1.0, 1), flow("[1, 2]", 0.0, 1000), flow("3", None, 5)])
+    assert stop[1] == pytest.approx(1 - (1 + k * MEDIAN_FLOW) / (1001 + k))  # the busy segment dominates
+    assert stop[2] == pytest.approx(1 - k * MEDIAN_FLOW / (1000 + k))
+    assert 3 not in stop
+    sparse = way_stop_go([flow("4", 1.0, 1)])[4]
+    assert 0 < sparse < DEFAULT_STOP_GO  # one free-rolling point moves it only a bit
 
 
 def test_point_risks_skips_missing_values():

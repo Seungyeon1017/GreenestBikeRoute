@@ -20,6 +20,7 @@ class RouteProperties(BaseModel):
     bump_penalty: float
     danger_penalty: float
     pm_penalty: float
+    stop_penalty: float
     length_m: float
     mean_roughness: Optional[float] = Field(
         description="Normalized Roughness 0-100, length-weighted over the measured part; null if none was measured")
@@ -29,6 +30,9 @@ class RouteProperties(BaseModel):
     mean_pm_risk: Optional[float] = Field(
         description="Air rank 0-1 from air_quality (0.5 = typical for its ride), length-weighted over the measured part; null if none was measured")
     pm_measured_share: float = Field(description="Share of the route length with air_quality measurements, 0-1")
+    mean_stop_go: Optional[float] = Field(
+        description="Stop-and-go 0-1 from traffic_flow (1 - avg_traffic_flow; higher = more slowing and stopping), length-weighted over the measured part; null if none was measured")
+    stop_measured_share: float = Field(description="Share of the route length with traffic_flow measurements, 0-1")
 
 
 class RouteFeature(BaseModel):
@@ -48,9 +52,10 @@ class RouteCollection(BaseModel):
             "type": "Feature",
             "geometry": {"type": "LineString", "coordinates": [[9.22687, 49.14838], [9.2259, 49.1371], [9.22439, 49.1262]]},
             "properties": {
-                "bump_penalty": 10, "danger_penalty": 25, "pm_penalty": 0.5,
+                "bump_penalty": 10, "danger_penalty": 25, "pm_penalty": 0.5, "stop_penalty": 0.5,
                 "length_m": 3331.9, "mean_roughness": 12.5, "measured_share": 0.96,
                 "danger_points": 15, "danger_risk": 13.42, "mean_pm_risk": 0.492, "pm_measured_share": 0.7,
+                "mean_stop_go": 0.62, "stop_measured_share": 0.81,
             },
         }],
     }}}
@@ -96,6 +101,18 @@ class AirFeature(BaseModel):
 class AirCollection(BaseModel):
     type: Literal["FeatureCollection"]
     features: list[AirFeature]
+
+
+class FlowFeature(BaseModel):
+    type: Literal["Feature"]
+    geometry: LineString
+    properties: dict[Literal["stop_go"], float] = Field(
+        description="1 - avg_traffic_flow, 0-1: near 0 = bikes roll freely, near 1 = slow or stop-and-go (traffic lights, congestion)")
+
+
+class FlowCollection(BaseModel):
+    type: Literal["FeatureCollection"]
+    features: list[FlowFeature]
 
 
 class Error(BaseModel):

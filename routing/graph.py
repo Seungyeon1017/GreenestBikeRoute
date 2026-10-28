@@ -1,4 +1,4 @@
-"""The Heilbronn bike graph from OSM (via OSMnx), with ATRAI roughness and danger on every edge."""
+"""The Heilbronn bike graph from OSM (via OSMnx), with ATRAI roughness, stop-and-go and danger on every edge."""
 import math
 from pathlib import Path
 
@@ -7,7 +7,7 @@ import osmnx as ox
 from shapely import LineString, STRtree, points
 
 from download_data import load_features
-from routing.costs import SNAP_M, air_ranks, clean_overtaking, edge_roughness, point_risks, way_roughness
+from routing.costs import SNAP_M, air_ranks, clean_overtaking, edge_roughness, point_risks, way_roughness, way_stop_go
 
 CACHE_DIR = Path(__file__).resolve().parent.parent / "cache"
 GRAPH_PATH = CACHE_DIR / "heilbronn_bike.graphml"
@@ -27,6 +27,7 @@ def load_graph(path=GRAPH_PATH):
         G = ox.graph_from_place(PLACE, network_type="bike")
         ox.save_graphml(G, path)
     attach_roughness(G, way_roughness(load_features("bumpy_roads_heilbronn")))
+    attach_stop_go(G, way_stop_go(load_features("traffic_flow_heilbronn")))
     attach_danger(G, point_risks(clean_overtaking(load_features("danger_zones_raw_heilbronn")), "Risk Index Overtaking"),
                   air_ranks(load_features("air_quality_heilbronn")))
     return G
@@ -36,6 +37,12 @@ def attach_roughness(G, way_rough):
     """Set edge attribute `roughness` (0-100, or None where no bike has measured it)."""
     for _, _, d in G.edges(data=True):
         d["roughness"] = edge_roughness(d["osmid"], way_rough)
+
+
+def attach_stop_go(G, way_stop):
+    """Set edge attribute `stop_go` (0-1, or None where no bike has measured it)."""
+    for _, _, d in G.edges(data=True):
+        d["stop_go"] = edge_roughness(d["osmid"], way_stop)
 
 
 def _to_metres(lonlat, lat0):

@@ -20,7 +20,7 @@ def client():
         yield c
 
 
-ONLY_BUMPS = {"danger_penalty": 0, "pm_penalty": 0}
+ONLY_BUMPS = {"danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0}
 
 
 def test_hating_bumps_gives_a_smoother_longer_route(client):
@@ -31,7 +31,7 @@ def test_hating_bumps_gives_a_smoother_longer_route(client):
 
 
 def test_hating_close_overtaking_passes_fewer_danger_spots(client):
-    zero = {"bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0}
+    zero = {"bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0}
     shortest = client.get("/route", params={**TRIP, **zero}).json()["features"][0]["properties"]
     safe = client.get("/route", params={**TRIP, **zero, "danger_penalty": 25}).json()["features"][0]["properties"]
     assert safe["danger_points"] < shortest["danger_points"] / 2
@@ -43,6 +43,16 @@ def test_air_overlay_gives_ranked_points(client):
     features = r.json()["features"]
     assert r.status_code == 200 and len(features) > 100
     assert all(f["geometry"]["type"] == "Point" and 0 <= f["properties"]["air"] <= 1 for f in features)
+
+
+def test_hating_stop_and_go_gives_a_more_free_flowing_route(client):
+    # A north-to-south-east trip where the shortest route runs through stop-and-go streets.
+    trip = {"from_lat": 49.16, "from_lon": 9.215, "to_lat": 49.135, "to_lon": 9.235}
+    zero = {"bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0}
+    shortest = client.get("/route", params={**trip, **zero}).json()["features"][0]["properties"]
+    smooth = client.get("/route", params={**trip, **zero, "stop_penalty": 5}).json()["features"][0]["properties"]
+    assert smooth["mean_stop_go"] < shortest["mean_stop_go"]
+    assert smooth["length_m"] < shortest["length_m"] * 1.05
 
 
 def test_route_starts_and_ends_near_the_requested_points(client):

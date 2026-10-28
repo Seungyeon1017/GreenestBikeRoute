@@ -3,11 +3,11 @@
 The Heilbronn street map (OpenStreetMap, ~34k street pieces) is a graph. Every street piece gets a **cost**, and route planning picks the path with the lowest total cost. Bad streets "feel longer", so a detour wins when it's cheaper than riding through.
 
 ```
-cost = length × (1 + bump_penalty × roughness / 100 + pm_penalty × pm_risk)
+cost = length × (1 + bump_penalty × roughness / 100 + pm_penalty × pm_risk + stop_penalty × stop_go)
      + danger_penalty × danger
 ```
 
-- Roughness and PM risk describe the whole street, so they **scale with length**.
+- Roughness, PM risk and stop-and-go describe the whole street, so they **scale with length**.
 - Danger counts incidents at spots, so it's **a fixed amount per street**, whatever its length.
 - All penalties at 0 give the shortest route.
 
@@ -39,6 +39,14 @@ cost = length × (1 + bump_penalty × roughness / 100 + pm_penalty × pm_risk)
 - **Map overlay:** `/air` serves these points scored 0-1 against the rest of the same bike trip (0.5 = usual; not an absolute PM value).
 - **Why not `danger_zones_PM_heilbronn`?** Its `Risk Index` mixes in overtaking, which `danger_penalty` already counts. Our rows match its points inside Heilbronn exactly, plus 21,915 valid air readings from bikes without a distance sensor.
 
+### `traffic_flow_heilbronn`: stop-and-go per street
+
+- `avg_traffic_flow` is 0-1 per segment: near 1 = bikes roll freely, near 0 = slow or stop-and-go (traffic lights, congestion). Routing uses `stop_go = 1 − flow`, so higher is worse like the other factors.
+- Matched by OSM way id, like roughness. A way's value is the mean of its segments **weighted by `points_in_segment`**, pulled towards the median flow (0.37) by 5 extra points. Half the segments have 7 or fewer points and their values scatter more, so one slow reading doesn't brand a street.
+- Unmeasured streets get **0.63** (1 − median). About 43% of graph edges (35% of the length) are measured.
+- `stop_penalty` default 0.5. Streets differ little (way values ~0.5-0.85, 5-95%), and the shortest route is rarely the slow one: over 40 random trips of 1.5 km or more, a penalty of 1 changes 72% of routes but adds only 0.4% distance and lowers `mean_stop_go` by 0.02. Expect small detours.
+- **Map overlay:** `/flow` serves the raw segments as `stop_go`.
+
 ## Which overtaking readings count
 
 Each row in `danger_zones_raw_heilbronn` is one overtake, with the gap between car and bike as the sensor measured it. Route planning and `/danger` only count gaps of **more than 25 cm**:
@@ -67,10 +75,11 @@ Note: This is a judgement from the data; the hardware owners haven't confirmed i
 
 From 49.14838, 9.22687 to 49.1262, 9.22439:
 
-| Penalties (bump / danger / PM) | Length  | Roughness | Overtaking spots |
-|--------------------------------|---------|-----------|------------------|
-| 0 / 0 / 0 (shortest)           | 3.15 km | 24        | 10               |
-| 10 / 25 / 0.5 (defaults)       | 3.25 km | 11.8      | 26               |
-| 10 / 100 / 0.5                 | 3.33 km | 12.5      | 7                |
+| Penalties (bump / danger / PM / stop) | Length  | Roughness | Overtaking spots | Stop-and-go |
+|---------------------------------------|---------|-----------|------------------|-------------|
+| 0 / 0 / 0 / 0 (shortest)              | 3.15 km | 24        | 10               | 0.66        |
+| 10 / 25 / 0.5 / 0.5 (defaults)        | 3.25 km | 11.8      | 26               | 0.69        |
+| 10 / 100 / 0.5 / 0.5                  | 3.33 km | 12.5      | 7                | 0.69        |
+| 0 / 0 / 0 / 5                         | 3.16 km | 23.6      | 12               | 0.66        |
 
-On this trip the defaults pick the smooth street, which has more overtaking spots than the shortest route, and 25 is too weak to change that. At 100 the route avoids both.
+On this trip the defaults pick the smooth street, which has more overtaking spots than the shortest route, and 25 is too weak to change that. At 100 the route avoids both. The default `stop_penalty` doesn't change any of these routes, and even 5 only swaps a few short pieces.
