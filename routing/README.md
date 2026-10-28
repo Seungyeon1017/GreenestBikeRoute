@@ -45,12 +45,33 @@ OSMnx's bike network, with these changes:
 
 ### `air_quality_heilbronn`: air quality, **averaged** per street
 
-- Fine dust samples about every 20 m of every ride. A point's index is `0.4 × PM1 + 0.3 × PM2.5 + 0.2 × PM4 + 0.1 × PM10`, each divided by its maximum (the PM weights of `danger_zones_PM`, scaled to sum to 1).
-- Weather and sensor offsets outweigh location, so routing uses each point's **rank within its ride** (same device and day; 0.5 = typical). Unmeasured streets get 0.5.
-- `pm_penalty` default 0.5: streets agree only weakly between days (correlation ~0.17).
-- **Source:** built from `osem_bike_data` with the `danger_zones_PM` filters: devices tagged `heilbronn`, humidity ≤ 75%, per-device IQR outlier removal, then cut to `HEILBRONN_BBOX`. 166,429 rows.
-- **Map overlay:** `/air` serves these points scored 0-1 against the rest of the same bike trip (0.5 = usual; not an absolute PM value).
+- Fine dust samples about every 20 m of every ride, combined as `0.4 × PM1 + 0.3 × PM2.5 + 0.2 × PM4 + 0.1 × PM10` (the PM weights of `danger_zones_PM`, scaled to sum to 1).
+- Weather and sensor offsets outweigh location, so each reading is scored relative to two references (`routing.costs.air_scores`):
+  1. **The region's air at that hour**, from the fixed senseBox:home stations (`air_background_heilbronn`, below): a log ratio, so a smoggy afternoon or a smoggy half hour within a ride drops out.
+  2. **The rest of its ride** (same device and day): the ride's median is subtracted, so a bike sensor that reads high everywhere drops out.
+- The result is mapped linearly to 0-1: 0.5 = typical, 1 = about 1.35× the ride's usual (`AIR_SPREAD`), clipped.
+- Streets agree only weakly. Split the bikes into two random halves and rank streets by each half's readings: the rankings correlate ~0.24 (Spearman, 30 splits, streets with 5+ readings in both halves; 0.18 with the old within-ride rank, which the new score beat in 28 of 30 splits). Split by day instead: ~0.39 (0.38 before).
+- **Averaged per street by ride, not by reading.** One pass leaves several readings from the same sensor in the same minute, so they count as one: each ride's readings on a street are averaged first, then the rides, pulled towards the street's prior (0.5, or 0.525 on a hotspot, below) by 8 virtual rides (`AIR_PRIOR_RIDES`). A street one bike passed once barely moves from 0.5; a street 20 rides agree on keeps most of its value. A third of the measured streets have a single ride.
+  - Why 8: street values from one half of the bikes (or days) predict the other half's per-ride street means. Plain reading means, as before, are 25-30% *worse* than giving every street 0.5, i.e. they mostly carried noise. 8 rides does best, slightly better than 0.5 everywhere (1% by bike, 3.5% by day); anything from 5 to 30 is within 1%.
+  - Street values now span about 0.44-0.58 (5-95%; 0.23-0.86 before). Over 40 random trips of 1.5-5 km with only `pm_penalty` on, 0.5 changes 15 routes (26 before) for no extra length, and 2 changes 24 for 0.2%. Air now moves routes only where many rides agree.
+- `pm_penalty` default 0.5. Unmeasured streets get 0.5.
+- **Source:** built from `osem_bike_data` with the `danger_zones_PM` filters: devices tagged `heilbronn`, humidity ≤ 75%, per-device IQR outlier removal, then cut to `HEILBRONN_BBOX`. 166,429 rows; 164,789 are scored (rows before the stations started in March 2026, or in hours without a station reading, are dropped).
+- **Map overlay:** `/air` serves these points with their 0-1 score (not an absolute PM value).
 - **Why not `danger_zones_PM_heilbronn`?** Its `Risk Index` mixes in overtaking, which `danger_penalty` already counts. Our rows match its points inside Heilbronn exactly, plus 21,915 valid air readings from bikes without a distance sensor.
+
+### `air_hotspots_heilbronn`: NO₂ hotspots from the clean-air plan, a prior for every street along them
+
+- **Source:** Luftreinhalteplan Regierungsbezirk Stuttgart, Teilplan Heilbronn, 2. Fortschreibung (2020), Tabelle 3: the 19 street sections of measure M9 (diesel ban), forecast well over 40 µg/m³ NO₂ (Weinsberger, Paulinen-, Mannheimer, Süd-, Karlstraße, ...). Matched by name to OSM car roads in the centre by `python -m routing.air_hotspots`.
+- **Use:** bike streets running along them (≥ 50% within 15 m: side paths and pavements, not cross streets) start at **0.525** instead of 0.5 (`AIR_HOTSPOT_OFFSET`), measured or not. ~2,400 graph edges.
+- **Why:** the bikes agree. Within the same ride they read +0.06 higher there than on other main roads (181 rides, worse in 67%; ~5 standard errors). 0.025 is the difference of the ride-weighted means (0.557 vs 0.530). In the hold-out test (fit on half the bikes or days, predict the rest) this prior beats 0.5 in 26-28 of 30 splits, with 2-2.6% lower error on the hotspot streets.
+- **Tried and dropped:** a ridge regression on road class, car traffic within 50/150 m (OSM `drive`, by class × lanes), distance to main roads, building cover and height within 30 m (LoD2), trees (Baumkataster) and distance to the centre. On streets the training half never measured, it did no better than 0.5 (−0.3% to +5%, unstable coefficients). PM2.5 is mostly regional, and the bikes see only weak street differences; the named NO₂ hotspots are the one street feature they confirm.
+
+### `air_background_heilbronn`: the region's fine dust per hour (senseBox:home)
+
+- Built by `download_data.py` from `osem_home_data_heilbronn`: 2M rows (every ~10 s) from 15 fixed senseBox:home stations. One feature per hour: the **median over stations** of each station's hourly mean, per PM value. 5,211 hours from March 2026, usually 3-5 stations.
+- Only the 7 stations with at least 1,000 hours of fine dust count (`MIN_HOME_HOURS`): Innenstadt, Schulgarten, GreenCity OpenSpace, Eichbottschule Leingarten, Wolf-von-Gemmingen-Schule, PDG-NEO and HCG Beilstein. The others logged only on their first day, or have no PM sensor.
+- **Why not route with the stations directly?** Only 3 of them are in Heilbronn proper, all in the centre within 1.5 km of each other: far too few to tell streets apart. What they show is time: the two centre stations correlate 0.90 hour by hour, and each bike ride's median correlates 0.86 with the stations' median at the same hour. Bike sensors do measure the real air; most of what they see is how the whole region's air changes, which this background takes out.
+- **Download:** like `osem_bike_data`, its pages come in a different order on every request, so it is fetched in one request (about 3 GB, a minute) and only the hourly sums are kept.
 
 ### `traffic_flow_heilbronn`: stop-and-go per street
 

@@ -26,12 +26,27 @@ DEFAULT_DANGER_PENALTY = 25.0
 # 25 cm is also where the overtaking_distance dataset starts counting.
 MIN_OVERTAKING_CM = 25.0
 
-# air_quality: air rank 0-1 within its ride (see air_ranks) sampled every ~20 m along
-# rides, so it is averaged per street like roughness. Unmeasured streets get 0.5, a typical reading.
-# Street means span ~0.13-0.87, but streets agree only weakly between days (correlation ~0.17),
-# so the default penalty is kept mild.
+# air_quality: air score 0-1 (see air_scores) sampled every ~20 m along rides, averaged per street by ride
+# (see AIR_PRIOR_RIDES), which keeps street values within ~0.44-0.58 (5-95%). Unmeasured streets get 0.5, a typical
+# reading. Streets agree only weakly between bikes (rank correlation ~0.24 between halves of the bike sensors,
+# ~0.39 between halves of the days), so the default penalty is kept mild.
 DEFAULT_PM_RISK = 0.5
 DEFAULT_PM_PENALTY = 0.5
+
+# air_scores: a reading this far above its ride's median (in weighted log ratio to the senseBox:home
+# background) scores 1, as far below scores 0. 0.3 is about 1.35x the ride's usual air; ~10% of rows reach it.
+AIR_SPREAD = 0.3
+
+# A street's air is the mean over the rides that passed it (each ride's readings averaged first: they share one
+# sensor, one moment and one weather), pulled towards DEFAULT_PM_RISK by AIR_PRIOR_RIDES virtual rides. A third of
+# the measured streets have a single ride. Predicting held-out rides (other bikes, or other days), plain point means
+# do 25-30% worse than no air data at all; 8 rides does best, slightly better than no data (1% by bike, 3.5% by day).
+AIR_PRIOR_RIDES = 8
+# Streets along the clean-air plan's NO2 hotspots (routing.air_hotspots) start this much above DEFAULT_PM_RISK, before
+# any ride: the difference between their measured mean (0.557) and other streets' (0.530). Within the same ride, bikes
+# read +0.06 higher there than on other main roads (181 rides). Predicting held-out rides, it beats 0.5 for them in
+# 26-28 of 30 splits (-2 to -2.6% error there); a regression on road class, traffic nearby, buildings and trees did not.
+AIR_HOTSPOT_OFFSET = 0.025
 
 # Rides (one device, one day) with fewer rows can't say what is typical for them; ~0.1% of rows.
 MIN_RIDE_POINTS = 20
@@ -148,30 +163,28 @@ def clean_overtaking(features):
     return [f for f in features if (f["properties"]["Overtaking Distance"] or 0) > MIN_OVERTAKING_CM]
 
 
-def air_risks(features):
-    """(lon, lat) and air Risk Index (0-1) of every air_quality row: each PM value divided
-    by its maximum over `features`, weighted by PM_WEIGHTS. The rows are free of spikes already
-    (see download_data.clean_pm_rows), so the maximum is a real reading.
-    """
-    if not features:
-        return [], []
-    pm = np.array([[f["properties"][k] for k in PM_WEIGHTS] for f in features], dtype=float)
-    risk = (pm / pm.max(axis=0)) @ np.array(list(PM_WEIGHTS.values()))
-    return [tuple(f["geometry"]["coordinates"]) for f in features], risk.tolist()
+def air_scores(features, background):
+    """(lon, lat), air score (0-1) and ride id of every air_quality row in a ride of at least MIN_RIDE_POINTS rows
+    with a background at its hour; 0.5 is typical, higher is worse. A ride is one device on one day.
 
-
-def air_ranks(features):
-    """(lon, lat) and air rank (0-1) of every air_quality row in a ride of at least
-    MIN_RIDE_POINTS rows: where its air_risks value falls within its ride (same device, same day).
-    0.5 is a typical reading for that ride, so weather and sensor offsets drop out.
+    `background` is air_background_heilbronn: the median fine dust of the senseBox:home stations per hour.
+    Each row's log ratio to that hour, weighted by PM_WEIGHTS, takes out how the air of the whole region
+    changes, also within a ride. Its ride's median is then subtracted, which takes out the bike sensor's
+    offset. Last, the result is scaled to 0-1: AIR_SPREAD above the ride's median is 1, as far below is 0.
     """
-    lonlat, risk = air_risks(features)
-    rides = pd.Series([f["properties"]["boxId"] + f["properties"]["createdAt"][:10] for f in features], dtype=object)
-    by_ride = pd.Series(risk, dtype=float).groupby(rides)
-    size = by_ride.transform("size")
-    rank = (by_ride.rank() - 0.5) / size
-    keep = (size >= MIN_RIDE_POINTS).to_numpy()
-    return [p for p, k in zip(lonlat, keep) if k], rank[keep].tolist()
+    bg = {f["properties"]["hour"]: [f["properties"][k] for k in PM_WEIGHTS] for f in background}
+    rows = [f for f in features if f["properties"]["createdAt"][:13] in bg]
+    if not rows:
+        return [], [], []
+    pm = np.array([[f["properties"][k] for k in PM_WEIGHTS] for f in rows], dtype=float)
+    ref = np.array([bg[f["properties"]["createdAt"][:13]] for f in rows], dtype=float)
+    ratio = pd.Series(np.log((pm + 1) / (ref + 1)) @ np.array(list(PM_WEIGHTS.values())))
+    rides = pd.Series([f["properties"]["boxId"] + f["properties"]["createdAt"][:10] for f in rows], dtype=object)
+    by_ride = ratio.groupby(rides)
+    keep = (by_ride.transform("size") >= MIN_RIDE_POINTS).to_numpy()
+    score = (ratio - by_ride.transform("median"))[keep]
+    return ([tuple(f["geometry"]["coordinates"]) for f, k in zip(rows, keep) if k],
+            np.clip(0.5 + score / (2 * AIR_SPREAD), 0, 1).tolist(), rides[keep].tolist())
 
 
 def point_risks(features, risk_key):

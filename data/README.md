@@ -9,9 +9,11 @@ ATRAI collections as served (`api.atrai.bike`); for details, see https://hackath
 Routing uses `bumpy_roads`, `traffic_flow` and `speed_map` from here.
 
 ## `custom/`
-Built by us from raw `osem_bike_data`, used by routing
+Built by us from raw `osem_bike_data`, `osem_home_data_heilbronn` and other sources, used by routing
 - `danger_zones_raw_heilbronn`: overtakes with device + exact distance
 - `air_quality_heilbronn`: fine dust (PM1–PM10), outliers removed
+- `air_hotspots_heilbronn`: car roads of the NO₂ hotspot sections in Heilbronn's Luftreinhalteplan (2020, Tabelle 3), from OSM, by `python -m routing.air_hotspots`
+- `air_background_heilbronn`: fine dust per hour, the median of the senseBox:home stations, which the bike readings are compared against
 - `shade_heilbronn`: street-tree canopy per OSM way (`routing.shade`)
 - `shadow_heilbronn`: building and tree shadow per OSM way and time slot (`routing.shadow`)
 - `roughness_estimates_heilbronn.json`: roughness for unmeasured OSM ways near measured streets, from `bumpy_roads` by `estimation/estimate_roughness.py` (see [estimation/README.md](../estimation/README.md))

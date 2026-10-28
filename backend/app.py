@@ -13,7 +13,7 @@ from backend.schemas import EXAMPLE_TRIP, AirCollection, DangerCollection, Error
     SpeedCollection
 from download_data import load_features
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_PM_PENALTY, \
-    DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, air_ranks, clean_overtaking
+    DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, air_scores, clean_overtaking
 from routing.elevation import attach_elevation, load_elevation
 from routing.grade import NoElevationError, route_grade
 from routing.graph import load_graph
@@ -46,11 +46,11 @@ def danger_collection():
 
 @cache
 def air_collection():
-    """The air_quality points routing uses, trimmed to geometry + air rank (0-1, within each ride)."""
-    lonlat, ranks = air_ranks(load_features("air_quality_heilbronn"))
+    """The air_quality points routing uses, trimmed to geometry + air score (0-1, 0.5 = typical, see air_scores)."""
+    lonlat, scores, _ = air_scores(load_features("air_quality_heilbronn"), load_features("air_background_heilbronn"))
     features = [
-        {"type": "Feature", "geometry": {"type": "Point", "coordinates": list(p)}, "properties": {"air": r}}
-        for p, r in zip(lonlat, ranks)
+        {"type": "Feature", "geometry": {"type": "Point", "coordinates": list(p)}, "properties": {"air": s}}
+        for p, s in zip(lonlat, scores)
     ]
     return {"type": "FeatureCollection", "features": features}
 
@@ -128,6 +128,7 @@ grade doesn't change which route is picked).
 Heights for `/route/grade`: Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0 (DGM1).
 Shade: LGL BW LoD2 (dl-de/by-2-0) and Stadt Heilbronn Baumkataster (dl-de/by-2-0).
 Lighting: OpenStreetMap contributors (ODbL), Mapillary (CC BY-SA 4.0), LGL BW LoD2 (dl-de/by-2-0).
+Air: ATRAI bike sensors and senseBox:home stations (openSenseMap); streets along the NO₂ hotspots of the Luftreinhalteplan Heilbronn (Regierungspräsidium Stuttgart, 2020, Tabelle 3) start slightly worse.
 """
 
 
@@ -251,9 +252,9 @@ def create_app(graph=None):
     def danger():
         return GeoJSONResponse(danger_collection())
 
-    @app.get("/air", tags=[OVERLAYS], summary="Air quality (worse than usual for its bike trip) as GeoJSON points for a map overlay",
+    @app.get("/air", tags=[OVERLAYS], summary="Air quality (worse than usual for that hour and bike trip) as GeoJSON points for a map overlay",
              response_class=GeoJSONResponse, response_model=AirCollection,
-             response_description="Points with `air` 0-1 (0.5 = usual for that bike trip, higher = worse). About 21 MB")
+             response_description="Points with `air` 0-1 (0.5 = usual, higher = worse). About 21 MB")
     def air():
         return GeoJSONResponse(air_collection())
 

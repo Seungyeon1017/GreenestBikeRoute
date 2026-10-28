@@ -1,9 +1,10 @@
+import math
 import pytest
 
 from download_data import overtaking_risk
 from routing import costs
 from routing.costs import DEFAULT_PM_RISK, DEFAULT_ROUGHNESS, DEFAULT_STOP_GO, FLOW_PRIOR_POINTS, MEDIAN_FLOW, MEDIAN_SPEED_KMH, \
-    MIN_RIDE_POINTS, MIN_SPEED_KMH, SPEED_PRIOR_POINTS, air_ranks, air_risks, clean_overtaking, edge_cost, edge_roughness, \
+    AIR_SPREAD, MIN_RIDE_POINTS, MIN_SPEED_KMH, SPEED_PRIOR_POINTS, air_scores, clean_overtaking, edge_cost, edge_roughness, \
     osm_way_ids, point_risks, way_roughness, way_speed, way_stop_go
 
 
@@ -88,35 +89,41 @@ def test_clean_overtaking_drops_readings_of_25_cm_or_less_and_missing_distances(
     assert [f["properties"]["Overtaking Distance"] for f in kept] == [26, 100]
 
 
-def pm(pm1, pm25, pm4, pm10, lonlat=(9.2, 49.14)):
-    return {"geometry": {"coordinates": list(lonlat)},
-            "properties": {"Finedust PM1": pm1, "Finedust PM2.5": pm25, "Finedust PM4": pm4, "Finedust PM10": pm10}}
+def ride_row(box, day, value, hour="08"):
+    return {"geometry": {"coordinates": [9.2, 49.14]},
+            "properties": {"boxId": box, "createdAt": f"2026-06-{day}T{hour}:00:00.000",
+                           **{k: value for k in ("Finedust PM1", "Finedust PM2.5", "Finedust PM4", "Finedust PM10")}}}
 
 
-def test_air_risks_normalises_each_pm_by_its_maximum():
-    lonlat, risk = air_risks([pm(10, 20, 30, 40, lonlat=(9.1, 49.1)), pm(5, 20, 15, 0)])
-    assert lonlat == [(9.1, 49.1), (9.2, 49.14)]
-    assert risk == pytest.approx([1.0, 0.4 * 0.5 + 0.3 * 1 + 0.2 * 0.5 + 0])
-    assert air_risks([]) == ([], [])
+def background(day, value, hour="08"):
+    return {"properties": {"hour": f"2026-06-{day}T{hour}",
+                           **{k: value for k in ("Finedust PM1", "Finedust PM2.5", "Finedust PM4", "Finedust PM10")}}}
 
 
-def ride_row(box, day, value):
-    f = pm(value, value, value, value)
-    f["properties"].update(boxId=box, createdAt=f"2026-06-{day}T08:00:00.000")
-    return f
-
-
-def test_air_ranks_compare_each_reading_with_its_own_ride(monkeypatch):
+def test_air_scores_compare_each_reading_with_its_own_ride(monkeypatch):
     monkeypatch.setattr(costs, "MIN_RIDE_POINTS", 3)
-    smoggy = [ride_row("a", "01", v) for v in (30, 20, 40)]
-    clean = [ride_row("a", "02", v) for v in (2, 4, 3)]  # same device, next day: the weather drops out
-    _, rank = air_ranks(smoggy + clean)
-    assert rank == pytest.approx([1 / 2, 1 / 6, 5 / 6, 1 / 6, 5 / 6, 1 / 2])
+    smoggy = [ride_row("a", "01", v) for v in (24, 19, 29)]
+    clean = [ride_row("a", "02", v) for v in (3, 2, 5)]  # same device, next day: the weather drops out
+    _, score, rides = air_scores(smoggy + clean, [background("01", 19), background("02", 1)])
+    assert rides == ["a2026-06-01"] * 3 + ["a2026-06-02"] * 3
+    assert score == pytest.approx([0.5, 0.5 - math.log(25 / 20) / (2 * AIR_SPREAD), 0.5 + math.log(30 / 25) / (2 * AIR_SPREAD),
+                                   0.5, 0.5 - math.log(4 / 3) / (2 * AIR_SPREAD), 1.0])  # 6/4 is beyond AIR_SPREAD
 
 
-def test_air_ranks_skip_short_rides():
-    assert air_ranks([ride_row("a", "01", 3) for _ in range(MIN_RIDE_POINTS - 1)]) == ([], [])
-    assert air_ranks([]) == ([], [])
+def test_air_scores_take_out_how_the_background_changes_within_a_ride(monkeypatch):
+    monkeypatch.setattr(costs, "MIN_RIDE_POINTS", 3)
+    # the whole region got twice as smoggy at 09: a reading twice as high is just as usual
+    ride = [ride_row("a", "01", 9, "08"), ride_row("a", "01", 19, "09"), ride_row("a", "01", 9, "08")]
+    _, score, _ = air_scores(ride, [background("01", 9, "08"), background("01", 19, "09")])
+    assert score == pytest.approx([0.5, 0.5, 0.5])
+
+
+def test_air_scores_skip_short_rides_and_hours_without_a_background():
+    bg = [background("01", 3)]
+    assert air_scores([ride_row("a", "01", 3) for _ in range(MIN_RIDE_POINTS - 1)], bg) == ([], [], [])
+    lonlat, _, _ = air_scores([ride_row("a", "01", 3) for _ in range(MIN_RIDE_POINTS)] + [ride_row("a", "01", 3, "09")], bg)
+    assert len(lonlat) == MIN_RIDE_POINTS
+    assert air_scores([], bg) == ([], [], [])
 
 
 def test_lift_costs_stop_penalty_times_100_m_per_ride_through():

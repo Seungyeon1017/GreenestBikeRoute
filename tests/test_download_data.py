@@ -1,6 +1,7 @@
 import json
 
-from download_data import HEILBRONN_BBOX, UNSTABLE_PAGING, _danger_zone_row, _pm_row, clean_pm_rows, download_single_request, overtaking_risk
+import download_data
+from download_data import HEILBRONN_BBOX, UNSTABLE_PAGING, HourlyBackground, _danger_zone_row, _pm_row, clean_pm_rows, download_single_request, overtaking_risk
 
 
 def raw_row(distance=100, manoeuvre=1, lon=9.2, lat=49.14, tags='["bike", "atrai", "heilbronn"]'):
@@ -149,3 +150,22 @@ def test_download_single_request_streams_every_feature_once(tmp_path):
 def test_osem_bike_data_is_never_paged():
     # Its pages come back in a different order on every request, which duplicates and skips rows.
     assert "osem_bike_data" in UNSTABLE_PAGING
+
+
+def home_row(box, hour, pm1, pm10=None):
+    return {"properties": {"boxId": box, "createdAt": f"2026-07-01T{hour}:00:10.000", "Finedust PM1": pm1,
+                           "Finedust PM2.5": pm1, "Finedust PM4": pm1, "Finedust PM10": pm1 if pm10 is None else pm10}}
+
+
+def test_hourly_background_is_the_median_of_each_stations_hourly_mean(monkeypatch):
+    monkeypatch.setattr(download_data, "MIN_HOME_HOURS", 2)
+    bg = HourlyBackground()
+    rows = [home_row("a", "08", 2), home_row("a", "08", 4), home_row("b", "08", 9), home_row("c", "08", 5),
+            home_row("a", "09", 1), home_row("b", "09", 6), home_row("c", "09", 4),
+            home_row("a", "09", None), home_row("d", "08", 100)]  # a gap, and a station with a single hour
+    assert all(bg(r) is None for r in rows)  # keeps no row itself
+    out = bg.features()
+    assert [f["properties"]["hour"] for f in out] == ["2026-07-01T08", "2026-07-01T09"]
+    assert out[0]["properties"]["Finedust PM1"] == 5  # median of a 3, b 9, c 5; d has too few hours
+    assert out[0]["properties"]["stations"] == 3
+    assert out[1]["properties"]["Finedust PM10"] == 4
