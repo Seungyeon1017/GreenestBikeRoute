@@ -117,6 +117,16 @@ class ParkingRules:
         return "no"
 
 
+_RULES = {}  # id(geofencing list) -> (that list, its ParkingRules): the saved zones stay the same while the API runs
+
+
+def _parking_rules(geofencing):
+    if id(geofencing) not in _RULES or _RULES[id(geofencing)][0] is not geofencing:
+        _RULES.clear()
+        _RULES[id(geofencing)] = (geofencing, ParkingRules(geofencing))
+    return _RULES[id(geofencing)][1]
+
+
 def _return_points(G, walk, rules, zones, kind, origin, destination, to_end):
     """Where to leave a vehicle of `kind`, best first: [(score, (lat, lon), zone or None)].
 
@@ -155,12 +165,12 @@ def plan_sharing_trip(G, walk, vehicles, zones, origin, destination, penalties, 
     `vehicles`, `zones` and `geofencing` are the GeoJSON Features of /sharing, /sharing/zones and /sharing/geofencing,
     `penalties` the routing penalties of /route, `vehicle` "bike", "scooter" or "all". The ride ends at the destination
     where the provider allows parking there, else at the nearest place that it does (by walking to the end), or at a
-    parking zone; with park_in_zone, always at a parking zone. Without geofencing (feed down), at a parking zone.
+    parking zone; with park_in_zone, always at a parking zone. Without geofencing (no saved copy), at a parking zone.
     Raises RouteError when no vehicle is in reach or there is nowhere to leave it near the destination.
     """
     from_start = walk.from_point(*origin)
     to_end = walk.from_point(*destination)
-    rules = ParkingRules(geofencing) if geofencing and not park_in_zone else None
+    rules = _parking_rules(geofencing) if geofencing and not park_in_zone else None
     returns = {}  # kind -> _return_points
 
     candidates = []

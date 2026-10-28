@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from backend.app import create_app
 from backend.schemas import GeofencingCollection, SharingTrip, VehicleCollection, ZoneCollection
-from backend.sharing import CACHE_S, STALE_S, Sharing, SharingUnavailable, distance_m
+from backend.sharing import CACHE_S, STALE_S, Sharing, SharingUnavailable, distance_m, main
 from tests.conftest import COORDS, A, B
 
 MARKT = (49.1427, 9.2109)  # Heilbronn Marktplatz (lat, lon)
@@ -129,6 +129,24 @@ def test_feed_down_serves_the_last_snapshot_for_a_while():
         bs.collection("vehicles")
 
 
+@pytest.fixture
+def saved(tmp_path):
+    """The geofencing file from `python -m backend.sharing`, made from FEEDS."""
+    path = tmp_path / "geofencing.json"
+    main(["--out", str(path)], fetch=FakeFeed())
+    return path
+
+
+def test_saved_file_has_the_geofencing_zones_in_feed_order(saved):
+    zones = Sharing(fetch=FakeFeed(), saved=saved).collection("geofencing")["features"]
+    assert [(f["properties"]["order"], f["properties"]["bike"], f["properties"]["scooter"], f["properties"]["name"])
+            for f in zones] == [(0, "parking_zone", "no", None), (1, "anywhere", "anywhere", "Heilbronn")]
+
+
+def test_without_a_saved_file_there_are_no_geofencing_zones():
+    assert Sharing(fetch=FakeFeed(), saved=None).snapshot()["geofencing"] is None
+
+
 # ------------------------------------------------------------- API --------
 
 @pytest.fixture
@@ -137,8 +155,8 @@ def feed():
 
 
 @pytest.fixture
-def client(toy_graph, feed):
-    with TestClient(create_app(graph=toy_graph, sharing=Sharing(fetch=feed), walk_graph=walk_graph())) as c:
+def client(toy_graph, feed, saved):
+    with TestClient(create_app(graph=toy_graph, sharing=Sharing(fetch=feed, saved=saved), walk_graph=walk_graph())) as c:
         yield c
 
 
@@ -216,15 +234,8 @@ def test_sharing_trip_with_the_feed_down_is_503(client, feed):
     assert client.get("/route/sharing", params=trip_params()).status_code == 503
 
 
-def test_geofencing_keeps_the_feed_order_and_the_end_rule_per_vehicle(client):
+def test_geofencing_endpoint(client):
     r = client.get("/sharing/geofencing")
     assert r.status_code == 200
     body = GeofencingCollection.model_validate(r.json())
-    assert [(f.properties.order, f.properties.bike, f.properties.scooter, f.properties.name) for f in body.features] == [
-        (0, "parking_zone", "no", None), (1, "anywhere", "anywhere", "Heilbronn")]
-
-
-def test_without_a_geofencing_feed_there_are_no_zones(monkeypatch):
-    feeds = {k: v for k, v in FEEDS.items() if k != "geofencing_zones"}
-    snap = Sharing(fetch=lambda system, feed: feeds[feed]).snapshot()  # KeyError for the missing feed, like a 404
-    assert snap["geofencing"] is None
+    assert [f.properties.order for f in body.features] == [0, 1]

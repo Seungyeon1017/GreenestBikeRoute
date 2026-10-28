@@ -449,7 +449,8 @@ class GeofencingFeature(BaseModel):
 
 
 class GeofencingCollection(BaseModel):
-    """The provider's geofencing zones in feed order. Outside every zone a ride may not end."""
+    """The provider's geofencing zones in feed order, from the saved copy (python -m backend.sharing): they change
+    rarely. Outside every zone a ride may not end."""
     type: Literal["FeatureCollection"]
     features: list[GeofencingFeature]
     updated: str = Field(description=SHARING_UPDATED)
