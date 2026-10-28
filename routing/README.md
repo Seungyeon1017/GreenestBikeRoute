@@ -5,10 +5,12 @@ The Heilbronn street map (OpenStreetMap, ~42k street pieces) is a graph. Every s
 ```
 cost = length × (1 + bump_penalty × roughness / 100 + pm_penalty × pm_risk + stop_penalty × stop_go)
      + danger_penalty × danger
+     + stop_penalty × 100 m × lifts
 ```
 
 - Roughness, PM risk and stop-and-go describe the whole street, so they **scale with length**.
 - Danger counts incidents at spots, so it's **a fixed amount per street**, whatever its length.
+- A lift (`highway=elevator` node, e.g. onto the Campusbrücke) is a stop too: riding through one costs `stop_penalty` × 100 m (waiting plus getting in and out, about 25 s), a **fixed amount per lift**. At the default 0.5 that is 50 m of detour, at 5 it is 500 m. The route reports its `lifts`.
 - All penalties at 0 give the shortest route.
 
 ## Which streets are in the graph
@@ -16,7 +18,7 @@ cost = length × (1 + bump_penalty × roughness / 100 + pm_penalty × pm_risk + 
 OSMnx's bike network, with these changes:
 
 - **Left out:** roads tagged `bicycle=use_sidepath` (~23 km, mostly the B 39 around Europaplatz). Those have a mandatory bike path beside them (StVO §2 Abs. 4, signs 237/240/241), so cycling on the road is illegal; the path itself is mapped as its own way and stays in. Roads with an optional bike path beside them stay in too: riding on the road is legal there, so smoothness or overtaking data may pick either. Ways tagged `bicycle=dismount` are left out as well.
-- **Added:** footways and paths tagged `bicycle=yes|designated|permissive`, which OSMnx drops. Untagged footways stay out (no bikes in Germany), except `bridge=yes` ones and ones touching a lift (`highway=elevator` node): bikes reach the Campusbrücke and BUGA-Brücke by lift. Steps stay out.
+- **Added:** footways and paths tagged `bicycle=yes|designated|permissive`, which OSMnx drops. Untagged footways stay out (no bikes in Germany), except `bridge=yes` ones and ones touching a lift (`highway=elevator` node): bikes reach the Campusbrücke and BUGA-Brücke by lift. Street crossings (`footway=crossing`) are in even when tagged `bicycle=no`: cyclists push their bike across the lights. Footways tagged `bicycle=no` or without a tag stay out, with two exceptions where cyclists push their bike a short way: a footway up to 30 m long that links two places the graph already reaches (a crossing to a bike path), and an untagged footway up to 150 m long that fills a gap between two `bicycle=yes` ways (path 694954948 next to the Hauptbahnhof). Steps stay out.
 - **Graph file:** `cache/heilbronn_bike_footways.graphml`, built from OSM on first start (~2 min). Delete it to pick up newer OSM edits.
 
 ## Datasets
@@ -86,8 +88,8 @@ From 49.14838, 9.22687 to 49.1262, 9.22439:
 | Penalties (bump / danger / PM / stop) | Length  | Roughness | Overtaking spots | Stop-and-go |
 |---------------------------------------|---------|-----------|------------------|-------------|
 | 0 / 0 / 0 / 0 (shortest)              | 3.06 km | 24.7      | 10               | 0.67        |
-| 10 / 25 / 0.5 / 0.5 (defaults)        | 3.13 km | 12.0      | 23               | 0.69        |
-| 10 / 100 / 0.5 / 0.5                  | 3.35 km | 12.2      | 8                | 0.69        |
-| 0 / 0 / 0 / 5                         | 3.08 km | 24.3      | 12               | 0.66        |
+| 10 / 25 / 0.5 / 0.5 (defaults)        | 3.12 km | 12.2      | 21               | 0.69        |
+| 10 / 100 / 0.5 / 0.5                  | 3.25 km | 12.3      | 6                | 0.69        |
+| 0 / 0 / 0 / 5                         | 3.07 km | 24.3      | 12               | 0.66        |
 
 On this trip the defaults pick the smooth street, which has more overtaking spots than the shortest route, and 25 is too weak to change that. At 100 the route avoids both. The default `stop_penalty` doesn't change any of these routes, and even 5 only swaps a few short pieces.

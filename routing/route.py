@@ -71,8 +71,8 @@ def _split_edge(G, u, v, data, node, point_lonlat, plane):
     share = cut / line.length
     first = plane.to_lonlat(substring(line, 0, cut))
     second = plane.to_lonlat(substring(line, cut, line.length))
-    G.add_edge(u, node, **{**data, "length": data["length"] * share, "geometry": first})
-    G.add_edge(node, v, **{**data, "length": data["length"] * (1 - share), "geometry": second})
+    G.add_edge(u, node, **{**data, "length": data["length"] * share, "geometry": first, "lift_end": False})
+    G.add_edge(node, v, **{**data, "length": data["length"] * (1 - share), "geometry": second, "lift_start": False})
 
 
 @contextmanager
@@ -98,15 +98,16 @@ def _snapped_ends(G, origin, destination):
                 node = f"snap-{label}"
                 G.add_node(node, x=point_lonlat[0], y=point_lonlat[1])
                 removed = []
-                # Split the street in both directions, so the point can be reached and left either way.
+                undo.append((node, removed))  # recorded first, so an error while splitting is undone too
+                # Split the street in both directions (a one-way street has only one), so the point can be
+                # reached and left either way.
                 for a, b in ((u, v), (v, u)):
-                    for k, d in list(G[a][b].items()):
+                    for k, d in list((G.get_edge_data(a, b) or {}).items()):
                         if d.get("osmid") != data.get("osmid"):
                             continue
                         _split_edge(G, a, b, d, node, point_lonlat, plane)
                         removed.append((a, b, k, d))
                         G.remove_edge(a, b, k)
-                undo.append((node, removed))
                 ends.append(node)
             if ends[0] == ends[1]:
                 raise RouteError("start and end snap to the same spot")
@@ -133,7 +134,8 @@ def _stop_go(d):
 def _cost(d, penalties):
     bump_penalty, danger_penalty, pm_penalty, stop_penalty = penalties
     return edge_cost(d["length"], _roughness(d), bump_penalty,
-                     d.get("danger", 0.0), danger_penalty, _pm_risk(d), pm_penalty, _stop_go(d), stop_penalty)
+                     d.get("danger", 0.0), danger_penalty, _pm_risk(d), pm_penalty, _stop_go(d), stop_penalty,
+                     lift_ends=d.get("lift_start", False) + d.get("lift_end", False))
 
 
 def _route_feature(G, a, b, penalties):
@@ -149,6 +151,7 @@ def _route_feature(G, a, b, penalties):
     except nx.NetworkXNoPath:
         raise RouteError("no bike route between these points") from None
 
+    lifts = sum(1 for n in path[1:-1] if "elevator" in str(G.nodes[n].get("highway")))
     coords, length, rough_len, measured_len = [], 0.0, 0.0, 0.0
     danger, danger_points, pm_len, pm_measured_len = 0.0, 0, 0.0, 0.0
     stop_len, stop_measured_len = 0.0, 0.0
@@ -191,6 +194,8 @@ def _route_feature(G, a, b, penalties):
         # Length-weighted over the part of the route with traffic_flow measurements.
         "mean_stop_go": round(stop_len / stop_measured_len, 3) if stop_measured_len else None,
         "stop_measured_share": round(stop_measured_len / length, 2),
+        # Lifts the route rides through; each costs stop_penalty * LIFT_WAIT_M metres.
+        "lifts": lifts,
     }
     return {"type": "Feature", "geometry": {"type": "LineString", "coordinates": coords}, "properties": properties}
 

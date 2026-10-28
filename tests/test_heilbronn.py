@@ -1,7 +1,8 @@
-"""End-to-end on the real Heilbronn graph. Skipped until cache/heilbronn_bike_legal.graphml exists
+"""End-to-end on the real Heilbronn graph. Skipped until cache/heilbronn_bike_footways.graphml exists
 (start the API once, or run `python -c "from routing.graph import load_graph; load_graph()"`)."""
 import json
 
+import networkx as nx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -88,7 +89,27 @@ def test_roads_with_a_mandatory_bike_path_are_left_out(client):
 
 
 def test_bike_paths_and_bridges_are_in_the_graph(client):
-    """Rosenbergbrücke cycleway, Campusbrücke, a campus footway with bicycle=yes and the BUGA-Brücke."""
+    """Rosenbergbrücke cycleway, Campusbrücke, a campus footway with bicycle=yes, the BUGA-Brücke and a signalised crossing tagged bicycle=no."""
     G = client.app.state.graph
     in_graph = {w for *_, d in G.edges(data=True) for w in osm_way_ids(d["osmid"])}
-    assert {33498928, 443802903, 739824168, 795115713} <= in_graph
+    assert {33498928, 443802903, 739824168, 795115713, 1413078438} <= in_graph
+
+
+def test_route_from_bahnhofstrasse_crosses_at_the_start_to_reach_the_buga_bruecke(client):
+    """Crossing 1413078438 and path 694954948 lead to the BUGA-Brücke, so the route needs no detour via Olgastraße."""
+    r = client.get("/route", params={"from_lat": 49.142288810975934, "from_lon": 9.207969903945925,
+                                     "to_lat": 49.1475, "to_lon": 9.2105}).json()
+    assert r["features"][0]["properties"]["length_m"] < 1000
+
+
+def test_route_can_end_on_a_one_way_street(client):
+    """The snapped end point splits only the direction a one-way street has."""
+    G = client.app.state.graph
+    main = max(nx.strongly_connected_components(G), key=len)
+    u, v, d = next((u, v, d) for u, v, d in G.edges(data=True) if u in main and v in main
+                   and d.get("oneway") in (True, "True") and not G.has_edge(v, u) and "geometry" in d)
+    lon, lat = d["geometry"].interpolate(0.5, normalized=True).coords[0]
+    n_edges = G.number_of_edges()
+    r = client.get("/route", params={"from_lat": 49.14838, "from_lon": 9.22687, "to_lat": lat, "to_lon": lon})
+    assert r.status_code == 200
+    assert G.number_of_edges() == n_edges

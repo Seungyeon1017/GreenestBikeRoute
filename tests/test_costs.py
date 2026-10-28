@@ -109,3 +109,10 @@ def test_air_ranks_compare_each_reading_with_its_own_ride(monkeypatch):
 def test_air_ranks_skip_short_rides():
     assert air_ranks([ride_row("a", "01", 3) for _ in range(MIN_RIDE_POINTS - 1)]) == ([], [])
     assert air_ranks([]) == ([], [])
+
+
+def test_lift_costs_stop_penalty_times_100_m_per_ride_through():
+    """Each of the two edges meeting at a lift carries half."""
+    assert edge_cost(10, bump_penalty=0, pm_penalty=0, stop_penalty=0, lift_ends=1) == 10
+    one_edge = edge_cost(10, bump_penalty=0, pm_penalty=0, stop_penalty=2, stop_go=0, lift_ends=1)
+    assert one_edge == 10 + 2 * 100 / 2

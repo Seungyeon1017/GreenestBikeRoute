@@ -9,7 +9,7 @@ Example request: `/route?from_lat=49.14838&from_lon=9.22687&to_lat=49.1262&to_lo
 - `bump_penalty` (default 10): how much you hate bumps (`bumpy_roads`).
 - `danger_penalty` (default 25): metres of detour you'd ride to pass one fewer close-overtaking spot (`danger_zones_raw`, summed Risk Index Overtaking; readings of 25 cm or less ignored).
 - `pm_penalty` (default 0.5): how much you hate bad air (`air_quality`, fine dust ranked within each ride so weather drops out, averaged per street).
-- `stop_penalty` (default 0.5): how much you hate slowing down and stopping at traffic lights or in congestion (`traffic_flow`).
+- `stop_penalty` (default 0.5): how much you hate slowing down and stopping at traffic lights, in congestion (`traffic_flow`) or at a lift (each costs 100 m × this).
 
 `/route/compare` takes the same parameters and returns the route next to the shortest route, to draw both and show what the penalties changed. See `/docs` for the response.
 

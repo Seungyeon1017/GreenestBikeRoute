@@ -50,6 +50,8 @@ DEFAULT_STOP_GO = 1 - MEDIAN_FLOW
 # Way means span ~0.5-0.85 stop_go (5-95%), narrower than air ranks, so a mild default still
 # trades a short detour for streets where bikes don't keep stopping.
 DEFAULT_STOP_PENALTY = 0.5
+# Waiting for a lift and getting in and out, as metres of riding at stop_penalty 1 (about 25 s at 15 km/h).
+LIFT_WAIT_M = 100
 
 
 def osm_way_ids(osmid):
@@ -140,11 +142,13 @@ def point_risks(features, risk_key):
 def edge_cost(length_m, normalized_roughness=DEFAULT_ROUGHNESS, bump_penalty=DEFAULT_BUMP_PENALTY,
               danger=0.0, danger_penalty=DEFAULT_DANGER_PENALTY,
               pm_risk=DEFAULT_PM_RISK, pm_penalty=DEFAULT_PM_PENALTY,
-              stop_go=DEFAULT_STOP_GO, stop_penalty=DEFAULT_STOP_PENALTY):
+              stop_go=DEFAULT_STOP_GO, stop_penalty=DEFAULT_STOP_PENALTY, lift_ends=0):
     """Routing cost: plain length, inflated on rough, polluted and stop-and-go streets, plus a fixed
-    `danger_penalty` metres per unit of overtaking risk (`danger` = summed risk on the edge).
+    `danger_penalty` metres per unit of overtaking risk (`danger` = summed risk on the edge) and a fixed
+    `stop_penalty * LIFT_WAIT_M` metres per lift ridden through. A lift sits where two edges meet, so each
+    edge ending at one (`lift_ends` = 0, 1 or 2) carries half of it.
 
     Normalized Roughness is 0-100 in the live data (not 0-1 as the docs table says).
     """
     return (length_m * (1 + bump_penalty * normalized_roughness / 100 + pm_penalty * pm_risk + stop_penalty * stop_go)
-            + danger_penalty * danger)
+            + danger_penalty * danger + stop_penalty * LIFT_WAIT_M * lift_ends / 2)

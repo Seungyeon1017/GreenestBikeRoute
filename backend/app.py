@@ -96,8 +96,8 @@ def route_query(
     pm_penalty: float = Query(DEFAULT_PM_PENALTY, ge=0, le=5, description=(
         "How much do you hate bad air (fine dust). 0 = ignore, 5 = strongly avoid")),
     stop_penalty: float = Query(DEFAULT_STOP_PENALTY, ge=0, le=5, description=(
-        "How much do you hate stop-and-go (traffic lights, congestion). 0 = ignore, 5 = strongly avoid; "
-        "detours stay small, as streets differ little")),
+        "How much do you hate stop-and-go (traffic lights, congestion, waiting for a lift). 0 = ignore, "
+        "5 = strongly avoid; detours stay small, as streets differ little. Each lift costs this x 100 m")),
 ):
     """The query parameters shared by /route and /route/compare."""
     return (from_lat, from_lon), (to_lat, to_lon), (bump_penalty, danger_penalty, pm_penalty, stop_penalty)
