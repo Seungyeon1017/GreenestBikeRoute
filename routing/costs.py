@@ -177,7 +177,7 @@ def edge_cost(length_m, normalized_roughness=DEFAULT_ROUGHNESS, bump_penalty=DEF
     `speed_kmh` turns length into riding time, as metres at MEDIAN_SPEED_KMH: a street ridden at half the
     median speed costs twice its length. The default (the median) leaves the length as it is.
 
-    Normalized Roughness is 0-100 in the live data (not 0-1 as the docs table says).
+    Normalized Roughness is 0-100, in the live data and the ATRAI docs.
     """
     base = length_m * (MEDIAN_SPEED_KMH / speed_kmh)
     return (base * (1 + bump_penalty * normalized_roughness / 100 + pm_penalty * pm_risk + stop_penalty * stop_go)

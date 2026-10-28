@@ -27,7 +27,7 @@ OSMnx's bike network, with these changes:
 
 ### `bumpy_roads_heilbronn`: roughness per street
 
-- Matched by OSM way id. Values are 0–100, even though the docs say 0–1.
+- Matched by OSM way id. Values are 0–100 (`Normalized Roughness`; the ATRAI docs call it `normalized_score`).
 - A street without data but with measured streets close by gets an **estimate** from them (`data/custom/roughness_estimates_heilbronn.json`, see [estimation/README.md](../estimation/README.md)). Responses report it as `estimated_share`; `mean_roughness` stays over the measured part.
 - Any other street gets **10**, the median. With 0, unknown streets would look perfectly smooth and attract every route.
 - Graph edges: 38% measured, 28% estimated, 34% unknown. `bump_penalty` default: 10.
@@ -102,8 +102,8 @@ From 49.14838, 9.22687 to 49.1262, 9.22439:
 | Penalties (bump / danger / PM / stop) | Length  | Roughness | Overtaking spots | Stop-and-go |
 |---------------------------------------|---------|-----------|------------------|-------------|
 | 0 / 0 / 0 / 0 (shortest)              | 3.06 km | 24.7      | 10               | 0.67        |
-| 10 / 25 / 0.5 / 0.5 (defaults)        | 3.12 km | 12.2      | 21               | 0.69        |
-| 10 / 100 / 0.5 / 0.5                  | 3.25 km | 12.3      | 6                | 0.69        |
+| 10 / 25 / 0.5 / 0.5 (defaults)        | 3.09 km | 12.3      | 21               | 0.69        |
+| 10 / 100 / 0.5 / 0.5                  | 3.23 km | 12.4      | 6                | 0.69        |
 | 0 / 0 / 0 / 5                         | 3.07 km | 24.3      | 12               | 0.66        |
 | 0 / 0 / 0 / 0, `prefer_time`          | 3.72 km | 19.6      | 9                | 0.59        |
 | 10 / 25 / 0.5 / 0.5, `prefer_time`    | 4.15 km | 11.3      | 3                | 0.60        |
