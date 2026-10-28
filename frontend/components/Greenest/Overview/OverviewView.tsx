@@ -57,8 +57,10 @@ export default function OverviewView() {
         subtitle={t('greenest.overview.subtitle')}
         title={t('greenest.overview.title')}
       />
-      <div className="grid flex-1 grid-cols-1 gap-4 lg:grid-cols-[18rem_minmax(0,1fr)_20rem]">
-        <aside className="order-2 lg:order-1">
+      {/* On wide screens the row has a fixed height and the side panels scroll inside it,
+          so a panel growing when a layer is toggled never moves or resizes the map. */}
+      <div className="grid flex-1 grid-cols-1 gap-4 lg:h-[calc(100vh-7rem)] lg:flex-none lg:grid-cols-[18rem_minmax(0,1fr)_20rem] lg:grid-rows-[minmax(0,1fr)]">
+        <aside className="order-2 lg:order-1 lg:overflow-y-auto">
           <LayerPanel
             enabled={enabled}
             layers={ENVIRONMENT_LAYERS}
@@ -66,7 +68,7 @@ export default function OverviewView() {
             overlays={overlays}
           />
         </aside>
-        <section className="relative order-1 h-[60vh] min-h-[420px] overflow-hidden rounded-3xl border border-leaf-sand shadow-soft lg:order-2 lg:h-auto">
+        <section className="relative order-1 h-[60vh] min-h-[420px] overflow-hidden rounded-3xl border border-leaf-sand shadow-soft lg:order-2 lg:h-auto lg:min-h-0">
           <OverviewMap
             ariaLabel={t('greenest.overview.mapLabel')}
             data={data}
@@ -91,7 +93,7 @@ export default function OverviewView() {
             </div>
           )}
         </section>
-        <aside className="order-3">
+        <aside className="order-3 lg:overflow-y-auto">
           <AreaDetailsPanel
             area={selectedArea}
             onClear={() => setSelectedCell(null)}

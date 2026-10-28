@@ -52,7 +52,7 @@ export default function LayerPanel({
                   type="checkbox"
                 />
                 <div className="min-w-0 flex-1 space-y-1.5">
-                  <div className="flex items-start justify-between gap-2">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
                     <label
                       className={cx(
                         'block text-sm font-medium',
