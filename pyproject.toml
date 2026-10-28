@@ -15,8 +15,8 @@ dependencies = [
 dev = [
     "pytest>=8.0",
 ]
-# Only for recomputing the roughness estimates (ml/estimate_roughness.py); the API just reads its output.
-ml = [
+# Only for recomputing the roughness estimates (estimation/estimate_roughness.py); the API just reads its output.
+estimation = [
     "matplotlib>=3.8",
     "scikit-learn>=1.4",
 ]

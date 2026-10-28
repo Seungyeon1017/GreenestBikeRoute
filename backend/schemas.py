@@ -60,7 +60,7 @@ class RouteProperties(BaseModel):
         description="Normalized Roughness 0-100, length-weighted over the measured part; null if none was measured")
     measured_share: float = Field(description="Share of the route length with bumpy_roads measurements, 0-1")
     estimated_share: float = Field(
-        description="Share of the route length whose roughness is estimated from nearby measured streets (ml/README.md), 0-1")
+        description="Share of the route length whose roughness is estimated from nearby measured streets (estimation/README.md), 0-1")
     danger_points: int = Field(description="Close-overtaking spots (danger_zones) on the route")
     danger_risk: float = Field(description="Summed Risk Index Overtaking of those spots")
     mean_pm_risk: Optional[float] = Field(

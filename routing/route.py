@@ -104,7 +104,7 @@ def _route_feature(G, a, b, penalties):
         # Length-weighted over the measured part of the route only.
         "mean_roughness": round(rough_len / measured_len, 1) if measured_len else None,
         "measured_share": round(measured_len / length, 2),
-        # Roughness estimated from nearby measured streets (ml/README.md); the rest of the route is unknown.
+        # Roughness estimated from nearby measured streets (estimation/README.md); the rest of the route is unknown.
         "estimated_share": round(estimated_len / length, 2),
         # Overtaking spots (danger_zones) on the route and their summed Risk Index Overtaking.
         "danger_points": danger_points,

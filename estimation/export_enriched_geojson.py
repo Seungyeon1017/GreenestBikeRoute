@@ -1,9 +1,9 @@
 """Write data/road_network_enriched_heilbronn.geojson: every road segment with the roughness and
 stop-and-go the router uses and where each value comes from, for Kepler.gl or QGIS.
 
-    uv run python ml/export_enriched_geojson.py
+    uv run python estimation/export_enriched_geojson.py
 
-roughness_source: measured / estimated (ml/estimate_roughness.py) / unknown (router uses the median, 10)
+roughness_source: measured / estimated (estimation/estimate_roughness.py) / unknown (router uses the median, 10)
 stop_go_source:   measured / unknown (router uses 0.63, see routing/README.md)
 """
 import json

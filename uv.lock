@@ -375,7 +375,7 @@ dependencies = [
 dev = [
     { name = "pytest" },
 ]
-ml = [
+estimation = [
     { name = "matplotlib" },
     { name = "scikit-learn" },
 ]
@@ -392,7 +392,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=8.0" }]
-ml = [
+estimation = [
     { name = "matplotlib", specifier = ">=3.8" },
     { name = "scikit-learn", specifier = ">=1.4" },
 ]

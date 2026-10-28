@@ -12,7 +12,7 @@ from routing.costs import SNAP_M, air_ranks, clean_overtaking, edge_roughness, p
 
 CACHE_DIR = Path(__file__).resolve().parent.parent / "cache"
 GRAPH_PATH = CACHE_DIR / "heilbronn_bike.graphml"
-# Written by ml/estimate_roughness.py: roughness of unmeasured OSM ways close to measured streets.
+# Written by estimation/estimate_roughness.py: roughness of unmeasured OSM ways close to measured streets.
 ESTIMATED_ROUGHNESS_PATH = CACHE_DIR.parent / "data" / "custom" / "roughness_estimates_heilbronn.json"
 PLACE = "Heilbronn, Germany"
 
@@ -37,14 +37,14 @@ def load_graph(path=GRAPH_PATH):
 
 
 def load_estimates(path=ESTIMATED_ROUGHNESS_PATH):
-    """{OSM way id: estimated roughness} from ml/estimate_roughness.py, or {} if the file is missing."""
+    """{OSM way id: estimated roughness} from estimation/estimate_roughness.py, or {} if the file is missing."""
     path = Path(path)
     return {int(k): v for k, v in json.loads(path.read_text()).items()} if path.exists() else {}
 
 
 def attach_roughness(G, way_rough, estimated=None):
     """Set edge attributes `roughness` (0-100, or None where unknown) and `roughness_source`:
-    "measured", "estimated" (from nearby measured streets, see ml/README.md) or "unknown".
+    "measured", "estimated" (from nearby measured streets, see estimation/README.md) or "unknown".
     """
     for _, _, d in G.edges(data=True):
         d["roughness"] = edge_roughness(d["osmid"], way_rough)

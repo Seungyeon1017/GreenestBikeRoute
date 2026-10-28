@@ -1,4 +1,4 @@
-"""ml/estimate_roughness.py. Needs the ml dependency group: uv run --group ml pytest"""
+"""estimation/estimate_roughness.py. Needs the estimation dependency group: uv run --group estimation pytest"""
 import numpy as np
 import pandas as pd
 import pytest
@@ -6,7 +6,7 @@ import pytest
 pytest.importorskip("sklearn")
 
 from download_data import load_features
-from ml.estimate_roughness import measured_values, neighbour_estimates, segment_table, way_estimates
+from estimation.estimate_roughness import measured_values, neighbour_estimates, segment_table, way_estimates
 from routing.costs import way_roughness
 from routing.graph import load_estimates
 

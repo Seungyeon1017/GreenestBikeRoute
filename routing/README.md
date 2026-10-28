@@ -16,7 +16,7 @@ cost = length × (1 + bump_penalty × roughness / 100 + pm_penalty × pm_risk + 
 ### `bumpy_roads_heilbronn`: roughness per street
 
 - Matched by OSM way id. Values are 0–100, even though the docs say 0–1.
-- A street without data but with measured streets close by gets an **estimate** from them (`data/custom/roughness_estimates_heilbronn.json`, see [ml/README.md](../ml/README.md)). Responses report it as `estimated_share`; `mean_roughness` stays over the measured part.
+- A street without data but with measured streets close by gets an **estimate** from them (`data/custom/roughness_estimates_heilbronn.json`, see [estimation/README.md](../estimation/README.md)). Responses report it as `estimated_share`; `mean_roughness` stays over the measured part.
 - Any other street gets **10**, the median. With 0, unknown streets would look perfectly smooth and attract every route.
 - Graph edges: 38% measured, 28% estimated, 34% unknown. `bump_penalty` default: 10.
 

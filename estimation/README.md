@@ -161,7 +161,7 @@ For each distance band we picked the λ with the lowest average error on held-ou
 
 ## Validation
 
-Numbers from `ml/metrics.json`. "Held out" = those measurements were hidden and then predicted.
+Numbers from `estimation/metrics.json`. "Held out" = those measurements were hidden and then predicted.
 
 | Held out | Average error, always guess median | Average error, this method | R² | Spearman |
 | :--- | :---: | :---: | :---: | :---: |
@@ -193,7 +193,16 @@ The router neither prefers nor avoids unknown streets. With roughness alone, est
 
 ## Why traffic flow is not estimated
 
-An earlier version also filled in `traffic_flow` with a Random Forest (OpenStreetMap highway and surface tags, geometry, neighbour values). It was removed when routing started using stop-and-go from measured streets only (routing/README.md). What we learned, in case someone picks it up again (per-segment `avg_traffic_flow`, not weighted by `points_in_segment` like routing does):
+Routing uses stop-and-go (`1 − avg_traffic_flow`) from measured streets only and gives the rest the median (routing/README.md). We checked whether filling the gaps would be worth it, with the same method as roughness (neighbour mean, pulled towards the median 0.63 by distance), on the same 40 random trips:
+
+| Penalties (bump / danger / PM / stop) | Routes that change | Part of those routes that changes | Mean length |
+| :---: | :---: | :---: | :---: |
+| 10 / 25 / 0.5 / 0.5 (defaults) | 1 of 40 | 2% | ±0.00% |
+| 0 / 0 / 0 / 5 (stop-and-go only, 10× default) | 10 of 40 | 18% | +0.13% |
+
+Estimates would raise the share of graph edges with a stop-and-go value from 43% to 68%, but with the default penalties the routes stay the same: stop-and-go varies little between streets and carries little weight in the cost. It only becomes worth doing if stop-and-go gets a much higher penalty.
+
+An earlier version filled in `traffic_flow` with a Random Forest (OpenStreetMap highway and surface tags, geometry, neighbour values). What we learned, in case someone picks it up again (per-segment `avg_traffic_flow`, not weighted by `points_in_segment` like routing does):
 
 | Estimate | Held-out streets: average error | Held-out 1 km blocks: average error |
 | :--- | :---: | :---: |
@@ -221,12 +230,12 @@ An earlier version also filled in `traffic_flow` with a Random Forest (OpenStree
 
 ## Rerun
 
-The `ml` dependency group (scikit-learn, matplotlib) is only needed here; the API just reads the estimates file.
+The `estimation` dependency group (scikit-learn, matplotlib) is only needed here; the API just reads the estimates file.
 
 ```bash
-uv run --group ml python ml/estimate_roughness.py
-uv run python ml/export_enriched_geojson.py
-uv run --group ml pytest   # without --group ml, tests/test_estimate_roughness.py is skipped
+uv run --group estimation python estimation/estimate_roughness.py
+uv run python estimation/export_enriched_geojson.py
+uv run --group estimation pytest   # without --group estimation, tests/test_estimate_roughness.py is skipped
 ```
 
 ## Glossary

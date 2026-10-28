@@ -1,16 +1,16 @@
 """Estimate roughness for unmeasured Heilbronn streets from nearby measured ones.
 
-    uv run --group ml python ml/estimate_roughness.py
+    uv run --group estimation python estimation/estimate_roughness.py
 
 For each unmeasured road segment: the inverse-distance-weighted mean of the measured segments within
 250 m, pulled towards the city median the further away the nearest measurement is, and left unknown
-beyond 150 m (the router then uses the median). ml/README.md has the formulas and why this beats a
-Random Forest on the same data.
+beyond 150 m (the router then uses the median). estimation/README.md has the formulas and why this
+beats a Random Forest on the same data.
 
 Outputs:
   data/custom/roughness_estimates_heilbronn.json  {OSM way id: roughness} for unmeasured ways, read by routing/graph.py
-  ml/metrics.json                                 cross-validation and coverage
-  ml/roughness_performance.png                    measured vs estimated on held-out streets
+  estimation/metrics.json                         cross-validation and coverage
+  estimation/roughness_performance.png            measured vs estimated on held-out streets
 """
 import ast
 import json
@@ -30,7 +30,7 @@ from sklearn.neighbors import BallTree
 from download_data import load_features
 from routing.graph import ESTIMATED_ROUGHNESS_PATH
 
-ML_DIR = ROOT / "ml"
+OUT_DIR = ROOT / "estimation"
 
 EARTH_RADIUS_M = 6_371_000
 RADIUS_M = 250  # measured segments further away are ignored
@@ -41,7 +41,7 @@ CV_FOLDS = 5
 # Weight of the neighbour mean against the city median. The same street measured within
 # SAME_STREET_RADIUS_M gets full weight; otherwise it depends on how far the nearest measurement is,
 # and beyond the last limit the estimate is no better than the median, so the street stays unknown.
-# Tuned on held-out streets and checked on a second half of the streets (ml/README.md).
+# Tuned on held-out streets and checked on a second half of the streets (estimation/README.md).
 SAME_STREET_RADIUS_M = 100
 SHRINK_BY_NEAREST_M = ((50, 0.7), (150, 0.5))
 
@@ -200,7 +200,7 @@ def main():
     measured_ways = {w for i in measured_idx for w in table.ways.values[i]}
     ways = way_estimates(table, unmeasured_idx[known], np.clip(est[known], 0.0, 100.0), measured_ways)
     ESTIMATED_ROUGHNESS_PATH.write_text(json.dumps({str(k): round(v, 4) for k, v in sorted(ways.items())}, indent=0))
-    plot_performance(cv["cv_unseen_streets"], cv_scores["cv_unseen_streets"], ML_DIR / "roughness_performance.png")
+    plot_performance(cv["cv_unseen_streets"], cv_scores["cv_unseen_streets"], OUT_DIR / "roughness_performance.png")
 
     coverage = {
         "segments_measured": len(measured_idx),
@@ -211,7 +211,7 @@ def main():
         "ways_estimated": len(ways),
     }
     metrics = {"median": median, **{n: {"n": len(c), **cv_scores[n]} for n, c in cv.items()}, "coverage": coverage}
-    (ML_DIR / "metrics.json").write_text(json.dumps(metrics, indent=2))
+    (OUT_DIR / "metrics.json").write_text(json.dumps(metrics, indent=2))
     print(f"  {coverage['segments_estimated']} segments estimated, {coverage['segments_unknown']} unknown; "
           f"wrote {len(ways)} way estimates to {ESTIMATED_ROUGHNESS_PATH.relative_to(ROOT)}")
     return metrics
