@@ -301,6 +301,22 @@ class LightingCollection(BaseModel):
     model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"lit": 0.96}})
 
 
+class BikeFriendlyFeature(BaseModel):
+    type: Literal["Feature"]
+    geometry: LineString
+    properties: dict[Literal["osm_id"], int] = Field(description="OpenStreetMap way id")
+
+
+class BikeFriendlyCollection(BaseModel):
+    """Bike paths, bike lanes, bike roads and signed bike routes in Heilbronn (OSM via Overpass,
+    data/custom/bike_friendly_streets_heilbronn.overpassql): the streets prefer_bike_friendly favours.
+    Source: OpenStreetMap contributors (ODbL)."""
+    type: Literal["FeatureCollection"]
+    features: list[BikeFriendlyFeature]
+
+    model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"osm_id": 4087087}})
+
+
 class ScoreFeature(BaseModel):
     type: Literal["Feature"]
     geometry: LineString

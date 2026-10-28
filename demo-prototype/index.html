@@ -58,6 +58,10 @@
   <input id="stopPenalty" type="range" min="0" max="5" step="0.25" value="0.5">
   <div class="row"><span>0 = ignore</span><span>5 = strongly avoid</span></div>
 
+  <label for="bikeFriendly">How much do you prefer bike paths and lanes: <span id="bikeFriendlyValue">0</span></label>
+  <input id="bikeFriendly" type="range" min="0" max="5" step="0.25" value="0">
+  <div class="row"><span>0 = ignore</span><span>1 = other streets feel twice as long</span></div>
+
   <label><input type="checkbox" id="preferTime"> Time matters, not distance</label>
   <div class="row"><span>Weigh streets by how fast bikes were measured riding them</span></div>
 
@@ -102,6 +106,7 @@
     <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showSpeed"> Show cyclist speed (darker = slower)</label>
     <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showShade"> Show shade at <span id="shadeSlot">15:00</span> (darker = more shade)</label>
     <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showLighting"> Show street lighting (darker = more likely lit)</label>
+    <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showBikeFriendly"> Show bike paths, lanes and routes</label>
     <label style="font-weight:400;margin:6px 0 0"><input type="checkbox" id="showGrade"> Colour your route by grade (display only)</label>
     <div id="gradeLegend" hidden>
       <span class="swatch" style="background:#4caf50"></span>&lt;2%
@@ -251,6 +256,13 @@ fetch(API + "/lighting").then(r => r.json()).then(data => {
 });
 document.getElementById("showLighting").onchange = e => e.target.checked ? lighting.addTo(map) : lighting.remove();
 
+// Bike paths, bike lanes and bike routes from OSM: the streets prefer_bike_friendly favours.
+const bikeFriendly = L.layerGroup();
+fetch(API + "/bike-friendly-streets").then(r => r.json()).then(data => {
+  L.geoJSON(data, { style: { color: "#5e35b1", weight: 3, opacity: 0.7 }, interactive: false }).addTo(bikeFriendly);
+});
+document.getElementById("showBikeFriendly").onchange = e => e.target.checked ? bikeFriendly.addTo(map) : bikeFriendly.remove();
+
 // Shared e-bikes and e-scooters free to rent now (/sharing) and their parking zones (/sharing/zones). With a
 // start pin, vehicles come closest first and the nearest one is named in the panel. Colour = vehicle type
 // (teal e-bike, pink e-scooter; not the purple/blue of the danger and air layers), faded = battery under 20%.
@@ -320,7 +332,7 @@ map.on("click", e => {
   update();
 });
 
-const sliders = ["bumpPenalty", "dangerPenalty", "pmPenalty", "stopPenalty", "shadePenalty", "darkPenalty"].map(id => {
+const sliders = ["bumpPenalty", "dangerPenalty", "pmPenalty", "stopPenalty", "shadePenalty", "darkPenalty", "bikeFriendly"].map(id => {
   const el = document.getElementById(id);
   el.oninput = () => document.getElementById(id + "Value").textContent = el.value;
   el.onchange = () => { drawScore(); update(); };
@@ -333,8 +345,9 @@ departTime.onchange = () => { drawShade(); drawScore(); update(); };
 
 // The query parameters of the current sliders, checkbox and departure time, as /route and /score take them.
 function settings() {
-  const [bump_penalty, danger_penalty, pm_penalty, stop_penalty, shade_penalty, dark_penalty] = sliders.map(s => s.value);
-  const q = new URLSearchParams({ bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time: preferTime.checked, shade_penalty, dark_penalty });
+  const [bump_penalty, danger_penalty, pm_penalty, stop_penalty, shade_penalty, dark_penalty, prefer_bike_friendly] = sliders.map(s => s.value);
+  const q = new URLSearchParams({ bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time: preferTime.checked, shade_penalty, dark_penalty,
+                                  prefer_bike_friendly });
   if (departTime.value) q.set("depart_time", departTime.value);
   return q;
 }

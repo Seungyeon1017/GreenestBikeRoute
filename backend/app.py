@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.schemas import EXAMPLE_TRIP, AirCollection, DangerCollection, Error, FlowCollection, GradeCollection, \
+from backend.schemas import EXAMPLE_TRIP, AirCollection, BikeFriendlyCollection, DangerCollection, Error, FlowCollection, GradeCollection, \
     LightingCollection, RouteCollection, RouteComparison, RoughnessCollection, ScoreCollection, ShadeCollection, \
     SpeedCollection, VehicleCollection, ZoneCollection
 from backend.sharing import Sharing, SharingUnavailable
@@ -334,8 +334,8 @@ def create_app(graph=None, sharing=None):
 
     @app.get("/bike-friendly-streets", tags=[OVERLAYS],
              summary="Streets that suit bikes (bike paths, bike lanes, bike routes), as GeoJSON for a map overlay",
-             response_class=GeoJSONResponse,
-             response_description="LineStrings with `osm_id` (OpenStreetMap way id)")
+             response_class=GeoJSONResponse, response_model=BikeFriendlyCollection,
+             response_description="LineStrings with `osm_id` (OpenStreetMap way id); every bike path, bike lane and bike route")
     def bike_friendly_streets():
         return GeoJSONResponse(bike_friendly_collection())
 
