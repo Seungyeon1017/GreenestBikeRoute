@@ -652,6 +652,7 @@
       "planTrip": "Route planen",
       "viewOnMap": "Auf Karte zeigen",
       "noLocation": "Standort noch nicht geprüft",
+      "photoBy": "Foto: {{author}}, {{license}}",
       "mapLabel": "Karte der Highlights",
       "placesTitle": "Grüne Orte entdecken",
       "placesText": "Parks, Uferwege und Grünflächen, die eine Fahrt wert sind.",

@@ -652,6 +652,7 @@
       "planTrip": "Plan a Trip",
       "viewOnMap": "View on Map",
       "noLocation": "Location not verified yet",
+      "photoBy": "Photo: {{author}}, {{license}}",
       "mapLabel": "Map of highlighted places",
       "placesTitle": "Explore green places",
       "placesText": "Parks, riverside paths and green spaces worth a ride.",

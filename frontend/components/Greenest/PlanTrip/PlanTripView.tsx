@@ -1070,6 +1070,16 @@ export default function PlanTripView() {
             onClick={handleMapClick}
             onLoad={map => {
               mapRef.current = map
+              // Coming from Highlights ("Auf Karte zeigen"): that place is the destination.
+              const params = new URLSearchParams(window.location.search)
+              const [lng, lat] = (params.get('to') ?? '').split(',').map(Number)
+              if (Number.isFinite(lng) && Number.isFinite(lat)) {
+                const point: LngLat = [lng, lat]
+                setEnd(point)
+                setEndLabel(params.get('name') || formatPoint(point))
+                map.jumpTo({ center: point, zoom: 15 })
+                window.history.replaceState(null, '', window.location.pathname)
+              }
               // Bottom to top: routes, hills, highlighted stretches, riders' reports, shared vehicles,
               // the rented-vehicle trip.
               drawRoutes(map, resultRef.current)

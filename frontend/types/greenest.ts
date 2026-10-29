@@ -241,6 +241,14 @@ export type HighlightPlace = {
   description: string
   category: 'park' | 'riverside' | 'green-space' | 'destination'
   imageUrl?: string
+  /** Photo credit, shown on the photo; required for CC licenses. */
+  imageCredit?: {
+    author: string
+    /** Short license name, e.g. "CC BY-SA 4.0" or "Public domain". */
+    license: string
+    /** Commons page of the file. */
+    sourceUrl: string
+  }
   /** Approximate point; omitted until verified. */
   location?: LngLat
   /** True while the card text is placeholder content. */
