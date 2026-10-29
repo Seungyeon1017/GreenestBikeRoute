@@ -10,9 +10,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.reports import SNAP_M, ReportError, Reports
-from backend.schemas import EXAMPLE_TRIP, AirCollection, BikeFriendlyCollection, ClosureAnswer, ClosureCollection, ClosureFeature, ClosureReport,     DangerCollection, DayRoutes, Error, FlowCollection, GeofencingCollection, GradeCollection, GreenStreetCollection, LightingCollection, MappingCollection,     MappingFeature, MappingReport, PlaceCollection, FootwayFeature, StreetSegmentFeature, RouteCollection, RouteComparison, RoughnessCollection, ScoreCollection,     ShadeCollection, SharingTrip, SpeedCollection, VehicleCollection, ZoneCollection
+from backend.schemas import EXAMPLE_TRIP, AirCollection, BikeFriendlyCollection, ClosureAnswer, ClosureCollection, ClosureFeature, ClosureReport,     DangerCollection, DayRoutes, Error, FlowCollection, GeofencingCollection, GradeCollection, GreenStreetCollection, LightingCollection, MappingCollection,     MappingFeature, MappingReport, PlaceCollection, FootwayFeature, StreetSegmentFeature, RouteCollection, RouteComparison, RoughnessCollection, ScoreCollection,     ShadeCollection, SharingTrip, SpeedCollection, TransitDepartures, TransitStopCollection, VehicleCollection, ZoneCollection
 from backend.geocoding import Geocoder, GeocodingUnavailable, normalize
 from backend.sharing import ATTRIBUTION, Sharing, SharingUnavailable
+from backend.transit import LOCAL_TZ, Transit, TransitUnavailable
 from backend.users.router import router as users_router
 from download_data import DATA_DIR, load_features
 from routing.calories import DEFAULT_WEIGHT_KG
@@ -175,6 +176,10 @@ grade doesn't change which route is picked).
 - **Mapping mistakes:** `POST /reports/mapping` with `kind=rideable` reports a footway bikes ride on that routing
   leaves out (OSM lacks bicycle=yes). A maintainer checks it (`python -m backend.reports`); approved ways are routed
   from the next server start.
+- **Bike + train:** `/transit/stops` lists every Stadtbahn and train station of the region (also outside Heilbronn,
+  e.g. Mosbach) with a `stop_id`; `/transit/departures?stop_id=…&to=…` gives the next trains between two of them, so a
+  rider knows when to start riding to the station. Bikes ride free on HNV trains except Monday to Friday 06:00-09:00
+  (`bike_ticket_needed`). The timetable has no live delays.
 - **Overall score:** `/score` puts every street on one 0-100 scale (higher = better): its percentile, by length, among
   Heilbronn streets ranked by routing cost per metre. It takes the same penalties, `prefer_time`, `prefer_bike_friendly` and `depart_time` as
   `/route`, so it shows the streets the way that route request weighs them. Overtaking spots and air points count for
@@ -266,7 +271,7 @@ ROUTE_ERRORS = {400: {"description": "Start or end is outside Heilbronn, or no r
                           "detail": "start point is 812 m from the nearest Heilbronn street"}}}}}
 
 
-ROUTING, PLACES, OVERLAYS, HIGHLIGHTS, SHARING, REPORTS = "Routing", "Places", "Map overlays", "Highlights", "Sharing", "Reports"
+ROUTING, PLACES, OVERLAYS, HIGHLIGHTS, SHARING, TRANSIT, REPORTS = "Routing", "Places", "Map overlays", "Highlights", "Sharing", "Trains", "Reports"
 TAGS_METADATA = [
     {"name": ROUTING, "description": "Plan a bike route from A to B, compare it with the shortest one, "
                                        "or show its grade."},
@@ -276,6 +281,8 @@ TAGS_METADATA = [
     {"name": HIGHLIGHTS, "description": "Rankings for the app's Highlights tab, e.g. the greenest streets bikes have ridden."},
     {"name": SHARING, "description": "Shared e-bikes and e-scooters free to rent right now and their parking zones, "
                                        "live from MobiData BW (Heilbronn: Dott). Each vehicle links to the provider's app."},
+    {"name": TRANSIT, "description": "Stadtbahn and train stations of the region and their next departures, to combine "
+                                       "a bike ride with the train (NVBW timetable, no live delays)."},
     {"name": REPORTS, "description": "Riders report closed streets (routing uses them right away) and mapping mistakes "
                                        "(checked by a maintainer first)."},
 ]
@@ -294,14 +301,17 @@ def near_query(
 
 SHARING_ERRORS = {503: {"description": "The sharing feed can't be read right now", "model": Error}}
 GEOCODE_ERRORS = {503: {"description": "The place search (Nominatim) can't be reached right now", "model": Error}}
+TRANSIT_ERRORS = {503: {"description": "No timetable: it can't be downloaded and none is cached yet", "model": Error}}
 
 
-def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph=None, footways=None):
-    """`graph`, `sharing`, `reports`, `geocoder`, `walk_graph` and `footways` let tests pass small graphs, a fake feed,
-    an in-memory report store, a fake place search and a few footways; by default the Heilbronn bike and walking graphs
-    are loaded at startup (with a test graph, the walking graph on the first /route/sharing), bike and scooter sharing is read live from MobiData BW (kept
-    fresh in the background), reports are kept in data/reports.sqlite3, places are searched with Nominatim and the
-    footways the bike graph left out are read from cache/ (routing.footways)."""
+def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph=None, footways=None, transit=None):
+    """`graph`, `sharing`, `reports`, `geocoder`, `walk_graph`, `footways` and `transit` let tests pass small graphs, a
+    fake feed, an in-memory report store, a fake place search, a few footways and a small timetable; by default the
+    Heilbronn bike and walking graphs are loaded at startup (with a test graph, the walking graph on the first
+    /route/sharing), bike and scooter sharing is read live from MobiData BW (kept fresh in the background), reports are
+    kept in data/reports.sqlite3, places are searched with Nominatim, the footways the bike graph left out are read from
+    cache/ (routing.footways) and the train timetable is read from cache/ on the first /transit call (downloaded from
+    NVBW when missing or a week old)."""
     live_sharing = sharing is None
 
     @asynccontextmanager
@@ -325,6 +335,7 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
     sharing = sharing if sharing is not None else Sharing()
     reports = reports if reports is not None else Reports()
     geocoder = geocoder if geocoder is not None else Geocoder()
+    transit = transit if transit is not None else Transit()
 
     def shared(kind, query, vehicle="all"):
         near, limit = query
@@ -504,6 +515,51 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
         try:
             return GeoJSONResponse(geocoder.collection(q, limit))
         except GeocodingUnavailable as e:
+            raise HTTPException(status_code=503, detail=str(e))
+
+    @app.get("/transit/stops", tags=[TRANSIT], summary="Stadtbahn and train stations of the region, as GeoJSON points",
+             response_class=GeoJSONResponse, response_model=TransitStopCollection, responses=TRANSIT_ERRORS,
+             response_description="Points with the station's `stop_id`, `name` and `lines`")
+    def transit_stops(q: Optional[str] = Query(None, max_length=100, description=(
+            "Only stations whose name contains this, e.g. Mosbach. Case, accents and umlauts don't matter"),
+            openapi_examples={"mosbach": {"summary": "Mosbach", "value": "Mosbach"}}),
+                      near_lat: Optional[float] = Query(None, ge=-90, le=90, description=(
+                          "Latitude to sort by distance from, e.g. the route start")),
+                      near_lon: Optional[float] = Query(None, ge=-180, le=180, description="Longitude to sort by distance from"),
+                      limit: Optional[int] = Query(None, ge=1, le=500, description=(
+                          "Return at most this many (closest first if near_lat/near_lon is given)"))):
+        """Every station a Stadtbahn (S4, S41, S42) or train line (RE, RB, MEX) of the HNV timetable calls at, also
+        outside Heilbronn. Sorted by name, or closest first with near_lat/near_lon. The first call after a server start
+        reads the timetable (a few seconds)."""
+        if (near_lat is None) != (near_lon is None):
+            raise HTTPException(status_code=422, detail="give both near_lat and near_lon, or neither")
+        try:
+            return GeoJSONResponse(transit.stops(q, None if near_lat is None else (near_lat, near_lon), limit))
+        except TransitUnavailable as e:
+            raise HTTPException(status_code=503, detail=str(e))
+
+    @app.get("/transit/departures", tags=[TRANSIT], summary="The next trains from a station, optionally only those to another one",
+             response_model=TransitDepartures,
+             responses={**TRANSIT_ERRORS, 404: {"description": "No station with this stop_id", "model": Error}},
+             response_description="Departures soonest first, each with whether the bike needs a ticket")
+    def transit_departures(stop_id: str = Query(..., description="Station to leave from, a `stop_id` from /transit/stops",
+                                                openapi_examples={"hbf": {"summary": "Heilbronn Hbf/Willy-Brandt-Platz",
+                                                                          "value": "de:08121:1114"}}),
+                           to: Optional[str] = Query(None, description=(
+                               "Only trains that go on to this station without a change (a `stop_id`), with their "
+                               "arrival there"), openapi_examples={"mosbach": {"summary": "Mosbach, Bahnhof",
+                                                                                "value": "de:08225:8209"}}),
+                           after: Optional[datetime] = Query(None, description=(
+                               "Trains leaving at or after this time, e.g. 2026-11-04T07:30 (Heilbronn local time) or "
+                               "with a time zone; now if left out")),
+                           limit: int = Query(10, ge=1, le=50, description="Return at most this many departures")):
+        """For a bike + train trip: the trains to catch, so the rider knows when to start riding to the station.
+        Searches up to two days ahead. Times are as timetabled, without live delays."""
+        try:
+            return JSONResponse(transit.departures(stop_id, after or datetime.now(LOCAL_TZ), to, limit))
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=f"no station {e.args[0]}: pick a stop_id from /transit/stops")
+        except TransitUnavailable as e:
             raise HTTPException(status_code=503, detail=str(e))
 
     def client(request):
