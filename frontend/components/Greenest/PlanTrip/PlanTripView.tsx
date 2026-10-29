@@ -393,6 +393,15 @@ export default function PlanTripView() {
 
   // 3. EFFECTS: code that runs when certain values change.
 
+  // The thank-you after answering a closure fades away on its own.
+  useEffect(() => {
+    if (!reportStatus) {
+      return
+    }
+    const timer = setTimeout(() => setReportStatus(null), 6000)
+    return () => clearTimeout(timer)
+  }, [reportStatus])
+
   // Ask the backend for a route (or, through the day, all of the day's routes) when the points or any option change.
   useEffect(() => {
     if (!start || !end) {
