@@ -302,7 +302,7 @@ def test_pick_the_left_out_footway_near_a_click(client):
     r = client.get("/reports/footway", params={"lat": 49.1404, "lon": 9.21105})
     assert r.status_code == 200
     assert FootwayFeature.model_validate(r.json()).properties.osm_way_id == 77
-    assert client.get("/reports/footway", params={"lat": 49.1404, "lon": 9.2200}).status_code == 404
+    assert client.get("/reports/footway", params={"lat": 49.1404, "lon": 9.2200}).status_code == 400
 
 
 def test_footways_left_out_of_routing_are_kept_per_way():

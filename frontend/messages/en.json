@@ -659,6 +659,7 @@
           "looking": "Looking for the street…",
           "noStreet": "No street is near there. Click closer to the closed street.",
           "noFootway": "No footway near there that routes leave out. If bikes may ride there already, routes use it; for anything else, report another mistake in the map.",
+          "unavailable": "This server cannot pick streets and footways yet: it runs an older backend. Restart or rebuild the backend.",
           "remove": "Remove",
           "unnamed": {
             "closure": "Street without a name",

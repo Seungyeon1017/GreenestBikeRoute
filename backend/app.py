@@ -521,14 +521,14 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
 
     @app.get("/reports/footway", tags=[REPORTS], summary="The footway routing leaves out nearest to a point",
              response_model=FootwayFeature,
-             responses={404: {"description": "No such footway within 50 m of the point", "model": Error}},
+             responses={400: {"description": "No such footway within 50 m of the point", "model": Error}},
              response_description="The whole OSM way, to name in a `rideable` mapping report")
     def report_footway(lat: float = Query(..., ge=-90, le=90), lon: float = Query(..., ge=-180, le=180)):
         """Footways and paths without a bicycle tag in OSM are left out of routing. A rider who sees bikes ride on one
         picks it here, so the report names its OSM way (`osm_way_id` in POST /reports/mapping)."""
         feature, dist = app.state.footways.nearest(lat, lon)
         if feature is None or dist > SNAP_M:
-            raise HTTPException(status_code=404, detail=f"no footway left out of routing within {SNAP_M} m")
+            raise HTTPException(status_code=400, detail=f"no footway left out of routing within {SNAP_M} m")
         return feature
 
     @app.post("/reports/closures", tags=[REPORTS], summary="Report that a street is closed right now",

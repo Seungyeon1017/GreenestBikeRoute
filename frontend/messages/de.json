@@ -659,6 +659,7 @@
           "looking": "Straße wird gesucht…",
           "noStreet": "Dort ist keine Straße in der Nähe. Klicke näher an die gesperrte Straße.",
           "noFootway": "Dort ist kein Gehweg in der Nähe, den Routen auslassen. Dürfen Räder dort schon fahren, nutzen Routen ihn; alles andere meldest du als anderen Fehler in der Karte.",
+          "unavailable": "Dieser Server kann noch keine Straßen und Gehwege auswählen: Er läuft mit einem älteren Backend. Starte das Backend neu oder baue es neu.",
           "remove": "Entfernen",
           "unnamed": {
             "closure": "Straße ohne Namen",
