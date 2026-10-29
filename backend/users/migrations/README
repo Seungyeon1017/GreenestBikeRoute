@@ -1,0 +1,18 @@
+Migrations for the users database (Alembic). Run every command from the repo root.
+
+Apply all migrations (after pulling, or on a new database):
+    alembic -c backend/users/alembic.ini upgrade head
+
+After changing a table in backend/users/models.py, create a migration, then READ it
+before applying (autogenerate can miss renames and some defaults):
+    alembic -c backend/users/alembic.ini revision --autogenerate -m "add avatar_url to users"
+    alembic -c backend/users/alembic.ini upgrade head
+
+Undo the last migration:
+    alembic -c backend/users/alembic.ini downgrade -1
+
+Where am I / what exists:
+    alembic -c backend/users/alembic.ini current
+    alembic -c backend/users/alembic.ini history
+
+The database URL comes from USERS_DATABASE_URL (see backend/users/config.py).

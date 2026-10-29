@@ -16,6 +16,7 @@ from backend.schemas import EXAMPLE_TRIP, AirCollection, BikeFriendlyCollection,
     SpeedCollection, VehicleCollection, ZoneCollection
 from backend.geocoding import Geocoder, GeocodingUnavailable, normalize
 from backend.sharing import Sharing, SharingUnavailable
+from backend.users.router import router as users_router
 from download_data import DATA_DIR, load_features
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_PM_PENALTY, \
     DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, air_scores, clean_overtaking, osm_way_ids
@@ -288,7 +289,7 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None):
     app = FastAPI(title="Greenest Bike Route", description=API_DESCRIPTION, lifespan=lifespan,
                   openapi_tags=TAGS_METADATA)
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST"],
-                       allow_headers=["Content-Type"])
+                       allow_headers=["Content-Type", "Authorization"])
     sharing = sharing if sharing is not None else Sharing()
     reports = reports if reports is not None else Reports()
     geocoder = geocoder if geocoder is not None else Geocoder()
@@ -485,6 +486,7 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None):
         return GeoJSONResponse({"type": "FeatureCollection",
                                 "features": [mapping_feature(r) for r in reports.mapping_reports(status)]})
 
+    app.include_router(users_router)
     return app
 
 

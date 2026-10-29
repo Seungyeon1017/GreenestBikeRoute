@@ -1,0 +1,54 @@
+# Backend + PostgreSQL for the users feature (backend/users). Self-contained: use this file ON ITS OWN,
+# not together with compose.yml. All USERS_* values come from .env (see .env.users.example).
+#
+#   docker compose -f compose.users.yml up -d postgres          # only the database
+#   docker compose -f compose.users.yml up --build              # database + backend
+#   docker compose -f compose.users.yml exec backend alembic -c backend/users/alembic.ini upgrade head
+#   docker compose -f compose.users.yml down                    # stop (add -v to also delete the data)
+#
+# Kept separate while the feature is on a branch, so compose.yml doesn't conflict with main.
+# When the branch is merged, move the postgres service and the backend's env settings into compose.yml.
+services:
+  postgres:
+    image: postgres:16
+    container_name: bike-postgres
+    environment:
+      POSTGRES_USER: ${USERS_DATABASE_USERNAME}
+      POSTGRES_PASSWORD: ${USERS_DATABASE_PASSWORD}
+      POSTGRES_DB: ${USERS_DATABASE_NAME}
+    ports:
+      # Your computer's port (from .env, e.g. 5434) -> PostgreSQL's port inside the container (always 5432).
+      - "${USERS_DATABASE_PORT}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # $$ = a literal $, so the container fills these in, not Compose.
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    # Same as the backend in compose.yml, plus the database settings below.
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bike-backend-new
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./data:/app/data
+      - ./cache:/app/cache
+    env_file:
+      - .env
+    environment:
+      # Inside Docker, the database is the "postgres" service on its inside port.
+      # These two override the localhost/5434 values from .env, which are for running on your computer.
+      USERS_DATABASE_HOSTNAME: postgres
+      USERS_DATABASE_PORT: "5432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
