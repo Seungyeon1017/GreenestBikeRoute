@@ -241,7 +241,7 @@
       },
       "environmental-score": {
         "label": "Gesamtwert",
-        "description": "Jede Straße bewertet von 0 bis 100 aus allen gemessenen Faktoren: Unebenheit, enges Überholen, Luft, Stop-and-go. Höher ist besser."
+        "description": "Wie gut jede Straße zum Radfahren ist (0–100): glatter Belag, sicheres Überholen, saubere Luft, wenige Stopps, etc. Höher ist besser."
       },
       "bike-friendly": {
         "label": "Radwege & Radspuren",
@@ -270,7 +270,7 @@
     },
     "overview": {
       "title": "Entdecke die Umwelt deiner Stadt",
-      "subtitle": "Luftqualität, Lärm, Grün und Radinfrastruktur in Heilbronn. Ebenen ein- und ausblenden und ein Gebiet für Details anklicken.",
+      "subtitle": "Was beim Radfahren zählt: Luft, Belag, Verkehr, Schatten und Licht. Ebenen ein- und ausblenden und ein Gebiet für Details anklicken.",
       "layersTitle": "Umweltebenen",
       "streetLayersHint": "Ebenen, die Straßen einfärben, werden einzeln gezeigt.",
       "detailsTitle": "Gebietsdetails",

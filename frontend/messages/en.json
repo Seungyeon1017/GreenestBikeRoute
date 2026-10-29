@@ -241,7 +241,7 @@
       },
       "environmental-score": {
         "label": "Overall score",
-        "description": "Every street rated 0–100 by all measured factors together: roughness, close overtakes, air, stop-and-go. Higher is better."
+        "description": "How good each street is for cycling (0–100): smooth surface, safe overtaking, clean air, few stops, etc. Higher is better."
       },
       "bike-friendly": {
         "label": "Bike paths & lanes",
@@ -270,7 +270,7 @@
     },
     "overview": {
       "title": "Explore your city's environment",
-      "subtitle": "See air quality, noise, greenery and cycling infrastructure across Heilbronn. Turn layers on and off and click an area for details.",
+      "subtitle": "See what matters for cycling: air, road surface, traffic, shade and lighting. Turn layers on and off and click an area for details.",
       "layersTitle": "Environmental layers",
       "streetLayersHint": "Layers that colour the streets are shown one at a time.",
       "detailsTitle": "Area details",
