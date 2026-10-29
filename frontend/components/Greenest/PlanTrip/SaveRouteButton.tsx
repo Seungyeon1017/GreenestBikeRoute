@@ -81,7 +81,8 @@ export default function SaveRouteButton({
 
   return (
     <Card className="flex flex-col gap-2">
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
+      {/* Phones: Save above Share, so a long label like "Log in to save this route" keeps one line. */}
+      <div className="grid grid-cols-1 items-start gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
         {status === 'authenticated' ? (
           <button
             className="flex items-center justify-center gap-2 rounded-full bg-leaf-forest px-4 py-2.5 text-sm font-semibold text-leaf-cream hover:bg-leaf-moss disabled:cursor-not-allowed disabled:bg-leaf-sand disabled:text-leaf-muted"
