@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next'
 import BaseMap from '@/components/Greenest/Map'
 import PageIntro from '@/components/Greenest/ui/PageIntro'
 import { useSharedVehicles, useSharingTrip } from '@/hooks/useSharing'
+import { GRADE_COLOR } from '@/lib/hillColors'
 import {
   DEFAULT_ROUTE_OPTIONS,
   fetchGeofencing,
@@ -94,13 +95,21 @@ function drawRoutes(map: maplibregl.Map, result: RouteResult | null) {
 function drawGrade(map: maplibregl.Map, grade: GradeCollection | null) {
   if (!map.getSource('grade')) {
     map.addSource('grade', { type: 'geojson', data: EMPTY })
+    // White edge so the pale flat and yellow pieces stand out from the map.
+    map.addLayer({
+      id: 'grade-casing',
+      type: 'line',
+      source: 'grade',
+      layout: ROUND_LINE,
+      paint: { 'line-color': '#ffffff', 'line-width': 9 },
+    })
     map.addLayer({
       id: 'grade',
       type: 'line',
       source: 'grade',
       layout: ROUND_LINE,
-      // Each piece carries the backend's suggested colour for its steepness.
-      paint: { 'line-color': ['get', 'color'], 'line-width': 6 },
+      // Coloured from the exact grade (not the backend's five classes): uphill warm, downhill cool.
+      paint: { 'line-color': GRADE_COLOR, 'line-width': 6 },
     })
   }
   map.getSource<maplibregl.GeoJSONSource>('grade')?.setData(grade ?? EMPTY)

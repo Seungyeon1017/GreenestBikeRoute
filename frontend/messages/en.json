@@ -362,15 +362,13 @@
         "climb": "Climb",
         "descent": "Descent",
         "steepest": "Steepest",
-        "severity": {
-          "flat": "flat (< 2 %)",
-          "gentle": "gentle (2–4 %)",
-          "noticeable": "noticeable (4–6 %)",
-          "steep": "steep (6–10 %)",
-          "very_steep": "very steep (10 %+)"
-        },
         "unavailable": "Hills are not available: this server has no elevation data.",
-        "credit": "Heights: LGL, www.lgl-bw.de, dl-de/by-2-0 (DGM1)"
+        "credit": "Heights: LGL, www.lgl-bw.de, dl-de/by-2-0 (DGM1)",
+        "legend": {
+          "down": "↓ downhill",
+          "up": "uphill ↑ (%)",
+          "hint": "One colour per band. Uphill turns yellow to orange already at 2–4 %, which you feel; red from 6 %, dark red at 10 % and more. Downhill is blue to violet: the darker, the more braking. Flat (under 1 %) is green."
+        }
       },
       "search": {
         "noMatch": "No place found in Heilbronn. Try another spelling, or click the map.",

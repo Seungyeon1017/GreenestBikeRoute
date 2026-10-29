@@ -190,7 +190,7 @@ export function drawTrip(
 /** Fades your route and the shortest one while the rented-vehicle trip is shown. */
 export function fadeRoutes(map: maplibregl.Map, faded: boolean) {
   const opacity = faded ? 0.25 : 1
-  for (const id of ['shortest', 'greenest', 'grade']) {
+  for (const id of ['shortest', 'greenest', 'grade-casing', 'grade']) {
     if (map.getLayer(id)) {
       map.setPaintProperty(id, 'line-opacity', opacity)
     }

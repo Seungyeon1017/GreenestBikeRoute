@@ -362,15 +362,13 @@
         "climb": "Anstieg",
         "descent": "Abstieg",
         "steepest": "Steilste Stelle",
-        "severity": {
-          "flat": "flach (< 2 %)",
-          "gentle": "leicht (2–4 %)",
-          "noticeable": "spürbar (4–6 %)",
-          "steep": "steil (6–10 %)",
-          "very_steep": "sehr steil (10 %+)"
-        },
         "unavailable": "Steigungen sind nicht verfügbar: Dieser Server hat keine Höhendaten.",
-        "credit": "Höhen: LGL, www.lgl-bw.de, dl-de/by-2-0 (DGM1)"
+        "credit": "Höhen: LGL, www.lgl-bw.de, dl-de/by-2-0 (DGM1)",
+        "legend": {
+          "down": "↓ bergab",
+          "up": "bergauf ↑ (%)",
+          "hint": "Eine Farbe pro Bereich. Bergauf wird es schon bei 2–4 % gelb bis orange, das spürt man; rot ab 6 %, dunkelrot ab 10 %. Bergab ist blau bis violett: je dunkler, desto mehr Bremsen. Flach (unter 1 %) ist grün."
+        }
       },
       "search": {
         "noMatch": "Kein Ort in Heilbronn gefunden. Versuche eine andere Schreibweise oder klicke auf die Karte.",
