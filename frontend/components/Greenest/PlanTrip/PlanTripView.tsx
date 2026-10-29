@@ -773,13 +773,22 @@ export default function PlanTripView() {
     }
     const s = (key: string, values?: Record<string, unknown>) =>
       t(`greenest.planTrip.sharing.${key}`, values)
+    const bikes = (count: number) => s('zoneBikes', { count })
+    const scooters = (count: number) => s('zoneScooters', { count })
     const content = sharingPopup(hit.layer.id, hit.properties, {
       vehicle: kind => s(`vehicle.${kind}`),
       away: m => s('away', { m }),
       range: km => s('range', { km }),
       price: price => localPrice(price, t, i18n.language),
       rent: provider => s('rent', { provider }),
-      zoneCounts: (bikes, scooters) => s('zoneCounts', { bikes, scooters }),
+      zoneSpaces: (b, sc) =>
+        b != null && sc != null
+          ? s('zoneSpaces.both', { bikes: bikes(b), scooters: scooters(sc) })
+          : s('zoneSpaces.one', {
+              what: b != null ? bikes(b) : scooters(sc ?? 0),
+            }),
+      zoneCounts: (provider, b, sc) =>
+        s('zoneCounts', { provider, bikes: bikes(b), scooters: scooters(sc) }),
     })
     popupRef.current?.remove()
     popupRef.current = new maplibregl.Popup({

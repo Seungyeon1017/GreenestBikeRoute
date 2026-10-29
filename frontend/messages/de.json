@@ -433,7 +433,15 @@
         "battery": "Akku {{pct}} %",
         "range": "noch etwa {{km}} km",
         "rent": "In der {{provider}}-App leihen",
-        "zoneCounts": "Hier: {{bikes}} E-Bikes, {{scooters}} E-Scooter",
+        "zoneSpaces": {
+          "both": "Platz für {{bikes}} und {{scooters}}",
+          "one": "Platz für {{what}}"
+        },
+        "zoneCounts": "Laut {{provider}} gerade hier: {{bikes}} und {{scooters}}",
+        "zoneBikes_one": "{{count}} E-Bike",
+        "zoneBikes_other": "{{count}} E-Bikes",
+        "zoneScooters_one": "{{count}} E-Scooter",
+        "zoneScooters_other": "{{count}} E-Scooter",
         "updated": "Stand {{time}}",
         "unavailable": "Leihfahrzeuge sind gerade nicht verfügbar.",
         "price": "{{unlock}} zum Entsperren + {{perMin}}/Min.",

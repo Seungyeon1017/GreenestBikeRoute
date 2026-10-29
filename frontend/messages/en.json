@@ -433,7 +433,15 @@
         "battery": "Battery {{pct}} %",
         "range": "about {{km}} km left",
         "rent": "Rent in the {{provider}} app",
-        "zoneCounts": "{{bikes}} e-bikes, {{scooters}} e-scooters here",
+        "zoneSpaces": {
+          "both": "Room for {{bikes}} and {{scooters}}",
+          "one": "Room for {{what}}"
+        },
+        "zoneCounts": "{{provider}} reports {{bikes}} and {{scooters}} here now",
+        "zoneBikes_one": "{{count}} e-bike",
+        "zoneBikes_other": "{{count}} e-bikes",
+        "zoneScooters_one": "{{count}} e-scooter",
+        "zoneScooters_other": "{{count}} e-scooters",
         "updated": "Updated {{time}}",
         "unavailable": "Shared vehicles are not available right now.",
         "price": "{{unlock}} to unlock + {{perMin}}/min",

@@ -211,7 +211,9 @@ type Labels = {
   /** The feed's price, e.g. "€1.00 to unlock + €0.44/min", in the page's language. */
   price: (_price: string) => string
   rent: (_provider: string) => string
-  zoneCounts: (_bikes: number, _scooters: number) => string
+  /** "Room for 10 e-bikes and 10 e-scooters"; a kind the zone has no spaces for is null. */
+  zoneSpaces: (_bikes: number | null, _scooters: number | null) => string
+  zoneCounts: (_provider: string, _bikes: number, _scooters: number) => string
 }
 
 /** A DOM element with classes and (safe) text. */
@@ -265,14 +267,37 @@ export function sharingPopup(
   )
   if (layer === 'sharing-zones') {
     const z = properties as unknown as ZoneProperties
-    box.append(
+    box.appendChild(
       el('strong', 'pr-4 text-sm font-semibold text-leaf-forest', z.name),
-      el(
-        'span',
-        'text-leaf-muted',
-        labels.zoneCounts(z.bikes_available, z.scooters_available),
-      ),
     )
+    // Dott reports every zone as full (available = capacity), whatever is
+    // parked there, so its counts only add something when they differ.
+    const spaces = z.bike_capacity != null || z.scooter_capacity != null
+    const reportsFull =
+      z.bikes_available === (z.bike_capacity ?? 0) &&
+      z.scooters_available === (z.scooter_capacity ?? 0)
+    if (spaces) {
+      box.appendChild(
+        el(
+          'span',
+          'text-leaf-muted',
+          labels.zoneSpaces(z.bike_capacity, z.scooter_capacity),
+        ),
+      )
+    }
+    if (!spaces || !reportsFull) {
+      box.appendChild(
+        el(
+          'span',
+          'text-leaf-muted',
+          labels.zoneCounts(
+            z.provider,
+            z.bikes_available,
+            z.scooters_available,
+          ),
+        ),
+      )
+    }
     return box
   }
   const p = properties as unknown as VehicleProperties
