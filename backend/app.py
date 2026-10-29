@@ -295,17 +295,22 @@ GEOCODE_ERRORS = {503: {"description": "The place search (Nominatim) can't be re
 def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph=None, footways=None):
     """`graph`, `sharing`, `reports`, `geocoder`, `walk_graph` and `footways` let tests pass small graphs, a fake feed,
     an in-memory report store, a fake place search and a few footways; by default the Heilbronn bike graph is loaded at
-    startup, the walking graph on the first /route/sharing, bike and scooter sharing is read live from MobiData BW,
-    reports are kept in data/reports.sqlite3, places are searched with Nominatim and the footways the bike graph left
-    out are read from cache/ (routing.footways)."""
+    startup, the walking graph on the first /route/sharing, bike and scooter sharing is read live from MobiData BW (kept
+    fresh in the background), reports are kept in data/reports.sqlite3, places are searched with Nominatim and the
+    footways the bike graph left out are read from cache/ (routing.footways)."""
+    live_sharing = sharing is None
 
     @asynccontextmanager
     async def lifespan(app):
+        if live_sharing:
+            sharing.start()  # fetches the feed while the graph loads
         app.state.graph = graph if graph is not None else load_graph()
         attach_elevation(app.state.graph, load_elevation(), load_crests())  # node heights and bridge crests for /route/grade
         app.state.scores = {}
         app.state.footways = footways if footways is not None else Footways()  # written with the graph, so after it
         yield
+        if live_sharing:
+            sharing.stop()
 
     app = FastAPI(title="Greenest Bike Route", description=API_DESCRIPTION, lifespan=lifespan,
                   openapi_tags=TAGS_METADATA)

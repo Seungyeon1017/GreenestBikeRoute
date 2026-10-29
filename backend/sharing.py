@@ -16,6 +16,7 @@ and its scooter counterpart, Datenlizenz Deutschland – Namensnennung – 2.0. 
 import argparse
 import json
 import math
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -29,8 +30,9 @@ SYSTEMS = ("dott_heilbronn",)  # add more GBFS systems here if a provider starts
 # GBFS form_factor -> what we call it. Cars, mopeds and other types are left out.
 VEHICLES = {"bicycle": "bike", "cargo_bicycle": "bike", "scooter_standing": "scooter", "scooter_seated": "scooter",
             "scooter": "scooter"}
-CACHE_S = 60          # serve the same snapshot for this long
-STALE_S = 30 * 60     # if the feed is down, keep serving the last snapshot this long
+CACHE_S = 60          # serve the same snapshot for this long, then refetch it in the background
+STALE_S = 30 * 60     # serve an older snapshot than this only after refetching (or failing to)
+IDLE_S = 30 * 60      # the background thread stops refetching when nobody asked for sharing data this long
 ATTRIBUTION = "MobiData BW (dl-de/by-2-0), sharing data by the providers"
 SAVED_PATH = DATA_DIR / "custom" / "dott_geofencing_heilbronn.json"
 
@@ -182,36 +184,85 @@ def nearest(features, lat, lon, limit):
     return sorted(out, key=lambda f: f["properties"]["distance_m"])[:limit]
 
 
+def _in_thread(fn):
+    threading.Thread(target=fn, daemon=True).start()
+
+
 class Sharing:
     """Cached snapshot of all SYSTEMS, with the geofencing zones saved at `saved` (SAVED_PATH; None for none).
-    `fetch(system, feed)` returns a GBFS feed's JSON (tests pass a fake)."""
+    `fetch(system, feed)` returns a GBFS feed's JSON (tests pass a fake), `spawn(fn)` runs fn in the background (tests
+    run it at once).
 
-    def __init__(self, fetch=fetch_json, systems=SYSTEMS, clock=time.monotonic, saved=SAVED_PATH):
-        self.fetch, self.systems, self.clock = fetch, systems, clock
+    A request never waits for MobiData BW while there is a snapshot younger than STALE_S: an older one than CACHE_S is
+    served and refetched in the background. With `start()`, a background thread also refetches every CACHE_S while
+    the API was asked for sharing data in the last IDLE_S, so the snapshot is fresh when the next request comes."""
+
+    def __init__(self, fetch=fetch_json, systems=SYSTEMS, clock=time.monotonic, saved=SAVED_PATH, spawn=_in_thread):
+        self.fetch, self.systems, self.clock, self.spawn = fetch, systems, clock, spawn
         self.geofencing = (json.loads(saved.read_text(encoding="utf-8"))["geofencing"]
                            if saved is not None and saved.exists() else None)
-        self._snapshot, self._taken = None, None
+        self._snapshot, self._taken, self._asked = None, None, None
+        self._lock = threading.Lock()  # one refetch at a time
+        self._stop = threading.Event()
 
-    def snapshot(self):
-        """{"vehicles": [...], "zones": [...], "geofencing": [...] or None without a saved copy, "updated": ISO time};
-        refetched after CACHE_S."""
+    def _refetch(self):
+        """Read all SYSTEMS into a new snapshot; raises the feed's error."""
         now = self.clock()
-        if self._snapshot is not None and now - self._taken < CACHE_S:
-            return self._snapshot
-        try:
-            vehicles, zones = [], []
-            for system in self.systems:
-                v, z = read_system(system, self.fetch)
-                vehicles += v
-                zones += z
-        except (requests.RequestException, KeyError, ValueError) as e:
-            if self._snapshot is not None and now - self._taken < STALE_S:
-                return self._snapshot
-            raise SharingUnavailable(f"sharing data unavailable ({type(e).__name__}), try again later") from e
+        vehicles, zones = [], []
+        for system in self.systems:
+            v, z = read_system(system, self.fetch)
+            vehicles += v
+            zones += z
         self._snapshot = {"vehicles": vehicles, "zones": zones, "geofencing": self.geofencing,
                           "updated": datetime.now(timezone.utc).isoformat(timespec="seconds")}
         self._taken = now
+
+    def _refetch_quietly(self):
+        """_refetch unless one is running; a failure keeps the old snapshot (snapshot() gives up on it after STALE_S)."""
+        if not self._lock.acquire(blocking=False):
+            return
+        try:
+            self._refetch()
+        except (requests.RequestException, KeyError, ValueError):
+            pass
+        finally:
+            self._lock.release()
+
+    def snapshot(self):
+        """{"vehicles": [...], "zones": [...], "geofencing": [...] or None without a saved copy, "updated": ISO time};
+        refetched in the background after CACHE_S, and before answering when there is none younger than STALE_S."""
+        now = self._asked = self.clock()
+        if self._snapshot is not None and now - self._taken < CACHE_S:
+            return self._snapshot
+        if self._snapshot is not None and now - self._taken < STALE_S:
+            self.spawn(self._refetch_quietly)
+            return self._snapshot
+        with self._lock:
+            if self._snapshot is not None and self.clock() - self._taken < CACHE_S:  # refetched while we waited
+                return self._snapshot
+            try:
+                self._refetch()
+            except (requests.RequestException, KeyError, ValueError) as e:
+                raise SharingUnavailable(f"sharing data unavailable ({type(e).__name__}), try again later") from e
         return self._snapshot
+
+    def tick(self):
+        """One round of the background thread: refetch if sharing data was asked for in the last IDLE_S, or never
+        fetched yet (at startup)."""
+        if self._snapshot is None or (self._asked is not None and self.clock() - self._asked < IDLE_S):
+            self._refetch_quietly()
+
+    def start(self):
+        """Keep the snapshot fresh in a background thread until stop()."""
+        def run():
+            while not self._stop.is_set():
+                self.tick()
+                self._stop.wait(CACHE_S)
+        self._stop.clear()
+        _in_thread(run)
+
+    def stop(self):
+        self._stop.set()
 
     def collection(self, kind, near=None, limit=None, vehicle="all"):
         """A FeatureCollection of "vehicles" (all, or only vehicle="bike" / "scooter"), "zones" or "geofencing";

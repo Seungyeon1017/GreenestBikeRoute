@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from backend.app import create_app
 from backend.schemas import GeofencingCollection, SharingTrip, VehicleCollection, ZoneCollection
-from backend.sharing import CACHE_S, STALE_S, Sharing, SharingUnavailable, distance_m, main
+from backend.sharing import CACHE_S, IDLE_S, STALE_S, Sharing, SharingUnavailable, distance_m, main
 from tests.conftest import COORDS, A, B
 
 MARKT = (49.1427, 9.2109)  # Heilbronn Marktplatz (lat, lon)
@@ -106,7 +106,7 @@ def test_distance():
 
 def test_snapshot_is_cached_then_refetched():
     feed, clock = FakeFeed(), Clock()
-    bs = Sharing(fetch=feed, clock=clock)
+    bs = Sharing(fetch=feed, clock=clock, spawn=lambda fn: fn())
     bs.collection("vehicles")
     calls = feed.calls
     clock.t = CACHE_S - 1
@@ -117,9 +117,19 @@ def test_snapshot_is_cached_then_refetched():
     assert feed.calls > calls
 
 
+def test_an_old_snapshot_is_served_at_once_and_refetched_in_the_background():
+    feed, clock, later = FakeFeed(), Clock(), []
+    bs = Sharing(fetch=feed, clock=clock, spawn=later.append)
+    first = bs.snapshot()
+    clock.t = CACHE_S + 1
+    assert bs.snapshot() is first and len(later) == 1  # answered without waiting for the feed
+    later[0]()
+    assert bs.snapshot() is not first and bs._taken == CACHE_S + 1
+
+
 def test_feed_down_serves_the_last_snapshot_for_a_while():
     feed, clock = FakeFeed(), Clock()
-    bs = Sharing(fetch=feed, clock=clock)
+    bs = Sharing(fetch=feed, clock=clock, spawn=lambda fn: fn())
     first = bs.collection("vehicles")
     feed.down = True
     clock.t = CACHE_S + 1
@@ -127,6 +137,26 @@ def test_feed_down_serves_the_last_snapshot_for_a_while():
     clock.t = STALE_S + 1
     with pytest.raises(SharingUnavailable):
         bs.collection("vehicles")
+
+
+def test_background_thread_refetches_only_while_sharing_is_asked_for():
+    feed, clock = FakeFeed(), Clock()
+    bs = Sharing(fetch=feed, clock=clock)
+    bs.tick()  # at startup
+    assert bs._snapshot is not None
+    calls = feed.calls
+    clock.t = IDLE_S + 1
+    bs.tick()
+    assert feed.calls == calls  # nobody asked yet: MobiData BW is left alone
+    bs._taken = clock.t  # a fresh snapshot, so asking for it fetches nothing
+    bs.snapshot()
+    clock.t += CACHE_S
+    bs.tick()
+    assert feed.calls > calls
+    calls = feed.calls
+    clock.t += IDLE_S
+    bs.tick()
+    assert feed.calls == calls
 
 
 @pytest.fixture
