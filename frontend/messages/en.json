@@ -391,6 +391,10 @@
           "hint": "One colour per band. Uphill turns yellow to orange already at 2–4 %, which you feel; red from 6 %, dark red at 10 % and more. Downhill is blue to violet: the darker, the more braking. Flat (under 1 %) is green."
         }
       },
+      "layers": {
+        "button": "Layers",
+        "title": "Map layers"
+      },
       "search": {
         "noMatch": "No place found in Heilbronn. Try another spelling, or click the map.",
         "unavailable": "Place search is not available right now. Click the map instead.",

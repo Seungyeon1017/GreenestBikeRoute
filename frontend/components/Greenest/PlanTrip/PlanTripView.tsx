@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next'
 import BaseMap from '@/components/Greenest/Map'
 import PageIntro from '@/components/Greenest/ui/PageIntro'
 import useFullscreenMap from '@/hooks/useFullscreenMap'
+import useMediaQuery from '@/hooks/useMediaQuery'
 import { closureNear, useReports } from '@/hooks/useReports'
 import useSavedRouteFromUrl from '@/hooks/useSavedRouteFromUrl'
 import { useSharedVehicles, useSharingTrip } from '@/hooks/useSharing'
@@ -46,7 +47,8 @@ import type {
 } from '@/types/greenest'
 import DaySlider, { dayStops, stopAt } from './DaySlider'
 import FullscreenButton from './FullscreenButton'
-import GradeCard from './GradeCard'
+import HillsLegend from './HillsLegend'
+import MapLayers from './MapLayers'
 import {
   CLICKABLE_REPORT_LAYERS,
   drawReportPicks,
@@ -54,7 +56,7 @@ import {
   reportPopup,
 } from './reportLayers'
 import ReportProblem from './ReportProblem'
-import ReportsCard, { closureText } from './ReportsCard'
+import { closureText, ReportsNotice } from './ReportsLegend'
 import RouteComparisonCard, { ROUTE_COLORS } from './RouteComparison'
 import SaveRouteButton from './SaveRouteButton'
 import {
@@ -268,6 +270,8 @@ export default function PlanTripView() {
 
   // Hills: only requested while "Show hills" is ticked.
   const [showHills, setShowHills] = useState(false)
+  // Same breakpoint as Tailwind's `lg`: the cards column and the map side by side.
+  const wide = useMediaQuery('(min-width: 1024px)')
   const [grade, setGrade] = useState<GradeCollection | null>(null)
   const [gradeError, setGradeError] = useState<string | null>(null)
 
@@ -697,10 +701,16 @@ export default function PlanTripView() {
     if (!map || !start) {
       return
     }
-    const marker = endpointPin(map, start, '#1a7f37', t('greenest.planTrip.start'), point => {
-      setStart(point)
-      setStartLabel(formatPoint(point))
-    })
+    const marker = endpointPin(
+      map,
+      start,
+      '#1a7f37',
+      t('greenest.planTrip.start'),
+      point => {
+        setStart(point)
+        setStartLabel(formatPoint(point))
+      },
+    )
     return () => {
       marker.remove()
     }
@@ -711,10 +721,16 @@ export default function PlanTripView() {
     if (!map || !end) {
       return
     }
-    const marker = endpointPin(map, end, '#b3261e', t('greenest.planTrip.destination'), point => {
-      setEnd(point)
-      setEndLabel(formatPoint(point))
-    })
+    const marker = endpointPin(
+      map,
+      end,
+      '#b3261e',
+      t('greenest.planTrip.destination'),
+      point => {
+        setEnd(point)
+        setEndLabel(formatPoint(point))
+      },
+    )
     return () => {
       marker.remove()
     }
@@ -1242,6 +1258,27 @@ export default function PlanTripView() {
   }
 
   // 5. RENDER: what appears on the page.
+  const comparison = (
+    <RouteComparisonCard
+      className={
+        wide
+          ? // Stops above the Layers button at the bottom left.
+            'absolute left-3 top-3 z-10 max-h-[calc(100%-6.5rem)] w-[22rem] overflow-y-auto rounded-2xl p-4'
+          : undefined
+      }
+      collapsible={wide}
+      focus={{
+        shown: shownFlag,
+        pinned: pinnedFlag,
+        onPreview: setPreviewFlag,
+        onToggle: flag =>
+          setPinnedFlag(current => (current === flag ? null : flag)),
+      }}
+      paused={Boolean(sharingTrip.trip)}
+      result={shown}
+    />
+  )
+
   return (
     // data-workspace: on wide screens the page fills the window and doesn't
     // scroll; the cards column and the map each keep their own height.
@@ -1293,17 +1330,7 @@ export default function PlanTripView() {
               {error}
             </p>
           )}
-          <RouteComparisonCard
-            focus={{
-              shown: shownFlag,
-              pinned: pinnedFlag,
-              onPreview: setPreviewFlag,
-              onToggle: flag =>
-                setPinnedFlag(current => (current === flag ? null : flag)),
-            }}
-            paused={Boolean(sharingTrip.trip)}
-            result={shown}
-          />
+          {!wide && comparison}
           <SaveRouteButton
             end={end}
             endLabel={endLabel}
@@ -1312,15 +1339,6 @@ export default function PlanTripView() {
             result={result}
             start={start}
             startLabel={startLabel}
-          />
-          <ReportsCard
-            error={reports.error}
-            near={nearClosure}
-            onAnswer={answerClosure}
-            onShowChange={setShowReports}
-            onSkip={reports.skip}
-            show={showReports}
-            status={reportStatus}
           />
           <SharingCard
             error={sharing.error}
@@ -1340,13 +1358,6 @@ export default function PlanTripView() {
             vehicle={sharingVehicle}
             vehicles={sharing.vehicles}
             zones={sharing.zones}
-          />
-          <GradeCard
-            error={gradeError}
-            grade={grade}
-            hasRoute={Boolean(start && end)}
-            onShowChange={setShowHills}
-            show={showHills}
           />
         </div>
         <section
@@ -1429,6 +1440,29 @@ export default function PlanTripView() {
             picking={pending > 0}
             picks={picks}
           />
+          {/* Wide screens: the comparison sits on the map, top left, once there is a route. */}
+          {wide && shown && comparison}
+          <MapLayers
+            onShowHillsChange={setShowHills}
+            onShowReportsChange={setShowReports}
+            showHills={showHills}
+            showReports={showReports}
+          >
+            {showHills && (
+              <HillsLegend
+                error={gradeError}
+                grade={grade}
+                hasRoute={Boolean(start && end)}
+              />
+            )}
+            <ReportsNotice
+              error={reports.error}
+              near={nearClosure}
+              onAnswer={answerClosure}
+              onSkip={reports.skip}
+              status={reportStatus}
+            />
+          </MapLayers>
           <FullscreenButton full={fullMap} onToggle={toggleFullMap} />
         </section>
       </div>

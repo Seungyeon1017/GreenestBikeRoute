@@ -391,6 +391,10 @@
           "hint": "Eine Farbe pro Bereich. Bergauf wird es schon bei 2–4 % gelb bis orange, das spürt man; rot ab 6 %, dunkelrot ab 10 %. Bergab ist blau bis violett: je dunkler, desto mehr Bremsen. Flach (unter 1 %) ist grün."
         }
       },
+      "layers": {
+        "button": "Ebenen",
+        "title": "Kartenebenen"
+      },
       "search": {
         "noMatch": "Kein Ort in Heilbronn gefunden. Versuche eine andere Schreibweise oder klicke auf die Karte.",
         "unavailable": "Die Ortssuche ist gerade nicht erreichbar. Klicke stattdessen auf die Karte.",

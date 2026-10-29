@@ -10,6 +10,8 @@ type InfoTipProps = {
   label: string
   children: ReactNode
   className?: string
+  /** Open the panel above the button, e.g. near the bottom of the map. */
+  above?: boolean
 }
 
 /**
@@ -18,7 +20,12 @@ type InfoTipProps = {
  * a tap elsewhere or Escape. The panel spans its positioned parent, so give
  * the row around it `relative`.
  */
-export default function InfoTip({ label, children, className }: InfoTipProps) {
+export default function InfoTip({
+  label,
+  children,
+  className,
+  above = false,
+}: InfoTipProps) {
   const id = useId()
   // Opened by hover (closes when the mouse leaves) or pinned by a click/tap.
   const [hovered, setHovered] = useState(false)
@@ -67,7 +74,10 @@ export default function InfoTip({ label, children, className }: InfoTipProps) {
       </button>
       {open && (
         <span
-          className="absolute inset-x-0 top-full z-20 mt-1 block rounded-xl border border-leaf-sand bg-white p-3 text-xs font-normal leading-relaxed text-leaf-ink/80 shadow-soft"
+          className={cx(
+            'absolute inset-x-0 z-20 block rounded-xl border border-leaf-sand bg-white p-3 text-xs font-normal leading-relaxed text-leaf-ink/80 shadow-soft',
+            above ? 'bottom-full mb-1' : 'top-full mt-1',
+          )}
           id={id}
           role="tooltip"
         >

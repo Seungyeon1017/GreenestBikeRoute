@@ -1,6 +1,8 @@
 'use client'
 
 import { cx } from 'class-variance-authority'
+import { ChevronDown } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import AvailabilityBadge from '@/components/Greenest/ui/AvailabilityBadge'
 import Card, { CardTitle } from '@/components/Greenest/ui/Card'
@@ -127,6 +129,9 @@ type RouteComparisonProps = {
   paused?: boolean
   /** Links the "Why this route?" rows to the map. */
   focus?: FlagFocus
+  /** On the map: the title folds the card down to your route's distance and time. */
+  collapsible?: boolean
+  className?: string
 }
 
 /** The route's line as drawn on the map: grey dashed for the shortest, green solid for yours. */
@@ -151,8 +156,11 @@ export default function RouteComparison({
   result,
   paused = false,
   focus,
+  collapsible = false,
+  className,
 }: RouteComparisonProps) {
   const { t, i18n } = useTranslation()
+  const [open, setOpen] = useState(true)
   const kinds: RouteKind[] = ['shortest', 'greenest']
 
   // The backend calls the penalty-based route "route"; on screen it's the greenest route.
@@ -168,29 +176,65 @@ export default function RouteComparison({
   )
 
   return (
-    <Card className="flex flex-col gap-3">
-      <CardTitle>{t('greenest.planTrip.comparisonTitle')}</CardTitle>
-      {paused && (
+    <Card className={cx('flex flex-col gap-3', className)}>
+      <CardTitle>
+        {collapsible ? (
+          <button
+            aria-expanded={open}
+            className="flex w-full items-center justify-between gap-2 text-left"
+            onClick={() => setOpen(o => !o)}
+            type="button"
+          >
+            {t('greenest.planTrip.comparisonTitle')}
+            <ChevronDown
+              aria-hidden
+              className={cx(
+                'h-4 w-4 shrink-0 text-leaf-muted transition-transform',
+                open && 'rotate-180',
+              )}
+            />
+          </button>
+        ) : (
+          t('greenest.planTrip.comparisonTitle')
+        )}
+      </CardTitle>
+      {!open && result && (
+        <p className="flex items-center gap-1.5 text-xs text-leaf-ink">
+          <RouteLine kind="greenest" />
+          <span className="font-semibold">
+            {t('greenest.planTrip.routes.greenestShort')}:
+          </span>
+          <span className="tabular-nums">
+            {METRICS[0].format(result.route.properties, i18n.language)} ·{' '}
+            {METRICS[1].format(result.route.properties, i18n.language)}
+          </span>
+        </p>
+      )}
+      {open && paused && (
         <p className="rounded-xl border border-leaf-sand bg-leaf-cream p-3 text-xs text-leaf-ink">
           {t('greenest.planTrip.comparisonPaused')}
         </p>
       )}
       {/* Streets riders reported closed that the route still rides: there was no sensible way round. */}
-      {!paused && result && result.route.properties.reported_closures > 0 && (
-        <p
-          className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900"
-          role="alert"
-        >
-          {t('greenest.planTrip.reports.warning', {
-            count: result.route.properties.reported_closures,
-          })}
-        </p>
-      )}
+      {open &&
+        !paused &&
+        result &&
+        result.route.properties.reported_closures > 0 && (
+          <p
+            className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900"
+            role="alert"
+          >
+            {t('greenest.planTrip.reports.warning', {
+              count: result.route.properties.reported_closures,
+            })}
+          </p>
+        )}
       <div
         aria-disabled={paused || undefined}
         className={cx(
           'flex flex-col gap-3 transition-opacity',
           paused && 'opacity-40',
+          !open && 'hidden',
         )}
       >
         <table className="w-full border-collapse text-xs">

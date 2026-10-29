@@ -2,7 +2,6 @@
 
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
-import Card, { CardTitle } from '@/components/Greenest/ui/Card'
 import InfoTip from '@/components/Greenest/ui/InfoTip'
 import type { ClosureFeature, ClosureProperties } from '@/types/greenest'
 import { CLOSURE_COLORS, MAPPING_COLOR } from './reportLayers'
@@ -64,9 +63,7 @@ export function closureText(
   return parts.join(' ')
 }
 
-type ReportsCardProps = {
-  show: boolean
-  onShowChange: (_show: boolean) => void
+type ReportsNoticeProps = {
   /** A closure near the trip's start or end to ask about. */
   near: ClosureFeature | null
   onAnswer: (_segment: string, _stillClosed: boolean) => void
@@ -77,31 +74,32 @@ type ReportsCardProps = {
 }
 
 /**
- * Riders' reports (Meldungen) on the map: streets closed for construction and
- * mapping mistakes such as a footway bikes ride on. New ones are reported with
- * "Report a problem" on the map; known closures can be answered here in one tap.
+ * On the map beside the Layers button: a known closure near the trip, answered
+ * in one tap, and the line that follows an answer. Nothing when there is neither.
  */
-export default function ReportsCard(props: ReportsCardProps) {
+export function ReportsNotice({
+  near,
+  onAnswer,
+  onSkip,
+  status,
+  error,
+}: ReportsNoticeProps) {
   const { t, i18n } = useTranslation()
-  const { near, show } = props
   const r = (key: string, values?: Record<string, unknown>) =>
     t(`greenest.planTrip.reports.${key}`, values)
 
+  if (!near && !status && !error) {
+    return null
+  }
   return (
-    <Card className="flex flex-col gap-3">
-      <div className="relative flex items-center gap-1.5">
-        <CardTitle>{r('title')}</CardTitle>
-        <InfoTip label={r('infoLabel')}>{r('info')}</InfoTip>
-      </div>
-
-      {props.status && (
-        <p className="text-xs text-leaf-forest" role="status">
-          {props.status}
+    <div className="pointer-events-auto flex w-72 flex-col gap-2 rounded-2xl border border-leaf-sand bg-white p-3 text-xs text-leaf-ink shadow-soft">
+      {status && (
+        <p className="text-leaf-forest" role="status">
+          {status}
         </p>
       )}
-
-      {near && show && (
-        <div className="flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-leaf-ink">
+      {near && (
+        <div className="flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50 p-2.5">
           <span>
             {r('near', {
               closure: closureText(near.properties, t, i18n.language),
@@ -117,15 +115,9 @@ export default function ReportsCard(props: ReportsCardProps) {
           <div className="flex flex-wrap gap-2">
             {(
               [
-                [
-                  'stillClosed',
-                  () => props.onAnswer(near.properties.segment, true),
-                ],
-                [
-                  'openAgain',
-                  () => props.onAnswer(near.properties.segment, false),
-                ],
-                ['dontKnow', () => props.onSkip(near.properties.segment)],
+                ['stillClosed', () => onAnswer(near.properties.segment, true)],
+                ['openAgain', () => onAnswer(near.properties.segment, false)],
+                ['dontKnow', () => onSkip(near.properties.segment)],
               ] as const
             ).map(([key, onClick]) => (
               <button
@@ -140,47 +132,54 @@ export default function ReportsCard(props: ReportsCardProps) {
           </div>
         </div>
       )}
-
-      <label className="flex cursor-pointer items-center gap-2 text-sm text-leaf-ink/80">
-        <input
-          checked={show}
-          className="h-4 w-4 accent-leaf-forest"
-          onChange={e => props.onShowChange(e.target.checked)}
-          type="checkbox"
-        />
-        {r('show')}
-      </label>
-      {show && (
-        <div className="flex flex-col gap-1 text-[11px] text-leaf-muted">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            {(['closed', 'reported', 'unconfirmed'] as const).map(status => (
-              <span className="inline-flex items-center gap-1.5" key={status}>
-                <span
-                  aria-hidden
-                  className="inline-block h-1.5 w-4 rounded-full"
-                  style={{ background: CLOSURE_COLORS[status] }}
-                />
-                {r(`legend.${status}`)}
-              </span>
-            ))}
-            <span className="inline-flex items-center gap-1.5">
-              <span
-                aria-hidden
-                className="inline-block h-2.5 w-2.5 rounded-full border-2 bg-white"
-                style={{ borderColor: MAPPING_COLOR }}
-              />
-              {r('legend.mapping')}
-            </span>
-          </div>
-          <p>{r('legend.hint')}</p>
-          <p>{r('reportHint')}</p>
-        </div>
-      )}
-      {props.error && (
-        <p className="text-xs text-red-700" role="alert">
-          {props.error}
+      {error && (
+        <p className="text-red-700" role="alert">
+          {error}
         </p>
       )}
-    </Card>
+    </div>
+  )
+}
+
+/**
+ * Riders' reports (Meldungen) on the map: streets closed for construction and
+ * mapping mistakes such as a footway bikes ride on. The colours, in the Layers
+ * panel; new ones are reported with "Report a problem" on the map.
+ */
+export default function ReportsLegend() {
+  const { t } = useTranslation()
+  const r = (key: string) => t(`greenest.planTrip.reports.${key}`)
+
+  return (
+    <div className="relative flex flex-col gap-1.5 text-[11px] text-leaf-muted">
+      <div className="flex items-center gap-1.5">
+        <strong className="text-xs text-leaf-forest">{r('title')}</strong>
+        <InfoTip above label={r('infoLabel')}>
+          {r('info')}
+          <span className="mt-1 block">{r('legend.hint')}</span>
+          <span className="mt-1 block">{r('reportHint')}</span>
+        </InfoTip>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        {(['closed', 'reported', 'unconfirmed'] as const).map(status => (
+          <span className="inline-flex items-center gap-1.5" key={status}>
+            <span
+              aria-hidden
+              className="inline-block h-1.5 w-4 rounded-full"
+              style={{ background: CLOSURE_COLORS[status] }}
+            />
+            {r(`legend.${status}`)}
+          </span>
+        ))}
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            aria-hidden
+            className="inline-block h-2.5 w-2.5 rounded-full border-2 bg-white"
+            style={{ borderColor: MAPPING_COLOR }}
+          />
+          {r('legend.mapping')}
+        </span>
+      </div>
+    </div>
   )
 }
