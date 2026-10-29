@@ -925,11 +925,12 @@ export default function PlanTripView() {
       })
       .catch(err => {
         if (reportKindRef.current === kind) {
+          // 400: nothing to pick near the click. 404: this backend has no such lookup yet (older than the app).
           setPickError(
-            err.status === 404
-              ? r('noFootway')
-              : err.status === 400
-                ? r('noStreet')
+            err.status === 400
+              ? r(kind === 'closure' ? 'noStreet' : 'noFootway')
+              : err.status === 404
+                ? r('unavailable')
                 : err.message,
           )
         }
@@ -1029,6 +1030,7 @@ export default function PlanTripView() {
         openAgain: t('greenest.planTrip.reports.openAgain'),
         mappingTitle: p =>
           t(`greenest.planTrip.reports.mappingTitle.${p.kind}`),
+        noteLabel: t('greenest.planTrip.reports.noteLabel'),
       },
       answerClosure,
     )

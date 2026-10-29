@@ -293,7 +293,7 @@ export function fetchReportSegment(
   )
 }
 
-/** GET /reports/footway: the footway routing leaves out nearest to `at`. 404 if none is within 50 m. */
+/** GET /reports/footway: the footway routing leaves out nearest to `at`. 400 if none is within 50 m. */
 export function fetchReportFootway(
   at: LngLat,
   signal?: AbortSignal,
