@@ -134,20 +134,38 @@ export function useReports() {
     }
   }, [loads, routeVersion])
 
-  const sendClosure = useCallback(
-    async (at: LngLat, note?: string, until?: string) => {
-      const feature = await reportClosure(at, reporterId(), note, until)
-      setRouteVersion(v => v + 1)
-      return feature
+  /** One report per segment, with the same note and end date; the street states after them. */
+  const sendClosures = useCallback(
+    async (segments: string[], note?: string, until?: string) => {
+      const id = reporterId()
+      try {
+        return await Promise.all(
+          segments.map(s => reportClosure(s, id, note, until)),
+        )
+      } finally {
+        // Also after a partial failure: the segments that went through count.
+        setRouteVersion(v => v + 1)
+      }
     },
     [],
   )
 
+  /** `wayIds`: one report per footway picked; none for a mistake reported at a point. */
   const sendMapping = useCallback(
-    async (at: LngLat, kind: MappingKind, note?: string) => {
-      const feature = await reportMapping(at, kind, reporterId(), note)
-      setLoads(n => n + 1)
-      return feature
+    async (
+      at: LngLat[],
+      kind: MappingKind,
+      note?: string,
+      wayIds?: number[],
+    ) => {
+      const id = reporterId()
+      try {
+        return await Promise.all(
+          at.map((p, i) => reportMapping(p, kind, id, note, wayIds?.[i])),
+        )
+      } finally {
+        setLoads(n => n + 1)
+      }
     },
     [],
   )
@@ -171,7 +189,7 @@ export function useReports() {
     error,
     routeVersion,
     skipped,
-    sendClosure,
+    sendClosures,
     sendMapping,
     answer,
     skip,

@@ -31,7 +31,7 @@ Map overlays: `/roughness` (streets), `/danger` (overtaking spots), `/air` (air-
 
 Sharing: `/sharing` lists the shared e-bikes and e-scooters free to rent right now (Heilbronn: Dott, about 140 pedelecs and 350 e-scooters), with `vehicle` (bike/scooter), battery, range, price and a link that opens the vehicle in the provider's app; `vehicle=bike` or `vehicle=scooter` shows one kind, and `near_lat`/`near_lon` (e.g. the route start) sort them closest first. `/sharing/zones` lists the provider's parking zones with how many bikes and scooters stand there (the provider's own counts, so they can differ slightly from `/sharing`). Both are live from [MobiData BW](https://mobidata-bw.de/dataset/bikesh) (GBFS, dl-de/by-2-0), cached for a minute; if the feed is down the last snapshot is served for up to 30 minutes, then 503. `/route` plans for bikes; e-scooters must not ride on footways even where bikes may, which `/route/sharing` follows for a rented e-scooter.
 
-Reports: riders report closed streets (`POST /reports/closures`) and footways bikes ride on that OSM doesn't mark for bikes (`POST /reports/mapping`). Closures steer routes right away and stay until riders say they are open again or stop confirming them; mapping reports wait for a maintainer (`python -m backend.reports list`, then `approve ID`), and approved ways go into `data/custom/rideable_ways.json` and are routed from the next server start. The rules are in `/docs`; reports are kept in `data/reports.sqlite3`.
+Reports: riders report closed streets (`POST /reports/closures`) and footways bikes ride on that OSM doesn't mark for bikes (`POST /reports/mapping`). The app lets them pick the street segments first (`GET /reports/segment`) or the footway's OSM way (`GET /reports/footway`, from the footways the bike graph leaves out, written next to it in `cache/`). Closures steer routes right away and stay until riders say they are open again or stop confirming them; mapping reports wait for a maintainer (`python -m backend.reports list`, then `approve ID`), and approved ways go into `data/custom/rideable_ways.json` and are routed from the next server start. The rules are in `/docs`; reports are kept in `data/reports.sqlite3`.
 
 Danger points come from `danger_zones_raw_heilbronn` (one row per overtake, with device id and exact distance) and are snapped to the nearest street within 25 m. [routing/README.md](routing/README.md) explains how route planning works and why readings of 25 cm or less are ignored.
 
@@ -78,7 +78,14 @@ ports:
 ```
 ### 3. Run the Backend with Docker Compose
 
-Build the Docker image and start the backend in the background:
+`compose.yml` starts the backend and the PostgreSQL database for user accounts. Once, create `.env` from the example and set your own password and secret:
+
+```powershell
+copy .env.users.example .env
+python -c "import secrets; print(secrets.token_urlsafe(48))"   # paste after USERS_JWT_SECRET_KEY=
+```
+
+Build the Docker image and start the backend and database in the background (the backend creates the users tables itself on start):
 
 ```powershell
 docker compose up --build -d
@@ -103,6 +110,8 @@ Stop the backend:
 ```powershell
 docker compose down
 ```
+
+The users and saved routes stay in the `postgres-data` volume; `docker compose down -v` deletes them.
 
 Rebuild and restart after changing the Dockerfile, dependencies, or application code:
 

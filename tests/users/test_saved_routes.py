@@ -3,11 +3,12 @@ from sqlalchemy import func, select
 
 from backend.users.models import SavedRoute, User
 from backend.users.saved_routes import MAX_SAVED_ROUTES
+from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY
 
 ROUTE = {
     "start_lon": 9.21839, "start_lat": 49.14279, "start_label": "Rathaus Heilbronn",
     "end_lon": 9.2353, "end_lat": 49.1462, "end_label": "Pfühlpark",
-    "options": {"bump_penalty": 20, "prefer_time": True, "depart_time": "2026-07-21T15:00"},
+    "options": {"bump_penalty": 8, "prefer_time": True, "depart_time": "2026-07-21T15:00"},
     "length_m": 1850.4, "duration_s": 520,
 }
 
@@ -26,10 +27,10 @@ def test_save_returns_the_route_with_all_options_filled_in(client, auth_headers)
     assert body["duration_s"] == 520
     assert isinstance(body["id"], int) and body["created_at"]
     # Sent options are kept, the rest get the routing defaults.
-    assert body["options"]["bump_penalty"] == 20
+    assert body["options"]["bump_penalty"] == 8
     assert body["options"]["prefer_time"] is True
     assert body["options"]["depart_time"] == "2026-07-21T15:00"
-    assert body["options"]["danger_penalty"] == 25
+    assert body["options"]["danger_penalty"] == DEFAULT_DANGER_PENALTY
 
 
 def test_labels_options_and_totals_are_optional(client, auth_headers):
@@ -39,7 +40,7 @@ def test_labels_options_and_totals_are_optional(client, auth_headers):
 
     assert response.status_code == 201
     assert response.json()["start_label"] is None
-    assert response.json()["options"]["bump_penalty"] == 10
+    assert response.json()["options"]["bump_penalty"] == DEFAULT_BUMP_PENALTY
 
 
 def test_list_is_newest_first(client, auth_headers):

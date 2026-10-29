@@ -6,6 +6,8 @@ import type {
   ClosureStatus,
   MappingCollection,
   MappingProperties,
+  ReportKind,
+  ReportPick,
 } from '@/types/greenest'
 import { el } from './sharingLayers'
 
@@ -91,11 +93,20 @@ export function drawReports(
 }
 
 export type ReportLabels = {
-  /** "Closed: Baustelle. 2 reports, until Thu 5 Nov." */
+  /** "Closed. 2 reports, until Thu 5 Nov." */
   closure: (_p: ClosureProperties) => string
   stillClosed: string
   openAgain: string
   mappingTitle: (_p: MappingProperties) => string
+  /** "Rider's note", before what the reporter wrote. */
+  noteLabel: string
+}
+
+/** What the reporter wrote, labelled so it doesn't read as the app's own text. */
+function noteLine(note: string, labels: ReportLabels): HTMLElement {
+  const line = el('span', 'text-leaf-muted')
+  line.append(el('span', 'font-semibold', `${labels.noteLabel}: `), note)
+  return line
 }
 
 /**
@@ -122,7 +133,7 @@ export function reportPopup(
       ),
     )
     if (p.note) {
-      box.appendChild(el('span', 'text-leaf-muted', p.note))
+      box.appendChild(noteLine(p.note, labels))
     }
     return box
   }
@@ -132,6 +143,9 @@ export function reportPopup(
   swatch.style.background = CLOSURE_COLORS[p.status]
   title.append(swatch, el('span', '', labels.closure(p)))
   box.appendChild(title)
+  if (p.note) {
+    box.appendChild(noteLine(p.note, labels))
+  }
   const buttons = el('div', 'flex gap-2')
   for (const [text, stillClosed] of [
     [labels.stillClosed, true],
@@ -148,4 +162,50 @@ export function reportPopup(
   }
   box.appendChild(buttons)
   return box
+}
+
+/** Picked for a report: red for a closed street, the mapping purple for a footway. */
+const PICK_COLORS: Record<ReportKind, string> = {
+  closure: CLOSURE_COLORS.closed,
+  rideable: MAPPING_COLOR,
+  other: MAPPING_COLOR,
+}
+
+/**
+ * The streets or footways picked for the report being written, as a thick line
+ * on a white casing above everything else on the map, or none.
+ */
+export function drawReportPicks(
+  map: maplibregl.Map,
+  picks: ReportPick[],
+  kind: ReportKind | null,
+) {
+  if (!map.getSource('report-picks')) {
+    map.addSource('report-picks', { type: 'geojson', data: EMPTY })
+    map.addLayer({
+      id: 'report-picks-casing',
+      type: 'line',
+      source: 'report-picks',
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': '#ffffff', 'line-width': 12 },
+    })
+    map.addLayer({
+      id: 'report-picks',
+      type: 'line',
+      source: 'report-picks',
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': CLOSURE_COLORS.closed, 'line-width': 7 },
+    })
+  }
+  if (kind) {
+    map.setPaintProperty('report-picks', 'line-color', PICK_COLORS[kind])
+  }
+  source(map, 'report-picks')?.setData({
+    type: 'FeatureCollection',
+    features: picks.map(p => ({
+      type: 'Feature',
+      geometry: p.geometry,
+      properties: { key: p.key },
+    })),
+  })
 }

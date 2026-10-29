@@ -2,7 +2,7 @@
 from datetime import date
 from typing import Literal, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 LonLat = tuple[float, float]  # GeoJSON order: [longitude, latitude]
 
@@ -25,8 +25,8 @@ ROUTE_EXAMPLE = {
         "bumpy_m": 202, "bad_air_m": 292, "stop_go_m": 379, "sunny_m": None, "unlit_m": None, "bike_friendly_m": 1160, "pushed_m": 0,
         # Shortened: the real route has 44 stretches.
         "segments": [
-            {"from_index": 0, "to_index": 4, "start_m": 0.0, "length_m": 36.4, "name": "Kleiststraße", "way": None, "along": False, "flags": [], "roughness": 11.833, "danger_points": 0, "pm_risk": 0.494, "stop_go": 0.652, "speed_kmh": 14.495, "shade": None, "lit": 1.0, "bike_friendly": False, "pushed": False},
-            {"from_index": 4, "to_index": 7, "start_m": 36.4, "length_m": 36.2, "name": "Sichererstraße", "way": None, "along": False, "flags": ["bike_friendly_m"], "roughness": 9.485, "danger_points": 0, "pm_risk": 0.507, "stop_go": 0.636, "speed_kmh": 13.248, "shade": None, "lit": 1.0, "bike_friendly": True, "pushed": False},
+            {"from_index": 0, "to_index": 4, "start_m": 0.0, "length_m": 36.4, "name": "Kleiststraße", "way": None, "along": False, "flags": [], "roughness": 11.833, "danger_points": 0, "pm_risk": 0.494, "stop_go": 0.652, "speed_kmh": 14.495, "shade": None, "lit": 1.0, "bike_friendly": False, "pushed": False, "segments": ["1214835654-11925390607", "26890921-1214835654"]},
+            {"from_index": 4, "to_index": 7, "start_m": 36.4, "length_m": 36.2, "name": "Sichererstraße", "way": None, "along": False, "flags": ["bike_friendly_m"], "roughness": 9.485, "danger_points": 0, "pm_risk": 0.507, "stop_go": 0.636, "speed_kmh": 13.248, "shade": None, "lit": 1.0, "bike_friendly": True, "pushed": False, "segments": ["26890921-1214745069", "1214745069-1216889477", "1028721133-1216889477"]},
         ],
     },
 }
@@ -45,8 +45,8 @@ SHORTEST_EXAMPLE = {
         "bumpy_m": 1895, "bad_air_m": 733, "stop_go_m": 481, "sunny_m": None, "unlit_m": None, "bike_friendly_m": 874, "pushed_m": 0,
         # Shortened: the real route has 35 stretches.
         "segments": [
-            {"from_index": 0, "to_index": 4, "start_m": 0.0, "length_m": 36.4, "name": "Kleiststraße", "way": None, "along": False, "flags": [], "roughness": 11.833, "danger_points": 0, "pm_risk": 0.494, "stop_go": 0.652, "speed_kmh": 14.495, "shade": None, "lit": 1.0, "bike_friendly": False, "pushed": False},
-            {"from_index": 4, "to_index": 11, "start_m": 36.4, "length_m": 89.8, "name": "Sichererstraße", "way": None, "along": False, "flags": ["bike_friendly_m"], "roughness": 9.485, "danger_points": 0, "pm_risk": 0.491, "stop_go": 0.636, "speed_kmh": 13.248, "shade": None, "lit": 1.0, "bike_friendly": True, "pushed": False},
+            {"from_index": 0, "to_index": 4, "start_m": 0.0, "length_m": 36.4, "name": "Kleiststraße", "way": None, "along": False, "flags": [], "roughness": 11.833, "danger_points": 0, "pm_risk": 0.494, "stop_go": 0.652, "speed_kmh": 14.495, "shade": None, "lit": 1.0, "bike_friendly": False, "pushed": False, "segments": ["1214835654-11925390607", "26890921-1214835654"]},
+            {"from_index": 4, "to_index": 11, "start_m": 36.4, "length_m": 89.8, "name": "Sichererstraße", "way": None, "along": False, "flags": ["bike_friendly_m"], "roughness": 9.485, "danger_points": 0, "pm_risk": 0.491, "stop_go": 0.636, "speed_kmh": 13.248, "shade": None, "lit": 1.0, "bike_friendly": True, "pushed": False, "segments": ["26890921-1214835706", "1214835682-1214835706", "1214835682-1216735058", "1214835677-1216735058", "1214835597-1214835677", "1214835597-1214835623", "1214835623-1558436876"]},
         ],
     },
 }
@@ -90,6 +90,11 @@ class Point(BaseModel):
     coordinates: LonLat = Field(description="[lon, lat]")
 
 
+class MultiLineString(BaseModel):
+    type: Literal["MultiLineString"]
+    coordinates: list[list[LonLat]] = Field(description="Lines of [lon, lat] pairs")
+
+
 PLANNED_WITH = "The penalty this route was planned with, as requested (0 for the shortest route)"
 
 
@@ -122,6 +127,9 @@ class RouteSegment(BaseModel):
     lit: Optional[float] = Field(description="Chance the street is lit at night, 0-1; null without lighting data")
     bike_friendly: bool = Field(description="On a bike path, bike lane or bike route")
     pushed: bool = Field(description="An e-scooter is pushed here (footway or pedestrian street); always false for bikes")
+    segments: list[str] = Field(description=(
+        "The street segments (\"u-v\", as in `/reports/closures`) the stretch rides, in riding order: the app reports "
+        "them all when a rider says the stretch is closed"))
 
 
 class RouteProperties(BaseModel):
@@ -520,9 +528,13 @@ class PlaceCollection(BaseModel):
 
 
 class ClosureReport(BaseModel):
-    """A rider's report that the street at a point is closed right now (construction, event, ...)."""
-    lat: float = Field(ge=-90, le=90, description="Where the street is closed; the report goes to the nearest street within 50 m")
-    lon: float = Field(ge=-180, le=180)
+    """A rider's report that a street is closed right now (construction, event, ...): a `segment` the rider picked
+    (from `/reports/segment` or a route stretch's `segments`), or a point, which goes to the nearest street."""
+    segment: Optional[str] = Field(None, pattern=r"^\d+-\d+$", description=(
+        "The street segment, \"u-v\" as in `/reports/segment`; give this or lat/lon"))
+    lat: Optional[float] = Field(None, ge=-90, le=90, description=(
+        "Where the street is closed, without `segment`; the report goes to the nearest street within 50 m"))
+    lon: Optional[float] = Field(None, ge=-180, le=180)
     reporter_id: Optional[str] = Field(None, max_length=64, description=(
         "An anonymous random id the app keeps per device, so one rider's repeated reports count once"))
     note: Optional[str] = Field(None, max_length=500, description="What is closed, e.g. \"Baustelle, bis Freitag\"")
@@ -530,8 +542,14 @@ class ClosureReport(BaseModel):
         "The last day it is closed, if known (e.g. from the sign); the report then counts through that day "
         "(Heilbronn time), at most 30 days. Without it, the report counts for 24 h"))
 
-    model_config = {"json_schema_extra": {"example": {"lat": 49.14232, "lon": 9.21885, "reporter_id": "3f9c2a71",
+    model_config = {"json_schema_extra": {"example": {"segment": "268245781-268245790", "reporter_id": "3f9c2a71",
                                                       "note": "Baustelle, Durchfahrt gesperrt", "until": "2026-11-15"}}}
+
+    @model_validator(mode="after")
+    def _where(self):
+        if self.segment is None and (self.lat is None or self.lon is None):
+            raise ValueError("give a segment, or lat and lon")
+        return self
 
 
 class ClosureAnswer(BaseModel):
@@ -571,6 +589,44 @@ CLOSURE_EXAMPLE = {"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {
     "segment": "268245781-268245790", "osm_way_ids": [24710470], "status": "reported", "reports": 1, "open_reports": 0,
     "note": "Baustelle, Durchfahrt gesperrt", "last_report": "2026-10-28T15:10:00+00:00",
     "expires": "2026-11-15T23:00:00+00:00"}}
+
+
+class StreetSegmentProperties(BaseModel):
+    segment: str = Field(description="\"u-v\", the OSM node ids at its two junctions: what `/reports/closures` takes")
+    osm_way_ids: list[int] = Field(description="The OpenStreetMap ways the segment is part of")
+    name: Optional[str] = Field(description=(
+        "Street name; a sidewalk or bike path without one takes the name of the road beside it; null if none"))
+    length_m: float
+    status: Optional[Literal["closed", "reported", "unconfirmed"]] = Field(description=(
+        "What riders already reported on it, as in `/reports/closures`; null if nothing"))
+
+
+class StreetSegmentFeature(BaseModel):
+    """The street segment (between two junctions) a click would report closed."""
+    type: Literal["Feature"]
+    geometry: LineString
+    properties: StreetSegmentProperties
+
+    model_config = {"json_schema_extra": {"example": {"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {
+        "segment": "268245781-268245790", "osm_way_ids": [24710470], "name": "Allee", "length_m": 84.2,
+        "status": None}}}}
+
+
+class FootwayProperties(BaseModel):
+    osm_way_id: int = Field(description="The OpenStreetMap way: what a `rideable` mapping report should name")
+    name: Optional[str] = Field(description="Its name in OSM, if it has one (most footways don't)")
+    length_m: float
+
+
+class FootwayFeature(BaseModel):
+    """A footway or path routing leaves out because OSM doesn't say bikes may use it: the whole OSM way."""
+    type: Literal["Feature"]
+    geometry: MultiLineString
+    properties: FootwayProperties
+
+    model_config = {"json_schema_extra": {"example": {"type": "Feature", "geometry": {
+        "type": "MultiLineString", "coordinates": [[[9.21998, 49.14425], [9.22051, 49.14398]]]},
+        "properties": {"osm_way_id": 286359672, "name": None, "length_m": 46.3}}}}
 
 
 class ClosureCollection(BaseModel):
