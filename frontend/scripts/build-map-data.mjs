@@ -124,19 +124,6 @@ for (const f of load('bumpy_roads')) {
   })
 }
 
-// Streets tagged with a cycle lane in OpenStreetMap.
-const LANE_TAGS = new Set(['lane', 'shared_lane', 'opposite_lane', 'opposite'])
-const laneFeatures = load('bike_road_network')
-  .filter(f => LANE_TAGS.has(f.properties.cycleway))
-  .map(f => ({
-    type: 'Feature',
-    geometry: {
-      type: 'LineString',
-      coordinates: roundCoords(f.geometry.coordinates),
-    },
-    properties: { cycleway: f.properties.cycleway, name: f.properties.name },
-  }))
-
 const areaFeatures = []
 for (const [key, c] of cells) {
   const [i, j] = key.split(':').map(Number)
@@ -186,7 +173,6 @@ const write = (name, features) => {
 mkdirSync(OUT_DIR, { recursive: true })
 write('areas.geojson', areaFeatures)
 write('surface-roughness.geojson', roughFeatures)
-write('cycle-lanes.geojson', laneFeatures)
 writeFileSync(
   join(OUT_DIR, 'meta.json'),
   JSON.stringify(

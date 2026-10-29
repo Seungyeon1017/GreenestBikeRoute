@@ -6,12 +6,7 @@ import BaseMap from '@/components/Greenest/Map'
 import type { OverlayState } from '@/hooks/useOverlays'
 import type { OverviewData } from '@/services/mapData'
 import type { EnvironmentLayerId } from '@/types/greenest'
-import {
-  CYCLE_LANE_COLOR,
-  OVERLAY_STYLES,
-  PM_RISK_STEPS,
-  ROUGHNESS_STEPS,
-} from './layers'
+import { OVERLAY_STYLES, PM_RISK_STEPS, ROUGHNESS_STEPS } from './layers'
 
 type OverviewMapProps = {
   ariaLabel: string
@@ -26,7 +21,7 @@ type OverviewMapProps = {
 /** MapLibre layer ids drawn for each environmental layer. */
 const MAP_LAYERS: Partial<Record<EnvironmentLayerId, string[]>> = {
   'air-quality': ['areas-pm'],
-  'cycling-infrastructure': ['roughness-lines', 'cycle-lanes'],
+  'surface-roughness': ['roughness-lines'],
 }
 
 /** MapLibre `step` expression from legend steps with an upper bound per class. */
@@ -44,7 +39,6 @@ function stepColor(
 function addLayers(map: MapLibreMap, data: OverviewData) {
   map.addSource('areas', { type: 'geojson', data: data.areas })
   map.addSource('roughness', { type: 'geojson', data: data.roughness })
-  map.addSource('cycle-lanes', { type: 'geojson', data: data.cycleLanes })
 
   map.addLayer({
     id: 'areas-pm',
@@ -65,16 +59,6 @@ function addLayers(map: MapLibreMap, data: OverviewData) {
       'line-color': stepColor('roughness', ROUGHNESS_STEPS),
       'line-width': ['interpolate', ['linear'], ['zoom'], 12, 1.5, 16, 4],
       'line-opacity': 0.85,
-    },
-  })
-  map.addLayer({
-    id: 'cycle-lanes',
-    type: 'line',
-    source: 'cycle-lanes',
-    paint: {
-      'line-color': CYCLE_LANE_COLOR,
-      'line-width': ['interpolate', ['linear'], ['zoom'], 12, 2, 16, 5],
-      'line-dasharray': [2, 1],
     },
   })
   // Invisible fill so every area can be clicked, whichever layers are on.

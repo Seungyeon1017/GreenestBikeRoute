@@ -11,10 +11,6 @@ export type OverviewData = {
     LineString,
     { roughness: number; name: string | null }
   >
-  cycleLanes: FeatureCollection<
-    LineString,
-    { cycleway: string; name: string | null }
-  >
 }
 
 async function getStatic<T>(file: string, signal?: AbortSignal): Promise<T> {
@@ -30,10 +26,9 @@ async function getStatic<T>(file: string, signal?: AbortSignal): Promise<T> {
 export async function fetchOverviewData(
   signal?: AbortSignal,
 ): Promise<OverviewData> {
-  const [areas, roughness, cycleLanes] = await Promise.all([
+  const [areas, roughness] = await Promise.all([
     getStatic<OverviewData['areas']>('areas.geojson', signal),
     getStatic<OverviewData['roughness']>('surface-roughness.geojson', signal),
-    getStatic<OverviewData['cycleLanes']>('cycle-lanes.geojson', signal),
   ])
-  return { areas, roughness, cycleLanes }
+  return { areas, roughness }
 }

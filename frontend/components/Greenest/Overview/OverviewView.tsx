@@ -25,8 +25,7 @@ export default function OverviewView() {
   const data = overview.status === 'ready' ? overview.data : null
 
   const [enabled, setEnabled] = useState<Set<EnvironmentLayerId>>(
-    () =>
-      new Set<EnvironmentLayerId>(['air-quality', 'cycling-infrastructure']),
+    () => new Set<EnvironmentLayerId>(['air-quality', 'surface-roughness']),
   )
   // Backend layers, each downloaded the first time it's switched on.
   const overlays = useOverlays(ENVIRONMENT_LAYERS, enabled)

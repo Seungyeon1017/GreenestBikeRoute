@@ -31,8 +31,6 @@ export const ROUGHNESS_STEPS = [
   { color: '#d63b3b', max: Infinity, label: '30+' },
 ]
 
-export const CYCLE_LANE_COLOR = '#0d9488'
-
 // Colours for the backend overlays, from bad (red) to good (green).
 const RED = '#d63b3b'
 const ORANGE = '#f2994a'
@@ -161,23 +159,25 @@ export const ENVIRONMENT_LAYERS: EnvironmentLayer[] = [
     legend: legendOf(PM_RISK_STEPS),
   },
   {
-    id: 'cycling-infrastructure',
+    id: 'surface-roughness',
     colorsStreets: true,
     unit: 'roughness 0–100',
-    source: 'ATRAI senseBox:bike (bumpy_roads), OpenStreetMap',
+    source: 'ATRAI senseBox:bike (bumpy_roads)',
     availability: 'measured',
-    legend: [
-      ...legendOf(ROUGHNESS_STEPS),
-      { color: CYCLE_LANE_COLOR, label: 'cycle lane (OSM)' },
-    ],
+    legend: legendOf(ROUGHNESS_STEPS),
   },
   {
     id: 'bike-friendly',
     colorsStreets: true,
     overlay: 'bike-friendly-streets',
     source: 'OpenStreetMap contributors (ODbL)',
-    availability: 'measured',
-    legend: [{ color: '#0f766e', label: 'bike path, bike lane or bike route' }],
+    availability: 'mapped',
+    legend: [
+      {
+        color: '#0f766e',
+        label: 'bike path or lane, way open to bikes, or bike route',
+      },
+    ],
   },
   {
     id: 'overtaking',

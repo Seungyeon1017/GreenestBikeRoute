@@ -6,7 +6,7 @@ export type LngLat = [number, number]
 export type EnvironmentLayerId =
   | 'environmental-score'
   | 'air-quality'
-  | 'cycling-infrastructure'
+  | 'surface-roughness'
   | 'bike-friendly'
   | 'overtaking'
   | 'stop-and-go'
@@ -31,6 +31,7 @@ export type DataAvailability =
   | 'measured' // real measurements from a named source
   | 'estimated' // derived or modelled, must be labelled as such
   | 'demo' // sample data for the UI only, never shown as a measurement
+  | 'mapped' // tagged in OpenStreetMap, not measured
   | 'unavailable' // not connected yet
 
 export type EnvironmentLayer = {

@@ -220,6 +220,7 @@
       "measured": "Measured",
       "estimated": "Estimated",
       "demo": "Sample",
+      "mapped": "Mapped",
       "unavailable": "Not connected yet"
     },
     "layers": {
@@ -227,9 +228,9 @@
         "label": "Air quality",
         "description": "Traffic and fine-dust risk index measured on bike rides, averaged per 500 m area."
       },
-      "cycling-infrastructure": {
-        "label": "Cycling infrastructure",
-        "description": "Measured road surface roughness and cycle lanes tagged in OpenStreetMap."
+      "surface-roughness": {
+        "label": "Surface roughness",
+        "description": "How bumpy the road surface is, measured by sensor bikes."
       },
       "noise": {
         "label": "Noise pollution",
@@ -245,7 +246,7 @@
       },
       "bike-friendly": {
         "label": "Bike paths & lanes",
-        "description": "Bike paths, bike lanes and signposted bike routes from OpenStreetMap."
+        "description": "Bike paths and lanes, footways and tracks open to bikes, and signposted bike routes from OpenStreetMap."
       },
       "overtaking": {
         "label": "Close overtaking",

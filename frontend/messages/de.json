@@ -220,6 +220,7 @@
       "measured": "Gemessen",
       "estimated": "Geschätzt",
       "demo": "Beispiel",
+      "mapped": "Kartiert",
       "unavailable": "Noch nicht angebunden"
     },
     "layers": {
@@ -227,9 +228,9 @@
         "label": "Luftqualität",
         "description": "Verkehrs- und Feinstaub-Risikoindex aus Radfahrten, gemittelt pro 500-m-Gebiet."
       },
-      "cycling-infrastructure": {
-        "label": "Radinfrastruktur",
-        "description": "Gemessene Oberflächenrauheit und in OpenStreetMap erfasste Radspuren."
+      "surface-roughness": {
+        "label": "Oberflächenrauheit",
+        "description": "Wie holprig der Straßenbelag ist, gemessen mit Sensor-Rädern."
       },
       "noise": {
         "label": "Lärmbelastung",
@@ -245,7 +246,7 @@
       },
       "bike-friendly": {
         "label": "Radwege & Radspuren",
-        "description": "Radwege, Radspuren und ausgeschilderte Radrouten aus OpenStreetMap."
+        "description": "Radwege und Radspuren, für Räder freigegebene Fuß- und Feldwege sowie ausgeschilderte Radrouten aus OpenStreetMap."
       },
       "overtaking": {
         "label": "Enges Überholen",

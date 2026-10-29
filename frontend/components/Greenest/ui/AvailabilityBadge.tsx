@@ -8,10 +8,11 @@ const STYLES: Record<DataAvailability, string> = {
   measured: 'bg-leaf-mint text-leaf-moss ring-leaf-sage/50',
   estimated: 'bg-amber-50 text-amber-800 ring-amber-200',
   demo: 'bg-[#f3ead6] text-[#7a5b1e] ring-[#e6d5ad]',
+  mapped: 'bg-sky-50 text-sky-800 ring-sky-200',
   unavailable: 'bg-leaf-cream text-leaf-muted ring-leaf-sand',
 }
 
-/** Tells the user whether a value is measured, estimated, demo content or missing. */
+/** Tells the user whether a value is measured, estimated, mapped in OSM, demo content or missing. */
 export default function AvailabilityBadge({
   availability,
   className,
