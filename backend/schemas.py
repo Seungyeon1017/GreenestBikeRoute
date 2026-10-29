@@ -463,8 +463,10 @@ class VehicleCollection(BaseModel):
 class ZoneProperties(BaseModel):
     provider: str
     name: str
-    bikes_available: int = Field(description="E-bikes parked in the zone right now")
-    scooters_available: int = Field(description="E-scooters parked in the zone right now")
+    bikes_available: int = Field(description="E-bikes parked in the zone right now, as the provider reports it (Dott "
+                                             "reports every zone as full: this equals bike_capacity)")
+    scooters_available: int = Field(description="E-scooters parked in the zone right now, as the provider reports it "
+                                                "(Dott: equals scooter_capacity)")
     bike_capacity: Optional[int] = Field(description="How many bikes the zone is meant for, null if unknown")
     scooter_capacity: Optional[int] = Field(description="How many scooters the zone is meant for, null if unknown")
     distance_m: Optional[int] = Field(None, description="Metres from the near_lat/near_lon point, when one was given")
