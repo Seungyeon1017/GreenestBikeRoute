@@ -268,3 +268,18 @@ def test_day_takes_the_same_parameters_and_errors_as_route(client):
     names = lambda path: {p["name"] for p in client.get("/openapi.json").json()["paths"][path]["get"]["parameters"]}
     assert names("/route/day") == names("/route")
     assert client.get("/route/day", params=params(start=(48.7758, 9.1829))).status_code == 400
+
+
+def test_any_site_may_call_the_api_by_default(toy_graph):
+    with TestClient(create_app(graph=toy_graph)) as c:
+        r = c.get("/docs", headers={"Origin": "https://other.example"})
+    assert r.headers["access-control-allow-origin"] == "*"
+
+
+def test_cors_origins_limits_which_sites_may_call_the_api(toy_graph, monkeypatch):
+    monkeypatch.setenv("CORS_ORIGINS", "https://bike.example, https://www.bike.example")
+    with TestClient(create_app(graph=toy_graph)) as c:
+        ours = c.get("/docs", headers={"Origin": "https://www.bike.example"})
+        other = c.get("/docs", headers={"Origin": "https://other.example"})
+    assert ours.headers["access-control-allow-origin"] == "https://www.bike.example"
+    assert "access-control-allow-origin" not in other.headers
