@@ -13,7 +13,7 @@ type MapLayersProps = {
   onShowHillsChange: (_show: boolean) => void
   showReports: boolean
   onShowReportsChange: (_show: boolean) => void
-  /** Legends and notices of the layers that are on, in a row beside the button. */
+  /** Legends and notices of the layers that are on, in a row beside the button; hidden while the panel is open. */
   children?: ReactNode
 }
 
@@ -95,8 +95,7 @@ export default function MapLayers({
   return (
     // Bottom left: MapLibre's attribution takes the bottom right corner.
     <div className="pointer-events-none absolute inset-x-2.5 bottom-2.5 z-10 flex flex-wrap-reverse items-end gap-2 pr-8">
-      {/* z-20: the open panel covers the legends, which wrap above the button on phones. */}
-      <div className="pointer-events-auto relative z-20" ref={ref}>
+      <div className="pointer-events-auto relative" ref={ref}>
         {open && (
           <div className="absolute bottom-full left-0 mb-2 flex w-72 flex-col gap-3 rounded-2xl border border-leaf-sand bg-white p-3 shadow-soft">
             <strong className="text-sm text-leaf-forest">
@@ -131,7 +130,8 @@ export default function MapLayers({
           {t('greenest.planTrip.layers.button')}
         </button>
       </div>
-      {children}
+      {/* Hidden while the panel is open: on phones they wrap above the button, where the panel opens. */}
+      {!open && children}
     </div>
   )
 }
