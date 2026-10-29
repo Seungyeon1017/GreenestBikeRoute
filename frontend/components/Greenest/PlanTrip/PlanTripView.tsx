@@ -144,6 +144,7 @@ function endpointPin(
   map: maplibregl.Map,
   at: LngLat,
   color: string,
+  label: string,
   onMove: (_point: LngLat) => void,
 ): maplibregl.Marker {
   const marker = new maplibregl.Marker({ color, draggable: true })
@@ -151,6 +152,23 @@ function endpointPin(
     .addTo(map)
   const pin = marker.getElement()
   pin.style.cursor = 'grab'
+  const tag = document.createElement('span')
+  tag.textContent = label
+  Object.assign(tag.style, {
+    position: 'absolute',
+    left: '50%',
+    bottom: '100%',
+    transform: 'translateX(-50%)',
+    marginBottom: '2px',
+    padding: '1px 6px',
+    borderRadius: '9px',
+    background: color,
+    color: '#fff',
+    font: '600 11px/16px system-ui, sans-serif',
+    whiteSpace: 'nowrap',
+    pointerEvents: 'none',
+  })
+  pin.appendChild(tag)
   pin.addEventListener('click', e => e.stopPropagation())
   marker.on('dragend', () => {
     const { lng, lat } = marker.getLngLat()
@@ -536,28 +554,28 @@ export default function PlanTripView() {
     if (!map || !start) {
       return
     }
-    const marker = endpointPin(map, start, '#1a7f37', point => {
+    const marker = endpointPin(map, start, '#1a7f37', t('greenest.planTrip.start'), point => {
       setStart(point)
       setStartLabel(formatPoint(point))
     })
     return () => {
       marker.remove()
     }
-  }, [start])
+  }, [start, t])
 
   useEffect(() => {
     const map = mapRef.current
     if (!map || !end) {
       return
     }
-    const marker = endpointPin(map, end, '#b3261e', point => {
+    const marker = endpointPin(map, end, '#b3261e', t('greenest.planTrip.destination'), point => {
       setEnd(point)
       setEndLabel(formatPoint(point))
     })
     return () => {
       marker.remove()
     }
-  }, [end])
+  }, [end, t])
 
   // 4. HANDLERS: functions called by clicks and buttons.
 
