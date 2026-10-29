@@ -9,16 +9,12 @@ import type {
   RouteProperties,
   RouteComparison as RouteResult,
 } from '@/types/greenest'
+import WhyThisRoute from './WhyThisRoute'
 
 /** Colours used for each route on the map and in the comparison. */
 export const ROUTE_COLORS: Record<RouteKind, string> = {
   greenest: '#16a34a',
   shortest: '#64748b',
-}
-
-/** Formats a number, or shows "–" when the backend sent null (no measurement). */
-function fixed(value: number | null, digits: number): string {
-  return value == null ? '–' : value.toFixed(digits)
 }
 
 /** Riding time as "12 min" (or "1 h 05 min"). */
@@ -30,23 +26,40 @@ function minutes(seconds: number): string {
   return `${Math.floor(total / 60)} h ${String(total % 60).padStart(2, '0')} min`
 }
 
-/** A percentage with its sign, e.g. "+3.3 %" or "−2.0 %". */
-function signedPct(value: number): string {
-  const sign = value > 0 ? '+' : value < 0 ? '−' : '±'
-  return `${sign}${Math.abs(value).toFixed(1)} %`
+/** A number with fixed decimals in the page language, or "–" when nothing was measured. */
+function fixed(value: number | null, digits: number, language: string): string {
+  return value == null
+    ? '–'
+    : value.toLocaleString(language, {
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits,
+      })
 }
 
 /** One row per metric: the translation key and how to show the value. */
 const METRICS: Array<{
   key: string
-  format: (_p: RouteProperties) => string
+  format: (_p: RouteProperties, _language: string) => string
+  /** Only shown when either route has a value (shade by day, lighting after dark). */
+  optional?: (_p: RouteProperties) => number | null
 }> = [
+  { key: 'distance', format: (p, l) => `${fixed(p.length_m / 1000, 2, l)} km` },
   { key: 'duration', format: p => minutes(p.duration_s) },
-  { key: 'distance', format: p => `${(p.length_m / 1000).toFixed(2)} km` },
-  { key: 'roughness', format: p => fixed(p.mean_roughness, 1) },
+  { key: 'roughness', format: (p, l) => fixed(p.mean_roughness, 1, l) },
   { key: 'overtaking', format: p => String(p.danger_points) },
-  { key: 'airQuality', format: p => fixed(p.mean_pm_risk, 2) },
-  { key: 'stopGo', format: p => fixed(p.mean_stop_go, 2) },
+  { key: 'airQuality', format: (p, l) => fixed(p.mean_pm_risk, 2, l) },
+  { key: 'stopGo', format: (p, l) => fixed(p.mean_stop_go, 2, l) },
+  {
+    key: 'shade',
+    format: (p, l) => fixed(p.mean_shade, 2, l),
+    optional: p => p.mean_shade,
+  },
+  {
+    key: 'lit',
+    format: (p, l) => fixed(p.mean_lit, 2, l),
+    optional: p => (p.daylight === false ? p.mean_lit : null),
+  },
+  { key: 'kcal', format: p => `~${Math.round(p.kcal)}` },
 ]
 
 type RouteComparisonProps = {
@@ -75,17 +88,25 @@ function RouteLine({ kind }: { kind: RouteKind }) {
   )
 }
 
-/** Side-by-side comparison of the shortest route and the route for the chosen penalties. */
+/** The shortest route and the route for the chosen settings in one table, and why yours goes where it goes. */
 export default function RouteComparison({
   result,
   paused = false,
 }: RouteComparisonProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const kinds: RouteKind[] = ['shortest', 'greenest']
 
   // The backend calls the penalty-based route "route"; on screen it's the greenest route.
   const propertiesFor = (kind: RouteKind) =>
     kind === 'shortest' ? result?.shortest.properties : result?.route.properties
+  const rows = METRICS.filter(
+    ({ optional }) =>
+      !optional ||
+      kinds.some(kind => {
+        const p = propertiesFor(kind)
+        return p != null && optional(p) != null
+      }),
+  )
 
   return (
     <Card className="flex flex-col gap-3">
@@ -102,53 +123,60 @@ export default function RouteComparison({
           paused && 'opacity-40',
         )}
       >
-        <div className="grid grid-cols-2 gap-3">
-          {kinds.map(kind => {
-            const properties = propertiesFor(kind)
-            return (
-              <div
-                className="flex flex-col gap-2 rounded-xl border border-leaf-sand/70 p-3"
-                key={kind}
-              >
-                <div className="flex items-center gap-2">
-                  <RouteLine kind={kind} />
-                  <span className="text-sm font-semibold text-leaf-ink">
-                    {t(`greenest.planTrip.routes.${kind}`)}
+        <table className="w-full border-collapse text-xs">
+          <thead>
+            <tr>
+              <th className="pb-1" scope="col">
+                <span className="sr-only">
+                  {t('greenest.planTrip.comparisonTitle')}
+                </span>
+              </th>
+              {kinds.map(kind => (
+                <th
+                  className="whitespace-nowrap pb-1 pl-3 text-right font-semibold text-leaf-ink"
+                  key={kind}
+                  scope="col"
+                  title={t(`greenest.planTrip.routes.${kind}Hint`)}
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <RouteLine kind={kind} />
+                    {t(`greenest.planTrip.routes.${kind}Short`)}
                   </span>
-                </div>
-                <p className="text-xs text-leaf-muted">
-                  {t(`greenest.planTrip.routes.${kind}Hint`)}
-                </p>
-                <dl className="flex flex-col gap-1.5">
-                  {METRICS.map(({ key, format }) => (
-                    <div
-                      className="flex items-center justify-between gap-2 text-xs"
-                      key={key}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ key, format }) => (
+              <tr className="border-t border-leaf-sand/50" key={key}>
+                <th
+                  className="py-1 text-left font-normal text-leaf-muted"
+                  scope="row"
+                >
+                  {t(`greenest.planTrip.metrics.${key}`)}
+                </th>
+                {kinds.map(kind => {
+                  const properties = propertiesFor(kind)
+                  return (
+                    <td
+                      className="whitespace-nowrap py-1 pl-3 text-right font-medium tabular-nums text-leaf-ink"
+                      key={kind}
                     >
-                      <dt className="text-leaf-muted">
-                        {t(`greenest.planTrip.metrics.${key}`)}
-                      </dt>
-                      <dd className="font-medium tabular-nums text-leaf-ink">
-                        {properties ? format(properties) : '–'}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              </div>
-            )
-          })}
-        </div>
+                      {properties ? format(properties, i18n.language) : '–'}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="text-[11px] text-leaf-muted">
+          {t('greenest.planTrip.metrics.scales')}
+        </p>
 
         {result ? (
-          <div className="flex flex-col gap-1 rounded-xl bg-leaf-cream p-3 text-xs text-leaf-ink">
-            <p className="font-medium">
-              {result.same_path
-                ? t('greenest.planTrip.sameAsShortest')
-                : t('greenest.planTrip.difference', {
-                    distance: signedPct(result.detour_pct),
-                    time: signedPct(result.extra_time_pct),
-                  })}
-            </p>
+          <div className="flex flex-col gap-2 rounded-xl bg-leaf-cream p-3 text-xs">
+            <WhyThisRoute result={result} />
             {/* Which time-of-day factor the backend applied, if a departure time was set. */}
             {result.route.properties.daylight === true && (
               <p className="text-leaf-muted">

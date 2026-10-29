@@ -109,6 +109,19 @@ export type RouteProperties = {
   /** Chance the streets are lit 0–1. */
   mean_lit: number | null
   lifts: number
+  /** Rough energy use for riding the route; an estimate, show it rounded. */
+  kcal: number
+
+  // Metres on the bad streets of each factor ("Why this route?"); null when the factor doesn't apply.
+  bumpy_m: number
+  bad_air_m: number
+  stop_go_m: number
+  /** Only by day with depart_time. */
+  sunny_m: number | null
+  /** Only after dark with depart_time. */
+  unlit_m: number | null
+  /** More is better here. */
+  bike_friendly_m: number
 }
 
 export type RouteFeature = Feature<LineString, RouteProperties>

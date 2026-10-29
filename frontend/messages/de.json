@@ -335,18 +335,22 @@
         "shortest": "Kürzeste Route",
         "shortestHint": "Der direkteste Weg, ohne Rücksicht auf Komfort.",
         "greenest": "Deine Route",
-        "greenestHint": "Geplant mit deinen Einstellungen."
+        "greenestHint": "Geplant mit deinen Einstellungen.",
+        "shortestShort": "Kürzeste",
+        "greenestShort": "Deine"
       },
       "metrics": {
-        "duration": "Fahrzeit",
         "distance": "Distanz",
-        "roughness": "Unebenheit (0–100)",
+        "duration": "Fahrzeit",
+        "roughness": "Unebenheit",
         "overtaking": "Enge Überholungen",
-        "airQuality": "Luft (0,5 = typisch)",
-        "stopGo": "Stop-and-go (0–1)"
+        "airQuality": "Luft",
+        "stopGo": "Stop-and-go",
+        "shade": "Schatten",
+        "lit": "Beleuchtet",
+        "kcal": "kcal",
+        "scales": "Unebenheit 0–100 · Luft 0,5 = typisch · Stop-and-go, Schatten und Beleuchtet 0–1 (Anteil der Strecke) · kcal grob geschätzt."
       },
-      "sameAsShortest": "Deine Route ist identisch mit der kürzesten Route.",
-      "difference": "Im Vergleich zur kürzesten Route: Distanz {{distance}}, Fahrzeit {{time}}.",
       "appliedShade": "Abfahrt bei Tag: schattige Straßen wurden bevorzugt.",
       "appliedDark": "Abfahrt nach Einbruch der Dunkelheit: beleuchtete Straßen wurden bevorzugt.",
       "emptyState": "Lege Start und Ziel fest, um Routen zu vergleichen. Werte erscheinen nur, wenn sie aus echten Daten stammen.",
@@ -487,6 +491,28 @@
         "day": "Dann scheint die Sonne: Schatten zählt, der Beleuchtungs-Regler ist aus.",
         "night": "Dann ist es dunkel: beleuchtete Straßen zählen, der Schatten-Regler ist aus.",
         "summerShade": "Der Schatten ist für einen Sommertag (21. Juli) berechnet. Außerhalb des Sommers zeigt er, welche Straßen Gebäude und Bäume beschatten, nicht die genauen Schatten an diesem Tag."
+      },
+      "why": {
+        "title": "Warum diese Route?",
+        "same": "Sie ist auch die kürzeste Route: Für deine Einstellungen lohnt sich kein Umweg ({{km}} km, {{min}} Min.). Unterwegs:",
+        "trade": "Sie ist {{m}} m ({{pct}}) länger und {{time}} als die kürzeste Route. Dafür:",
+        "slower": "{{min}} Min. langsamer",
+        "quicker": "{{min}} Min. schneller",
+        "asQuick": "genauso schnell",
+        "less": "{{amount}} weniger",
+        "fewer": "{{amount}} weniger",
+        "more": "{{amount}} mehr",
+        "aboutSame": "etwa gleich",
+        "bars": "Grau: kürzeste Route, {{shortest}}. Grün: deine Route, {{yours}}.",
+        "rows": {
+          "bumpy_m": "Auf holprigen Straßen",
+          "danger_points": "Stellen mit engem Überholen",
+          "bad_air_m": "Auf Straßen mit schlechter Luft",
+          "stop_go_m": "Auf Straßen mit viel Stop-and-go",
+          "sunny_m": "In der Sonne",
+          "unlit_m": "Auf unbeleuchteten Straßen",
+          "bike_friendly_m": "Auf Radwegen und Radspuren"
+        }
       }
     },
     "highlights": {

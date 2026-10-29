@@ -335,18 +335,22 @@
         "shortest": "Shortest route",
         "shortestHint": "The most direct path, ignoring comfort.",
         "greenest": "Your route",
-        "greenestHint": "Planned with your settings."
+        "greenestHint": "Planned with your settings.",
+        "shortestShort": "Shortest",
+        "greenestShort": "Yours"
       },
       "metrics": {
-        "duration": "Riding time",
         "distance": "Distance",
-        "roughness": "Roughness (0–100)",
+        "duration": "Riding time",
+        "roughness": "Roughness",
         "overtaking": "Close overtakes",
-        "airQuality": "Air (0.5 = typical)",
-        "stopGo": "Stop-and-go (0–1)"
+        "airQuality": "Air",
+        "stopGo": "Stop-and-go",
+        "shade": "Shade",
+        "lit": "Lit",
+        "kcal": "kcal",
+        "scales": "Roughness 0–100 · air 0.5 = typical · stop-and-go, shade and lit 0–1 (share of the way) · kcal a rough estimate."
       },
-      "sameAsShortest": "Your route is the same as the shortest route.",
-      "difference": "Compared with the shortest route: distance {{distance}}, riding time {{time}}.",
       "appliedShade": "Departure by day: shaded streets were preferred.",
       "appliedDark": "Departure after dark: lit streets were preferred.",
       "emptyState": "Set a start and destination to compare routes. Values only appear when they come from real data.",
@@ -487,6 +491,28 @@
         "day": "The sun is up then: shade counts, the lighting slider is off.",
         "night": "It is dark then: lit streets count, the shade slider is off.",
         "summerShade": "Shade is calculated for a summer day (21 July), so outside summer it shows which streets buildings and trees shade, not that day’s exact shadows."
+      },
+      "why": {
+        "title": "Why this route?",
+        "same": "It is also the shortest route: for your settings no detour is worth it ({{km}} km, {{min}} min). On the way:",
+        "trade": "It is {{m}} m ({{pct}}) longer and {{time}} than the shortest route. In return:",
+        "slower": "{{min}} min slower",
+        "quicker": "{{min}} min quicker",
+        "asQuick": "just as quick",
+        "less": "{{amount}} less",
+        "fewer": "{{amount}} fewer",
+        "more": "{{amount}} more",
+        "aboutSame": "about the same",
+        "bars": "Grey: shortest route, {{shortest}}. Green: your route, {{yours}}.",
+        "rows": {
+          "bumpy_m": "On bumpy streets",
+          "danger_points": "Close-overtaking spots",
+          "bad_air_m": "On streets with bad air",
+          "stop_go_m": "On stop-and-go streets",
+          "sunny_m": "In the sun",
+          "unlit_m": "On unlit streets",
+          "bike_friendly_m": "On bike paths and lanes"
+        }
       }
     },
     "highlights": {
