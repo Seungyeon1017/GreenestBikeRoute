@@ -707,6 +707,12 @@
       "noLocation": "Standort noch nicht geprüft",
       "photoBy": "Foto: {{author}}, {{license}}",
       "mapLabel": "Karte der Highlights",
+      "places": {
+        "pfuehlpark": "Großer Stadtpark mit altem Baumbestand und ruhigen Wegen.",
+        "wertwiesenpark": "Offene Parkfläche in der Nähe des Neckars.",
+        "neckarbogen": "Uferquartier mit Grünflächen am Wasser.",
+        "stadtgarten": "Grünfläche mitten in der Stadt."
+      },
       "placesTitle": "Grüne Orte entdecken",
       "placesText": "Parks, Uferwege und Grünflächen, die eine Fahrt wert sind.",
       "roadsTitle": "Grünste Straßen",

@@ -3,7 +3,6 @@
 import { MapPin, Trees } from 'lucide-react'
 import Link from 'next/link'
 import { useTranslation } from 'react-i18next'
-import AvailabilityBadge from '@/components/Greenest/ui/AvailabilityBadge'
 import type { HighlightPlace } from '@/types/greenest'
 
 const VIEW_ON_MAP_CLASS =
@@ -56,9 +55,10 @@ export default function PlaceCard({ place }: { place: HighlightPlace }) {
           <h3 className="font-display text-lg font-medium text-leaf-forest">
             {place.name}
           </h3>
-          {place.demo && <AvailabilityBadge availability="demo" />}
         </div>
-        <p className="flex-1 text-sm text-leaf-muted">{place.description}</p>
+        <p className="flex-1 text-sm text-leaf-muted">
+          {t(`greenest.highlights.places.${place.id}`)}
+        </p>
         {place.location ? (
           <Link className={VIEW_ON_MAP_CLASS} href={planTripHref(place)}>
             <MapPin aria-hidden className="h-4 w-4" />
