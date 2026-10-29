@@ -1,4 +1,11 @@
-import type { Feature, FeatureCollection, LineString } from 'geojson'
+import type {
+  Feature,
+  FeatureCollection,
+  LineString,
+  MultiPolygon,
+  Point,
+  Polygon,
+} from 'geojson'
 
 /** [longitude, latitude], the order GeoJSON and MapLibre use. */
 export type LngLat = [number, number]
@@ -119,23 +126,23 @@ export type RouteComparison = {
 
 /** Everything the rider can set in the Plan a Trip form. Limits match the backend. */
 export type RouteOptions = {
-  /** 0–50: avoid bumpy streets. */
+  /** 0–10 points: avoid bumpy streets (each point: +25 % on the bumpiest streets). */
   bump: number
   /** 0–100: metres of detour per close-overtaking spot avoided. */
   danger: number
-  /** 0–5: avoid bad air. */
+  /** 0–10 points: avoid bad air. */
   pm: number
-  /** 0–5: avoid traffic lights and stop-and-go. */
+  /** 0–10 points: avoid traffic lights and stop-and-go. */
   stop: number
-  /** 0–5: prefer bike paths, bike lanes and bike routes. */
+  /** 0–10 points: prefer bike paths, bike lanes and bike routes. */
   bikeFriendly: number
   /** Plan by riding time (fastest) instead of length (shortest). */
   preferTime: boolean
   /** Departure as "YYYY-MM-DDTHH:mm" in Heilbronn time, or "" for none. */
   departTime: string
-  /** 0–5, by day (needs departTime): prefer shaded streets. */
+  /** 0–10 points, by day (needs departTime): prefer shaded streets. */
   shade: number
-  /** 0–5, after dark (needs departTime): prefer lit streets. */
+  /** 0–10 points, after dark (needs departTime): prefer lit streets. */
   dark: number
 }
 
@@ -184,4 +191,117 @@ export type GradeSummary = {
 /** `/route/grade`: the same path as `/route`, cut into pieces by steepness, plus totals. */
 export type GradeCollection = FeatureCollection<LineString, GradeProperties> & {
   summary: GradeSummary
+}
+
+/** A place from `/geocode`: one "did you mean" candidate. */
+export type PlaceProperties = {
+  /** Full name with street and district. */
+  label: string
+  /** Short name, e.g. "Rathaus Heilbronn"; null for a plain address. */
+  name: string | null
+  category: string | null
+  type: string | null
+}
+
+export type PlaceCollection = FeatureCollection<Point, PlaceProperties> & {
+  attribution: string
+}
+
+export type SharingVehicleKind = 'bike' | 'scooter'
+/** Which shared vehicles to show or rent: e-bikes, e-scooters or both. */
+export type SharingVehicleChoice = 'all' | SharingVehicleKind
+
+/** A shared vehicle free to rent now, from `/sharing`. */
+export type VehicleProperties = {
+  provider: string
+  vehicle: SharingVehicleKind
+  vehicle_id: string
+  electric: boolean
+  battery_pct: number | null
+  range_m: number | null
+  /** As the provider publishes it, e.g. "€1.00 to unlock + €0.44/min". */
+  price: string | null
+  rent_url: string | null
+  last_reported: string | null
+  /** Metres from the start, when near_lat/near_lon was sent. */
+  distance_m?: number | null
+}
+
+export type VehicleFeature = Feature<Point, VehicleProperties>
+
+export type VehicleCollection = FeatureCollection<Point, VehicleProperties> & {
+  /** When the feed was read (ISO 8601, UTC). */
+  updated: string
+  attribution: string
+}
+
+/** A parking zone from `/sharing/zones` with live counts. */
+export type ZoneProperties = {
+  provider: string
+  name: string
+  bikes_available: number
+  scooters_available: number
+  bike_capacity: number | null
+  scooter_capacity: number | null
+  distance_m?: number | null
+}
+
+export type ZoneCollection = FeatureCollection<Point, ZoneProperties> & {
+  updated: string
+  attribution: string
+}
+
+/** Where a ride may end in a geofencing zone: anywhere, only at a parking zone, or not at all. */
+export type EndRule = 'anywhere' | 'parking_zone' | 'no'
+
+/** `/sharing/geofencing`: the provider's zones (Polygon or MultiPolygon), per vehicle kind. */
+export type GeofencingCollection = FeatureCollection<
+  Polygon | MultiPolygon,
+  {
+    provider: string
+    name: string | null
+    order: number
+    bike?: EndRule | null
+    scooter?: EndRule | null
+  }
+> & { updated: string; attribution: string }
+
+export type WalkLeg = Feature<
+  LineString,
+  { mode: 'walk'; length_m: number; duration_s: number; kcal: number }
+>
+
+export type RideLeg = Feature<
+  LineString,
+  RouteProperties & {
+    mode: SharingVehicleKind
+    kcal: number
+    /** Metres an e-scooter is pushed where it may not ride; 0 for bikes. */
+    pushed_m: number
+  }
+>
+
+/** `/route/sharing`: walk to a shared vehicle, ride it, walk to the end. */
+export type SharingTrip = {
+  vehicle: VehicleFeature
+  /** The parking zone the ride ends at, or null when it ends elsewhere. */
+  zone: Feature<Point, ZoneProperties> | null
+  return_point: Feature<
+    Point,
+    {
+      rule: 'anywhere' | 'parking_zone'
+      at_destination: boolean
+      name: string | null
+    }
+  >
+  /** Walk, ride, walk. */
+  legs: [WalkLeg, RideLeg, WalkLeg]
+  duration_s: number
+  walk_m: number
+  ride_m: number
+  /** Riding time in seconds, what the per-minute price applies to. */
+  ride_s: number
+  kcal: number
+  updated: string
+  attribution: string
 }

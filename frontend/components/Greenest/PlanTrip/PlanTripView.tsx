@@ -6,22 +6,56 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import BaseMap from '@/components/Greenest/Map'
 import PageIntro from '@/components/Greenest/ui/PageIntro'
+import { useSharedVehicles, useSharingTrip } from '@/hooks/useSharing'
 import {
   DEFAULT_ROUTE_OPTIONS,
+  fetchGeofencing,
   fetchRouteComparison,
   fetchRouteGrade,
 } from '@/services/greenestApi'
 import type {
+  GeofencingCollection,
   GradeCollection,
   LngLat,
   RouteOptions,
   RouteComparison as RouteResult,
+  SharingTrip,
+  SharingVehicleChoice,
+  VehicleCollection,
+  ZoneCollection,
 } from '@/types/greenest'
 import GradeCard from './GradeCard'
 import RouteComparisonCard, { ROUTE_COLORS } from './RouteComparison'
+import SharingCard, {
+  localPrice,
+  priceFor,
+  safeRentUrl,
+  VEHICLE_COLORS,
+  WALK_COLOR,
+} from './SharingCard'
 import TripForm from './TripForm'
+import {
+  attachPinPopup,
+  CLICKABLE_SHARING_LAYERS,
+  drawSharing,
+  drawTrip,
+  fadeRoutes,
+  pinPopup,
+  sharingPopup,
+  tripPin,
+} from './sharingLayers'
+import type { PinInfo } from './sharingLayers'
 
 const EMPTY: FeatureCollection = { type: 'FeatureCollection', features: [] }
+
+/** Rounded corners and ends, so a route's many small bends don't look jagged. */
+const ROUND_LINE: maplibregl.LineLayerSpecification['layout'] = {
+  'line-cap': 'round',
+  'line-join': 'round',
+}
+
+/** How close (px) a click must be to a shared vehicle or zone to open its popup. */
+const CLICK_TOLERANCE_PX = 10
 
 /** Creates the two route layers the first time, then puts the current result into them. */
 function drawRoutes(map: maplibregl.Map, result: RouteResult | null) {
@@ -32,6 +66,8 @@ function drawRoutes(map: maplibregl.Map, result: RouteResult | null) {
       id: 'shortest',
       type: 'line',
       source: 'shortest',
+      // Round corners only: round ends would turn the short dashes into dots.
+      layout: { 'line-join': 'round' },
       paint: {
         'line-color': ROUTE_COLORS.shortest,
         'line-width': 5,
@@ -42,6 +78,7 @@ function drawRoutes(map: maplibregl.Map, result: RouteResult | null) {
       id: 'greenest',
       type: 'line',
       source: 'greenest',
+      layout: ROUND_LINE,
       paint: { 'line-color': ROUTE_COLORS.greenest, 'line-width': 6 },
     })
   }
@@ -61,6 +98,7 @@ function drawGrade(map: maplibregl.Map, grade: GradeCollection | null) {
       id: 'grade',
       type: 'line',
       source: 'grade',
+      layout: ROUND_LINE,
       // Each piece carries the backend's suggested colour for its steepness.
       paint: { 'line-color': ['get', 'color'], 'line-width': 6 },
     })
@@ -68,12 +106,44 @@ function drawGrade(map: maplibregl.Map, grade: GradeCollection | null) {
   map.getSource<maplibregl.GeoJSONSource>('grade')?.setData(grade ?? EMPTY)
 }
 
+/** A clicked point as "lat, lng", the text shown in the search field. */
+function formatPoint([lng, lat]: LngLat): string {
+  return `${lat.toFixed(5)}, ${lng.toFixed(5)}`
+}
+
+/**
+ * A draggable start or destination pin. MapLibre keeps the map still while a
+ * pin is dragged; `onMove` gets the point where it was dropped. A plain click
+ * on the pin doesn't reach the map, so it doesn't set the other point there.
+ */
+function endpointPin(
+  map: maplibregl.Map,
+  at: LngLat,
+  color: string,
+  onMove: (_point: LngLat) => void,
+): maplibregl.Marker {
+  const marker = new maplibregl.Marker({ color, draggable: true })
+    .setLngLat(at)
+    .addTo(map)
+  const pin = marker.getElement()
+  pin.style.cursor = 'grab'
+  pin.addEventListener('click', e => e.stopPropagation())
+  marker.on('dragend', () => {
+    const { lng, lat } = marker.getLngLat()
+    onMove([lng, lat])
+  })
+  return marker
+}
+
 export default function PlanTripView() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
 
   // 1. STATE: values that make the page redraw when they change.
   const [start, setStart] = useState<LngLat | null>(null)
   const [end, setEnd] = useState<LngLat | null>(null)
+  // Text in the Start and Destination search fields.
+  const [startLabel, setStartLabel] = useState('')
+  const [endLabel, setEndLabel] = useState('')
   const [options, setOptions] = useState<RouteOptions>(DEFAULT_ROUTE_OPTIONS)
   const [result, setResult] = useState<RouteResult | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -84,12 +154,35 @@ export default function PlanTripView() {
   const [grade, setGrade] = useState<GradeCollection | null>(null)
   const [gradeError, setGradeError] = useState<string | null>(null)
 
+  // Shared vehicles: on the map, and a trip with a rented one. Nothing loads while unticked.
+  const [showSharing, setShowSharing] = useState(false)
+  const [sharingVehicle, setSharingVehicle] =
+    useState<SharingVehicleChoice>('bike')
+  const [tripOn, setTripOn] = useState(false)
+  const [tripVehicle, setTripVehicle] = useState<SharingVehicleChoice>('all')
+  const [fences, setFences] = useState<GeofencingCollection | null>(null)
+  const sharing = useSharedVehicles(showSharing, sharingVehicle, start)
+  const sharingTrip = useSharingTrip(tripOn, tripVehicle, start, end, options)
+
   // 2. REFS: values kept between redraws that don't trigger a redraw themselves.
   const mapRef = useRef<maplibregl.Map | null>(null)
   const resultRef = useRef<RouteResult | null>(null)
   resultRef.current = result
   const gradeRef = useRef<GradeCollection | null>(null)
   gradeRef.current = grade
+  // The map's style can reload (fallback style), so keep what's needed to redraw.
+  const sharingRef = useRef<{
+    vehicles: VehicleCollection | null
+    zones: ZoneCollection | null
+  }>({ vehicles: null, zones: null })
+  sharingRef.current = { vehicles: sharing.vehicles, zones: sharing.zones }
+  const tripRef = useRef<SharingTrip | null>(null)
+  tripRef.current = sharingTrip.trip
+  const plainTripRef = useRef<SharingTrip | null>(null)
+  plainTripRef.current = sharingTrip.plainTrip
+  const fencesRef = useRef<GeofencingCollection | null>(null)
+  fencesRef.current = fences
+  const popupRef = useRef<maplibregl.Popup | null>(null)
 
   // 3. EFFECTS: code that runs when certain values change.
 
@@ -159,6 +252,19 @@ export default function PlanTripView() {
     }
   }, [showHills, start, end, options, t])
 
+  // The parking rules change rarely: load them once, the first time a trip is shown.
+  useEffect(() => {
+    if (!sharingTrip.trip || fences) {
+      return
+    }
+    const controller = new AbortController()
+    fetchGeofencing(controller.signal)
+      .then(setFences)
+      // Without them the trip still shows, only the coloured zones are missing.
+      .catch(() => undefined)
+    return () => controller.abort()
+  }, [sharingTrip.trip, fences])
+
   // Draw (or clear) the hills whenever they change.
   useEffect(() => {
     if (mapRef.current) {
@@ -173,29 +279,155 @@ export default function PlanTripView() {
     }
   }, [result])
 
-  // Green pin at the start. The cleanup removes it when start changes or is reset.
+  // Shared vehicles and parking zones.
+  useEffect(() => {
+    if (mapRef.current) {
+      drawSharing(mapRef.current, sharing.vehicles, sharing.zones)
+    }
+    if (!sharing.vehicles) {
+      popupRef.current?.remove()
+    }
+  }, [sharing.vehicles, sharing.zones])
+
+  // The rented-vehicle trip; your route and the shortest fade meanwhile.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) {
+      return
+    }
+    drawTrip(map, sharingTrip.trip, fences, sharingTrip.plainTrip)
+    fadeRoutes(map, Boolean(sharingTrip.trip))
+  }, [sharingTrip.trip, sharingTrip.plainTrip, fences])
+
+  // Pins where to pick the vehicle up (①) and where to leave it (P), each with
+  // a popup on hover (mouse) or tap (touch).
+  useEffect(() => {
+    const map = mapRef.current
+    const trip = sharingTrip.trip
+    if (!map || !trip) {
+      return
+    }
+    const s = (key: string, values?: Record<string, unknown>) =>
+      t(`greenest.planTrip.sharing.${key}`, values)
+    const minutes = (seconds: number) => Math.max(1, Math.round(seconds / 60))
+    const [walk1, ride, walk2] = trip.legs
+    const v = trip.vehicle.properties
+    const rp = trip.return_point.properties
+    const url = safeRentUrl(v.rent_url)
+    const price = priceFor(v.price, trip.ride_s)
+
+    const pickUp: PinInfo = {
+      badge: '1',
+      color: VEHICLE_COLORS[v.vehicle],
+      title: s('pin.pickUp', {
+        vehicle: `${v.provider} ${s(`vehicle.${v.vehicle}`)}`,
+      }),
+      battery: v.battery_pct,
+      lines: [
+        s('pin.walkThere', {
+          m: Math.round(walk1.properties.length_m),
+          min: minutes(walk1.properties.duration_s),
+        }),
+        ...(v.price ? [localPrice(v.price, t, i18n.language)] : []),
+        ...(price !== null
+          ? [
+              s('pin.rideCost', {
+                min: minutes(trip.ride_s),
+                price: price.toLocaleString(i18n.language, {
+                  style: 'currency',
+                  currency: 'EUR',
+                }),
+              }),
+            ]
+          : []),
+      ],
+      rent: url
+        ? { url, label: s('rentThis', { provider: v.provider }) }
+        : undefined,
+    }
+    const leave: PinInfo = {
+      badge: 'P',
+      color: WALK_COLOR,
+      square: true,
+      title: s('pin.leave'),
+      lines: [
+        rp.rule === 'parking_zone' && rp.name
+          ? s('pin.atZone', { zone: rp.name })
+          : rp.at_destination
+            ? s('pin.atEnd')
+            : s('pin.outside', { vehicle: s(`vehicle.${v.vehicle}`) }),
+        s('pin.rideHere', {
+          km: (ride.properties.length_m / 1000).toLocaleString(i18n.language, {
+            maximumFractionDigits: 1,
+          }),
+          min: minutes(trip.ride_s),
+        }),
+        ...(walk2.properties.length_m > 0
+          ? [
+              s('pin.walkOn', {
+                m: Math.round(walk2.properties.length_m),
+                min: minutes(walk2.properties.duration_s),
+              }),
+            ]
+          : []),
+      ],
+    }
+
+    const [pickUpLng, pickUpLat] = trip.vehicle.geometry.coordinates
+    const [leaveLng, leaveLat] = trip.return_point.geometry.coordinates
+    const pins: Array<[PinInfo, LngLat]> = [
+      [pickUp, [pickUpLng, pickUpLat]],
+      [leave, [leaveLng, leaveLat]],
+    ]
+    const markers = pins.map(([info, at]) => {
+      const marker = new maplibregl.Marker({
+        element: tripPin(info.badge, info.color, info.square),
+      })
+        .setLngLat(at)
+        .addTo(map)
+      const popup = new maplibregl.Popup({
+        className: 'greenest-popup',
+        // Don't focus the rent link on open: it would show a focus ring on every hover.
+        focusAfterOpen: false,
+        offset: 16,
+        maxWidth: '260px',
+      }).setDOMContent(pinPopup(info))
+      attachPinPopup(marker, map, popup)
+      return { marker, popup }
+    })
+    return () =>
+      markers.forEach(({ marker, popup }) => {
+        popup.remove()
+        marker.remove()
+      })
+  }, [sharingTrip.trip, t, i18n.language])
+
+  // Green pin at the start, red pin at the destination. Drag a pin to move the
+  // point; while it is dragged the map stays put. The cleanup removes the pin
+  // when its point changes or is reset.
   useEffect(() => {
     const map = mapRef.current
     if (!map || !start) {
       return
     }
-    const marker = new maplibregl.Marker({ color: '#1a7f37' })
-      .setLngLat(start)
-      .addTo(map)
+    const marker = endpointPin(map, start, '#1a7f37', point => {
+      setStart(point)
+      setStartLabel(formatPoint(point))
+    })
     return () => {
       marker.remove()
     }
   }, [start])
 
-  // Red pin at the destination.
   useEffect(() => {
     const map = mapRef.current
     if (!map || !end) {
       return
     }
-    const marker = new maplibregl.Marker({ color: '#b3261e' })
-      .setLngLat(end)
-      .addTo(map)
+    const marker = endpointPin(map, end, '#b3261e', point => {
+      setEnd(point)
+      setEndLabel(formatPoint(point))
+    })
     return () => {
       marker.remove()
     }
@@ -203,17 +435,92 @@ export default function PlanTripView() {
 
   // 4. HANDLERS: functions called by clicks and buttons.
 
+  /** Opens a popup if the click hit a shared vehicle or zone; returns whether it did. */
+  function openSharingPopup(map: maplibregl.Map, point: LngLat): boolean {
+    const layers = CLICKABLE_SHARING_LAYERS.filter(id => map.getLayer(id))
+    if (!layers.length) {
+      return false
+    }
+    const { x, y } = map.project(point)
+    const r = CLICK_TOLERANCE_PX
+    const [hit] = map.queryRenderedFeatures(
+      [
+        [x - r, y - r],
+        [x + r, y + r],
+      ],
+      { layers },
+    )
+    if (!hit || hit.geometry.type !== 'Point') {
+      return false
+    }
+    const s = (key: string, values?: Record<string, unknown>) =>
+      t(`greenest.planTrip.sharing.${key}`, values)
+    const content = sharingPopup(hit.layer.id, hit.properties, {
+      vehicle: kind => s(`vehicle.${kind}`),
+      away: m => s('away', { m }),
+      range: km => s('range', { km }),
+      price: price => localPrice(price, t, i18n.language),
+      rent: provider => s('rent', { provider }),
+      zoneCounts: (bikes, scooters) => s('zoneCounts', { bikes, scooters }),
+    })
+    popupRef.current?.remove()
+    popupRef.current = new maplibregl.Popup({
+      className: 'greenest-popup',
+      // Don't focus the rent link on open: it would show a focus ring on every hover.
+      focusAfterOpen: false,
+      offset: 10,
+      maxWidth: '260px',
+    })
+      .setLngLat(hit.geometry.coordinates as LngLat)
+      .setDOMContent(content)
+      .addTo(map)
+    return true
+  }
+
   function handleMapClick(point: LngLat) {
+    const map = mapRef.current
+    if (map && openSharingPopup(map, point)) {
+      return
+    }
     if (!start) {
       setStart(point)
+      setStartLabel(formatPoint(point))
     } else {
       setEnd(point)
+      setEndLabel(formatPoint(point))
+    }
+  }
+
+  /** A place picked from the search list: set the point and move the map there. */
+  function pickPlace(which: 'start' | 'end', point: LngLat, label: string) {
+    if (which === 'start') {
+      setStart(point)
+      setStartLabel(label)
+    } else {
+      setEnd(point)
+      setEndLabel(label)
+    }
+    const map = mapRef.current
+    const other = which === 'start' ? end : start
+    if (!map) {
+      return
+    }
+    if (other) {
+      // Both points known: show them both.
+      map.fitBounds(new maplibregl.LngLatBounds(point, point).extend(other), {
+        padding: 80,
+        maxZoom: 16,
+      })
+    } else {
+      map.flyTo({ center: point, zoom: Math.max(map.getZoom(), 15) })
     }
   }
 
   function handleReset() {
     setStart(null)
     setEnd(null)
+    setStartLabel('')
+    setEndLabel('')
     setResult(null)
     setError(null)
     setLoading(false)
@@ -223,20 +530,29 @@ export default function PlanTripView() {
 
   // 5. RENDER: what appears on the page.
   return (
-    <div className="mx-auto flex w-full max-w-[1920px] flex-1 flex-col gap-4 px-4 py-4 md:px-8">
+    // data-workspace: on wide screens the page fills the window and doesn't
+    // scroll; the cards column and the map each keep their own height.
+    <div
+      className="mx-auto flex min-h-0 w-full max-w-[1920px] flex-1 flex-col gap-4 px-4 py-4 md:px-8"
+      data-workspace
+    >
       <PageIntro
         subtitle={t('greenest.planTrip.subtitle')}
         title={t('greenest.planTrip.title')}
       />
-      <div className="grid flex-1 grid-cols-1 gap-4 lg:grid-cols-[22rem_minmax(0,1fr)]">
-        <div className="flex flex-col gap-4">
+      <div className="grid flex-1 grid-cols-1 gap-4 lg:min-h-0 lg:grid-cols-[24rem_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
+        <div className="flex flex-col gap-4 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:pb-1 lg:pr-2">
           <TripForm
-            end={end}
+            endLabel={endLabel}
             loading={loading}
+            onEndLabelChange={setEndLabel}
             onOptionsChange={setOptions}
+            onPickEnd={(point, label) => pickPlace('end', point, label)}
+            onPickStart={(point, label) => pickPlace('start', point, label)}
             onReset={handleReset}
+            onStartLabelChange={setStartLabel}
             options={options}
-            start={start}
+            startLabel={startLabel}
           />
           {error && (
             <p
@@ -246,7 +562,29 @@ export default function PlanTripView() {
               {error}
             </p>
           )}
-          <RouteComparisonCard result={result} />
+          <RouteComparisonCard
+            paused={Boolean(sharingTrip.trip)}
+            result={result}
+          />
+          <SharingCard
+            error={sharing.error}
+            hasRoute={Boolean(start && end)}
+            hasStart={Boolean(start)}
+            onShowChange={setShowSharing}
+            onTripOnChange={setTripOn}
+            onTripVehicleChange={setTripVehicle}
+            onVehicleChange={setSharingVehicle}
+            plainTrip={sharingTrip.plainTrip}
+            show={showSharing}
+            trip={sharingTrip.trip}
+            tripError={sharingTrip.error}
+            tripLoading={sharingTrip.loading}
+            tripOn={tripOn}
+            tripVehicle={tripVehicle}
+            vehicle={sharingVehicle}
+            vehicles={sharing.vehicles}
+            zones={sharing.zones}
+          />
           <GradeCard
             error={gradeError}
             grade={grade}
@@ -255,14 +593,27 @@ export default function PlanTripView() {
             show={showHills}
           />
         </div>
-        <section className="h-[60vh] min-h-[420px] overflow-hidden rounded-3xl border border-leaf-sand shadow-soft lg:h-auto">
+        <section className="h-[60vh] min-h-[420px] overflow-hidden rounded-3xl border border-leaf-sand shadow-soft lg:h-auto lg:min-h-0">
           <BaseMap
             ariaLabel={t('greenest.planTrip.mapLabel')}
             onClick={handleMapClick}
             onLoad={map => {
               mapRef.current = map
+              // Bottom to top: routes, hills, shared vehicles, the rented-vehicle trip.
               drawRoutes(map, resultRef.current)
               drawGrade(map, gradeRef.current)
+              drawSharing(
+                map,
+                sharingRef.current.vehicles,
+                sharingRef.current.zones,
+              )
+              drawTrip(
+                map,
+                tripRef.current,
+                fencesRef.current,
+                plainTripRef.current,
+              )
+              fadeRoutes(map, Boolean(tripRef.current))
             }}
           />
         </section>
@@ -270,205 +621,3 @@ export default function PlanTripView() {
     </div>
   )
 }
-
-/* 'use client'
-
-import type { FeatureCollection } from 'geojson'
-import maplibregl from 'maplibre-gl'
-import { useEffect, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-import BaseMap from '@/components/Greenest/Map'
-import PageIntro from '@/components/Greenest/ui/PageIntro'
-import { fetchRouteComparison } from '@/services/greenestApi'
-import type {
-  LngLat,
-  Penalties,
-  RouteComparison as RouteResult,
-} from '@/types/greenest'
-import RouteComparisonCard, { ROUTE_COLORS } from './RouteComparison'
-import TripForm from './TripForm'
-
-const INITIAL_PENALTIES: Penalties = { bump: 10, danger: 25, pm: 0.5 }
-
-const EMPTY: FeatureCollection = { type: 'FeatureCollection', features: [] }
-
-// Creates the two route layers the first time, then puts the current result into them.
-function drawRoutes(map: maplibregl.Map, result: RouteResult | null) {
-  if (!map.getSource('shortest')) {
-    map.addSource('shortest', { type: 'geojson', data: EMPTY })
-    map.addSource('greenest', { type: 'geojson', data: EMPTY })
-    map.addLayer({
-      id: 'shortest',
-      type: 'line',
-      source: 'shortest',
-      paint: {
-        'line-color': ROUTE_COLORS.shortest,
-        'line-width': 5,
-        'line-dasharray': [2, 2],
-      },
-    })
-    map.addLayer({
-      id: 'greenest',
-      type: 'line',
-      source: 'greenest',
-      paint: { 'line-color': ROUTE_COLORS.greenest, 'line-width': 6 },
-    })
-  }
-  map
-    .getSource<maplibregl.GeoJSONSource>('shortest')
-    ?.setData(result?.shortest ?? EMPTY)
-  map
-    .getSource<maplibregl.GeoJSONSource>('greenest')
-    ?.setData(result?.route ?? EMPTY)
-}
-
-export default function PlanTripView() {
-  const { t } = useTranslation()
-
-  // 1. STATE: values that make the page redraw when they change.
-  const [start, setStart] = useState<LngLat | null>(null)
-  const [end, setEnd] = useState<LngLat | null>(null)
-  const [penalties, setPenalties] = useState<Penalties>(INITIAL_PENALTIES)
-  const [result, setResult] = useState<RouteResult | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-
-  // 2. REFS: values kept between redraws that don't trigger a redraw themselves.
-  const mapRef = useRef<maplibregl.Map | null>(null)
-  const resultRef = useRef<RouteResult | null>(null)
-  resultRef.current = result
-
-  // 3. EFFECTS: code that runs when certain values change.
-
-  // Ask the backend for a route when the points or sliders change.
-  useEffect(() => {
-    if (!start || !end) {
-      return
-    }
-    const controller = new AbortController()
-    setLoading(true)
-
-    // Wait 300 ms after the last change, so dragging a slider sends one request, not dozens.
-    const timer = setTimeout(() => {
-      fetchRouteComparison(
-        { from: start, to: end, penalties },
-        controller.signal,
-      )
-        .then(data => {
-          setResult(data)
-          setError(null)
-        })
-        .catch(err => {
-          if (err.name !== 'AbortError') {
-            setResult(null)
-            setError(err.message)
-          }
-        })
-        .finally(() => {
-          if (!controller.signal.aborted) {
-            setLoading(false)
-          }
-        })
-    }, 300)
-
-    return () => {
-      clearTimeout(timer)
-      controller.abort()
-    }
-  }, [start, end, penalties])
-
-  // Draw (or clear) the two lines whenever a new result arrives.
-  useEffect(() => {
-    if (mapRef.current) {
-      drawRoutes(mapRef.current, result)
-    }
-  }, [result])
-
-  // Green pin at the start. The cleanup removes it when start changes or is reset.
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map || !start) {
-      return
-    }
-    const marker = new maplibregl.Marker({ color: '#1a7f37' })
-      .setLngLat(start)
-      .addTo(map)
-    return () => {
-      marker.remove()
-    }
-  }, [start])
-
-  // Red pin at the destination.
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map || !end) {
-      return
-    }
-    const marker = new maplibregl.Marker({ color: '#b3261e' })
-      .setLngLat(end)
-      .addTo(map)
-    return () => {
-      marker.remove()
-    }
-  }, [end])
-
-  // 4. HANDLERS: functions called by clicks and buttons.
-
-  function handleMapClick(point: LngLat) {
-    if (!start) {
-      setStart(point)
-    } else {
-      setEnd(point)
-    }
-  }
-
-  function handleReset() {
-    setStart(null)
-    setEnd(null)
-    setResult(null)
-    setError(null)
-    setLoading(false)
-  }
-
-  // 5. RENDER: what appears on the page.
-  return (
-    <div className="mx-auto flex w-full max-w-[1920px] flex-1 flex-col gap-4 px-4 py-4 md:px-8">
-      <PageIntro
-        subtitle={t('greenest.planTrip.subtitle')}
-        title={t('greenest.planTrip.title')}
-      />
-      <div className="grid flex-1 grid-cols-1 gap-4 lg:grid-cols-[22rem_minmax(0,1fr)]">
-        <div className="flex flex-col gap-4">
-          <TripForm
-            end={end}
-            loading={loading}
-            onPenaltiesChange={setPenalties}
-            onReset={handleReset}
-            penalties={penalties}
-            start={start}
-          />
-          {error && (
-            <p
-              className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800"
-              role="alert"
-            >
-              {error}
-            </p>
-          )}
-          <RouteComparisonCard result={result} />
-        </div>
-        <section className="h-[60vh] min-h-[420px] overflow-hidden rounded-3xl border border-leaf-sand shadow-soft lg:h-auto">
-          <BaseMap
-            ariaLabel={t('greenest.planTrip.mapLabel')}
-            onClick={handleMapClick}
-            onLoad={map => {
-              mapRef.current = map
-              drawRoutes(map, resultRef.current)
-            }}
-          />
-        </section>
-      </div>
-    </div>
-  )
-}
- */

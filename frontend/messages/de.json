@@ -306,10 +306,7 @@
       "title": "Finde deine grünste Route",
       "subtitle": "Vergleiche die kürzeste Route mit einer Route nach deinen Wünschen: glatte Straßen, sicheres Überholen, saubere Luft und weniger Stopps.",
       "formTitle": "Deine Fahrt",
-      "clickHint": "Klicke auf die Karte, um zuerst den Start und dann das Ziel festzulegen.",
-      "startPoint": "Start",
-      "endPoint": "Ziel",
-      "notSet": "Nicht gesetzt",
+      "clickHint": "Suche einen Ort oder klicke auf die Karte: zuerst den Start, dann das Ziel.",
       "penalties": {
         "bump": "Unebenheiten meiden",
         "danger": "Enges Überholen meiden",
@@ -319,7 +316,7 @@
         "shade": "Schatten bevorzugen (tagsüber)",
         "dark": "Beleuchtete Straßen bevorzugen (nachts)"
       },
-      "moreOptions": "Weitere Optionen",
+      "options": "Optionen",
       "preferTime": "Schnellste statt kürzeste Route",
       "preferTimeHint": "Plant nach Fahrzeit, mit den gemessenen Geschwindigkeiten von Radfahrenden.",
       "departTime": "Abfahrtszeit",
@@ -333,6 +330,7 @@
       "destination": "Ziel",
       "destinationPlaceholder": "z. B. Pfühlpark",
       "comparisonTitle": "Routenvergleich",
+      "comparisonPaused": "Auf der Karte siehst du gerade die Fahrt mit Leihfahrzeug. Dieser Vergleich gilt für die Fahrt mit deinem eigenen Rad und ist ausgegraut, bis du die Leihfahrt ausschaltest.",
       "routes": {
         "shortest": "Kürzeste Route",
         "shortestHint": "Der direkteste Weg, ohne Rücksicht auf Komfort.",
@@ -369,6 +367,126 @@
         },
         "unavailable": "Steigungen sind nicht verfügbar: Dieser Server hat keine Höhendaten.",
         "credit": "Höhen: LGL, www.lgl-bw.de, dl-de/by-2-0 (DGM1)"
+      },
+      "search": {
+        "noMatch": "Kein Ort in Heilbronn gefunden. Versuche eine andere Schreibweise oder klicke auf die Karte.",
+        "unavailable": "Die Ortssuche ist gerade nicht erreichbar. Klicke stattdessen auf die Karte."
+      },
+      "sharing": {
+        "title": "E-Bikes & E-Scooter zum Leihen",
+        "tripToggle": "Kein Rad dabei? Für diese Fahrt eins leihen",
+        "tripVehicleLabel": "Fahrzeug zum Leihen",
+        "vehicleLabel": "Angezeigte Fahrzeuge",
+        "choice": {
+          "quickest": "Schnellstes E-Bike oder E-Scooter",
+          "both": "E-Bikes und E-Scooter"
+        },
+        "vehicle": {
+          "bike": "E-Bike",
+          "scooter": "E-Scooter"
+        },
+        "needRoute": "Lege zuerst Start und Ziel fest.",
+        "tripLoading": "Suche ein Fahrzeug in der Nähe deines Starts … Die erste Suche nach dem Serverstart kann eine Minute dauern.",
+        "total": "{{min}} Min. von Tür zu Tür",
+        "about": "etwa {{price}} €",
+        "kcal": "etwa {{kcal}} kcal",
+        "stepWalkTo": "Geh {{m}} m ({{min}} Min.) zu Pin 1, dem {{vehicle}} (Akku {{pct}} %).",
+        "stepRide": "Fahr {{km}} km ({{min}} Min.) und stell das Fahrzeug bei Pin P ab, {{where}}.",
+        "pushed": "Schieb ihn {{m}} m auf Gehwegen, auf denen E-Scooter nicht fahren dürfen.",
+        "stepWalkEnd": "Geh {{m}} m ({{min}} Min.) zu deinem Ziel.",
+        "leaveAtZone": "in der Parkzone „{{zone}}“",
+        "leaveAtEnd": "direkt an deinem Ziel",
+        "leaveOutside": "knapp außerhalb der Parkverbotszone",
+        "noParking": "Parkverbot für {{vehicle}}s",
+        "zonesOnly": "Nur in Parkzonen",
+        "rentThis": "In der {{provider}}-App leihen",
+        "showToggle": "Freie Leihfahrzeuge auf der Karte zeigen (live)",
+        "zone": "Parkzone",
+        "lowBattery": "blass = Akku unter {{pct}} %",
+        "summary": {
+          "all": "Gerade frei: {{bikes}} E-Bikes und {{scooters}} E-Scooter.",
+          "bike": "Gerade frei: {{bikes}} E-Bikes.",
+          "scooter": "Gerade frei: {{scooters}} E-Scooter."
+        },
+        "setStartHint": "Lege einen Start fest, um die nächsten Fahrzeuge zu sehen. Klicke auf einen Punkt in der Karte für Details.",
+        "away": "{{m}} m von deinem Start",
+        "battery": "Akku {{pct}} %",
+        "range": "noch etwa {{km}} km",
+        "rent": "In der {{provider}}-App leihen",
+        "zoneCounts": "Hier: {{bikes}} E-Bikes, {{scooters}} E-Scooter",
+        "updated": "Stand {{time}}",
+        "unavailable": "Leihfahrzeuge sind gerade nicht verfügbar.",
+        "price": "{{unlock}} zum Entsperren + {{perMin}}/Min.",
+        "pin": {
+          "pickUp": "Abholen: {{vehicle}}",
+          "walkThere": "{{m}} m ({{min}} Min.) zu Fuß von deinem Start bis hier.",
+          "rideCost": "Diese Fahrt: {{min}} Min., etwa {{price}}",
+          "leave": "Hier abstellen",
+          "atZone": "In der Parkzone „{{zone}}“.",
+          "atEnd": "Direkt an deinem Ziel.",
+          "outside": "Knapp außerhalb der Zone, in der {{vehicle}}s nicht abgestellt werden dürfen.",
+          "rideHere": "{{km}} km ({{min}} Min.) Fahrt von Pin 1 bis hier.",
+          "walkOn": "Dann {{m}} m ({{min}} Min.) zu Fuß zu deinem Ziel."
+        },
+        "compare": {
+          "title": "Mit und ohne deine Einstellungen",
+          "plain": "Ohne Einstellungen",
+          "yours": "Mit deinen Einstellungen",
+          "doorToDoor": "Tür zu Tür",
+          "walk": "Zu Fuß",
+          "ride": "Gefahren",
+          "price": "Preis",
+          "kcal": "kcal",
+          "hint": "Grau gestrichelt auf der Karte: dieselbe Fahrt mit allen Reglern auf 0. Unebenheit, Überholen, Luft und Anhalten gelten nur für die Fahrt mit dem Leihfahrzeug. Jede Fahrt nimmt das schnellste Fahrzeug in der Nähe deines Starts, daher können sie sich unterscheiden; beim E-Scooter zählen kcal nur, wo du ihn schiebst.",
+          "same": "Mit deinen Einstellungen ist die Fahrt dieselbe wie ohne.",
+          "vehicle": "Fahrzeug"
+        }
+      },
+      "info": {
+        "about": "Info: {{name}}",
+        "ignore": "egal",
+        "pointsRow": "{{x}}× so lang",
+        "dangerRow": "bis zu {{m}} m Umweg pro Stelle",
+        "yours": "(deine Einstellung)",
+        "bump": {
+          "question": "Wie viel länger fühlt sich eine sehr holprige Straße für dich an?",
+          "note": "Sehr holprig = die holprigsten 10 % der in Heilbronn gemessenen Straßen (Rauheit ab 20). Noch holprigere zählen mehr, normale oder glattere gar nicht.",
+          "example": "Mit {{p}} fährst du bis zu {{m}} m Umweg, um 100 m sehr holprige Straße zu meiden."
+        },
+        "danger": {
+          "question": "Wie weit würdest du ausweichen, um an einer Stelle mit engem Überholen weniger vorbeizukommen?",
+          "note": "Stellen, an denen Sensorräder zu enges Überholen durch Autos gemessen haben. Riskantere Stellen zählen mehr."
+        },
+        "pm": {
+          "question": "Wie viel länger fühlt sich eine Straße mit schlechter Luft für dich an?",
+          "note": "Schlechte Luft = die schlechtesten 10 % der von Sensorrädern gemessenen Straßen. Normale oder sauberere Luft zählt gar nicht.",
+          "example": "Mit {{p}} fährst du bis zu {{m}} m Umweg, um 100 m Straße mit schlechter Luft zu meiden."
+        },
+        "stop": {
+          "question": "Wie viel länger fühlt sich eine Straße mit viel Stop-and-go für dich an?",
+          "note": "Viel Stop-and-go = die schlechtesten 10 % der Straßen (Ampeln, Stau). Jeder Aufzug unterwegs zählt außerdem wie {{lift}} m.",
+          "example": "Mit {{p}} fährst du bis zu {{m}} m Umweg, um 100 m mit viel Stop-and-go zu meiden."
+        },
+        "bikeFriendly": {
+          "question": "Wie viel länger fühlt sich eine Straße ohne Radweg oder Radspur für dich an?",
+          "note": "Radwege, Radspuren und ausgeschilderte Radrouten aus OpenStreetMap.",
+          "example": "Mit {{p}} fährst du bis zu {{m}} m Umweg, um 100 m normale Straße gegen Radweg oder Radspur zu tauschen."
+        },
+        "shade": {
+          "question": "Tagsüber: Wie viel länger fühlt sich eine Straße in voller Sonne für dich an?",
+          "note": "Halb beschattete Straßen zählen halb. Nur wenn zur Abfahrtszeit die Sonne scheint. Der Schatten ist für den 21. Juli berechnet (9, 12, 15 und 18 Uhr; die nächste Uhrzeit zählt).",
+          "example": "Mit {{p}} fährst du bis zu {{m}} m Umweg, um 100 m in voller Sonne zu meiden."
+        },
+        "dark": {
+          "question": "Nach Einbruch der Dunkelheit: Wie viel länger fühlt sich eine unbeleuchtete Straße für dich an?",
+          "note": "Wahrscheinlich beleuchtete Straßen zählen weniger. Nur mit Abfahrtszeit nach Sonnenuntergang.",
+          "example": "Mit {{p}} fährst du bis zu {{m}} m Umweg, um 100 m unbeleuchtete Straße zu meiden."
+        }
+      },
+      "sky": {
+        "day": "Dann scheint die Sonne: Schatten zählt, der Beleuchtungs-Regler ist aus.",
+        "night": "Dann ist es dunkel: beleuchtete Straßen zählen, der Schatten-Regler ist aus.",
+        "summerShade": "Der Schatten ist für einen Sommertag (21. Juli) berechnet. Außerhalb des Sommers zeigt er, welche Straßen Gebäude und Bäume beschatten, nicht die genauen Schatten an diesem Tag."
       }
     },
     "highlights": {

@@ -7,27 +7,34 @@
  */
 import type { FeatureCollection, LineString } from 'geojson'
 import type {
+  GeofencingCollection,
   GradeCollection,
+  LngLat,
   OverlayName,
+  PlaceCollection,
   RouteComparison,
   RouteOptions,
   RouteRequest,
+  SharingTrip,
+  SharingVehicleChoice,
+  VehicleCollection,
+  ZoneCollection,
 } from '@/types/greenest'
 
 export const GREENEST_API_URL =
   process.env.NEXT_PUBLIC_GREENEST_API_URL ?? 'http://127.0.0.1:8001'
 
-/** The backend's own defaults (routing/costs.py), used when the page opens. */
+/** The backend's own defaults (routing/costs.py, DEFAULT_*_PENALTY), used when the page opens. */
 export const DEFAULT_ROUTE_OPTIONS: RouteOptions = {
-  bump: 10,
-  danger: 25,
-  pm: 0.5,
-  stop: 0.5,
+  bump: 2,
+  danger: 10,
+  pm: 1,
+  stop: 1,
   bikeFriendly: 0,
   preferTime: false,
   departTime: '',
-  shade: 0.5,
-  dark: 1,
+  shade: 2,
+  dark: 4,
 }
 
 export class GreenestApiError extends Error {
@@ -142,88 +149,68 @@ export function fetchRoughness(
   return getJson('/roughness', signal)
 }
 
-/* export class GreenestApiError extends Error {
-  status?: number
-
-  constructor(message: string, status?: number) {
-    super(message)
-    this.name = 'GreenestApiError'
-    this.status = status
-  }
-}
-
-async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
-  let response: Response
-  try {
-    response = await fetch(`${GREENEST_API_URL}${path}`, { signal })
-  } catch (error) {
-    if ((error as Error).name === 'AbortError') {
-      throw error
-    }
-    throw new GreenestApiError(
-      `The routing service at ${GREENEST_API_URL} is not reachable.`,
-    )
-  }
-
-  if (!response.ok) {
-    // FastAPI puts the reason in `detail`, e.g. "start point is 900 m from the nearest Heilbronn street".
-    const body = await response.json().catch(() => null)
-    throw new GreenestApiError(
-      body?.detail ?? `Request failed with status ${response.status}`,
-      response.status,
-    )
-  }
-  return response.json() as Promise<T>
-}
-
-/** GET /route: bike route from A to B as a GeoJSON FeatureCollection with one LineString. */
-/* export function fetchRoute(
-  { from, to, penalty }: RouteRequest,
+/**
+ * GET /geocode: places in Heilbronn matching what the rider typed, best first.
+ * Needs at least 3 characters (422 otherwise); 503 if the place search is down.
+ */
+export function fetchPlaces(
+  query: string,
   signal?: AbortSignal,
-): Promise<RouteCollection> {
-  const params = new URLSearchParams({
-    from_lat: String(from[1]),
-    from_lon: String(from[0]),
-    to_lat: String(to[1]),
-    to_lon: String(to[0]),
-  })
-  if (penalty !== undefined) {
-    params.set('penalty', String(penalty))
+  limit = 5,
+): Promise<PlaceCollection> {
+  const params = new URLSearchParams({ q: query, limit: String(limit) })
+  return getJson<PlaceCollection>(`/geocode?${params}`, signal)
+}
+
+/** near_lat / near_lon: the backend then sorts by distance and adds `distance_m`. */
+function nearParams(near: LngLat | null, limit?: number): URLSearchParams {
+  const params = new URLSearchParams()
+  if (near) {
+    params.set('near_lat', String(near[1]))
+    params.set('near_lon', String(near[0]))
   }
-  return getJson<RouteCollection>(`/route?${params}`, signal)
-} */
+  if (limit) {
+    params.set('limit', String(limit))
+  }
+  return params
+}
+
+/** GET /sharing: shared e-bikes and e-scooters free to rent now. 503 if the feed can't be read. */
+export function fetchSharedVehicles(
+  vehicle: SharingVehicleChoice,
+  near: LngLat | null,
+  signal?: AbortSignal,
+): Promise<VehicleCollection> {
+  const params = nearParams(near)
+  params.set('vehicle', vehicle)
+  return getJson<VehicleCollection>(`/sharing?${params}`, signal)
+}
+
+/** GET /sharing/zones: parking zones with how many vehicles stand there now. */
+export function fetchSharingZones(
+  near: LngLat | null,
+  signal?: AbortSignal,
+): Promise<ZoneCollection> {
+  return getJson<ZoneCollection>(`/sharing/zones?${nearParams(near)}`, signal)
+}
+
+/** GET /sharing/geofencing: where shared vehicles may (not) be left. Changes rarely. */
+export function fetchGeofencing(
+  signal?: AbortSignal,
+): Promise<GeofencingCollection> {
+  return getJson<GeofencingCollection>('/sharing/geofencing', signal)
+}
 
 /**
-export function fetchRoughness(
-  signal?: AbortSignal,
-): Promise<FeatureCollection<LineString, { roughness: number | null }>> {
-  return getJson('/roughness', signal)
-}
-
-function errorMessage(detail: unknown, status: number): string {
-  if (typeof detail === 'string') return detail
-  if (Array.isArray(detail)) return detail.map(d => d.msg).join(' ')
-  return `Request failed with status ${status}`
-}
-
-// In getJson, replace the message line with:
-//   errorMessage(body?.detail, response.status), response.status
-
-function routeParams({ from, to, penalties }: RouteRequest): URLSearchParams {
-  return new URLSearchParams({
-    from_lat: String(from[1]),
-    from_lon: String(from[0]),
-    to_lat: String(to[1]),
-    to_lon: String(to[0]),
-    bump_penalty: String(penalties?.bump ?? 10),
-    danger_penalty: String(penalties?.danger ?? 25),
-    pm_penalty: String(penalties?.pm ?? 0.5),
-  })
-}
-
-export function fetchRouteComparison(
+ * GET /route/sharing: walk to a free shared vehicle, ride it with the same options as /route, walk to the end.
+ * 400 when no vehicle is within reach, 503 when the sharing feed can't be read.
+ */
+export function fetchSharingTrip(
   request: RouteRequest,
+  vehicle: SharingVehicleChoice,
   signal?: AbortSignal,
-): Promise<RouteComparison> {
-  return getJson<RouteComparison>(`/route/compare?${routeParams(request)}`, signal)
-} */
+): Promise<SharingTrip> {
+  const params = routeParams(request)
+  params.set('vehicle', vehicle)
+  return getJson<SharingTrip>(`/route/sharing?${params}`, signal)
+}

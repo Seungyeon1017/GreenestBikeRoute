@@ -1,12 +1,22 @@
 'use client'
 
+import { cx } from 'class-variance-authority'
 import { useTranslation } from 'react-i18next'
 import Card, { CardTitle } from '@/components/Greenest/ui/Card'
 import type { LngLat, RouteOptions } from '@/types/greenest'
+import InfoTip from '@/components/Greenest/ui/InfoTip'
+import { isSunUp } from '@/lib/sun'
+import PlaceSearch from './PlaceSearch'
 
 type TripFormProps = {
-  start: LngLat | null
-  end: LngLat | null
+  /** Text in the Start and Destination fields. */
+  startLabel: string
+  endLabel: string
+  onStartLabelChange: (_label: string) => void
+  onEndLabelChange: (_label: string) => void
+  /** A place was picked from the search list. */
+  onPickStart: (_point: LngLat, _label: string) => void
+  onPickEnd: (_point: LngLat, _label: string) => void
   options: RouteOptions
   onOptionsChange: (_options: RouteOptions) => void
   onReset: () => void
@@ -25,28 +35,91 @@ type SliderKey =
 
 type SliderSpec = { key: SliderKey; min: number; max: number; step: number }
 
-/** Always visible. Min, max and step match the backend limits. */
-const MAIN_SLIDERS: SliderSpec[] = [
-  { key: 'bump', min: 0, max: 50, step: 1 },
-  { key: 'danger', min: 0, max: 100, step: 5 },
-  { key: 'pm', min: 0, max: 5, step: 0.25 },
+/**
+ * The backend counts the dislikes in whole points 0–10, each making a bad street
+ * cost 25 % more (routing/costs.py, MAX_POINTS); close overtaking is metres of detour.
+ */
+const MAX_POINTS = 10
+const points = (key: SliderKey): SliderSpec => ({
+  key,
+  min: 0,
+  max: MAX_POINTS,
+  step: 1,
+})
+
+/** Under "Options", always usable. Min, max and step match the backend limits. */
+const OPTION_SLIDERS: SliderSpec[] = [
+  points('bump'),
+  { key: 'danger', min: 0, max: 100, step: 1 },
+  points('pm'),
+  points('stop'),
+  points('bikeFriendly'),
 ]
 
-/** Under "More options". */
-const MORE_SLIDERS: SliderSpec[] = [
-  { key: 'stop', min: 0, max: 5, step: 0.25 },
-  { key: 'bikeFriendly', min: 0, max: 5, step: 0.25 },
-]
+/** Only used by the backend when a departure time is set: shade by day, lighting after dark. */
+const TIME_SLIDERS: SliderSpec[] = [points('shade'), points('dark')]
 
-/** Only used by the backend when a departure time is set. */
-const TIME_SLIDERS: SliderSpec[] = [
-  { key: 'shade', min: 0, max: 5, step: 0.25 },
-  { key: 'dark', min: 0, max: 5, step: 0.25 },
-]
+/** Share each dislike point adds on a bad street (routing/costs.py, POINT). */
+const POINT = 0.25
 
-/** Shows a point as "lat, lng" rounded to five decimals, or a placeholder. */
-function formatPoint(point: LngLat | null, notSet: string): string {
-  return point ? `${point[1].toFixed(5)}, ${point[0].toFixed(5)}` : notSet
+/** Rows of the info panel: 0, 4 (twice as long) and the maximum, plus the rider's own value. */
+const POINT_ROWS = [0, 4, MAX_POINTS]
+const DANGER_ROWS = [0, 100]
+
+/**
+ * What a slider's value means, in detours instead of costs: a point makes a bad
+ * street feel 25 % longer, so 4 points = twice as long = up to 100 m detour to skip 100 m of it.
+ */
+function SliderInfo({
+  sliderKey,
+  value,
+}: {
+  sliderKey: SliderKey
+  value: number
+}) {
+  const { t, i18n } = useTranslation()
+  const i = (key: string, values?: Record<string, unknown>) =>
+    t(`greenest.planTrip.info.${key}`, values)
+  const number = (n: number) => n.toLocaleString(i18n.language)
+  const isDanger = sliderKey === 'danger'
+  const rows = Array.from(
+    new Set([...(isDanger ? DANGER_ROWS : POINT_ROWS), value]),
+  ).sort((a, b) => a - b)
+
+  return (
+    <>
+      <span className="block font-medium text-leaf-ink">
+        {i(`${sliderKey}.question`)}
+      </span>
+      <span className="mt-1 block">
+        {rows.map(p => (
+          <span
+            className={cx(
+              'block',
+              p === value && 'font-semibold text-leaf-forest',
+            )}
+            key={p}
+          >
+            {p} ={' '}
+            {p === 0
+              ? i('ignore')
+              : isDanger
+                ? i('dangerRow', { m: p })
+                : i('pointsRow', { x: number(1 + p * POINT) })}
+            {p === value && ` ${i('yours')}`}
+          </span>
+        ))}
+      </span>
+      {!isDanger && value > 0 && (
+        <span className="mt-1 block">
+          {i(`${sliderKey}.example`, { p: value, m: value * 25 })}
+        </span>
+      )}
+      <span className="mt-1 block text-leaf-muted">
+        {i(`${sliderKey}.note`, { lift: value * 25 })}
+      </span>
+    </>
+  )
 }
 
 /** The current local time as "YYYY-MM-DDTHH:mm", the format of <input type="datetime-local">. */
@@ -57,16 +130,28 @@ function nowForInput(): string {
 }
 
 export default function TripForm({
-  start,
-  end,
+  startLabel,
+  endLabel,
+  onStartLabelChange,
+  onEndLabelChange,
+  onPickStart,
+  onPickEnd,
   options,
   onOptionsChange,
   onReset,
   loading = false,
 }: TripFormProps) {
   const { t } = useTranslation()
-  const notSet = t('greenest.planTrip.notSet')
   const hasTime = options.departTime !== ''
+  // Decided from the time itself, as the backend does: sun up → shade counts, else lighting.
+  const sunUp = isSunUp(options.departTime)
+  // The shade data is for 21 July: say so for daytime trips outside the summer months.
+  const month = Number(options.departTime.slice(5, 7))
+  const outsideSummer = sunUp === true && (month < 5 || month > 8)
+
+  /** Without a departure neither time slider applies; with one, only shade by day or lighting after dark. */
+  const timeSliderOff = (key: SliderKey) =>
+    sunUp === null || (key === 'shade' && !sunUp) || (key === 'dark' && sunUp)
 
   /** Changes one option and keeps the others. */
   const set = <K extends keyof RouteOptions>(key: K, value: RouteOptions[K]) =>
@@ -76,13 +161,25 @@ export default function TripForm({
     { key, min, max, step }: SliderSpec,
     disabled = false,
   ) => (
-    <label
-      className="flex flex-col gap-1 text-sm text-leaf-ink/80"
-      htmlFor={`option-${key}`}
+    // relative: the info panel spans this row.
+    <div
+      className="relative flex flex-col gap-1 text-sm text-leaf-ink/80"
       key={key}
     >
-      <span className={disabled ? 'text-leaf-muted/70' : undefined}>
-        {t(`greenest.planTrip.penalties.${key}`)}: {options[key]}
+      <span className="flex items-center gap-1.5">
+        <label
+          className={disabled ? 'text-leaf-muted/70' : undefined}
+          htmlFor={`option-${key}`}
+        >
+          {t(`greenest.planTrip.penalties.${key}`)}: {options[key]}
+        </label>
+        <InfoTip
+          label={t('greenest.planTrip.info.about', {
+            name: t(`greenest.planTrip.penalties.${key}`),
+          })}
+        >
+          <SliderInfo sliderKey={key} value={options[key]} />
+        </InfoTip>
       </span>
       <input
         className="accent-leaf-forest disabled:opacity-40"
@@ -95,7 +192,7 @@ export default function TripForm({
         type="range"
         value={options[key]}
       />
-    </label>
+    </div>
   )
 
   return (
@@ -106,25 +203,33 @@ export default function TripForm({
           {t('greenest.planTrip.clickHint')}
         </p>
 
-        <dl className="flex flex-col gap-1 text-sm text-leaf-ink/80">
-          <div className="flex justify-between gap-2">
-            <dt>{t('greenest.planTrip.startPoint')}</dt>
-            <dd className="tabular-nums">{formatPoint(start, notSet)}</dd>
-          </div>
-          <div className="flex justify-between gap-2">
-            <dt>{t('greenest.planTrip.endPoint')}</dt>
-            <dd className="tabular-nums">{formatPoint(end, notSet)}</dd>
-          </div>
-        </dl>
-
-        {MAIN_SLIDERS.map(spec => renderSlider(spec))}
+        <div className="flex flex-col gap-3">
+          <PlaceSearch
+            label={t('greenest.planTrip.start')}
+            onPick={onPickStart}
+            onValueChange={onStartLabelChange}
+            pinClassName="text-[#1a7f37]"
+            placeholder={t('greenest.planTrip.startPlaceholder')}
+            value={startLabel}
+          />
+          <PlaceSearch
+            label={t('greenest.planTrip.destination')}
+            onPick={onPickEnd}
+            onValueChange={onEndLabelChange}
+            pinClassName="text-[#b3261e]"
+            placeholder={t('greenest.planTrip.destinationPlaceholder')}
+            value={endLabel}
+          />
+        </div>
 
         <details className="group rounded-xl border border-leaf-sand/70 p-3">
           <summary className="cursor-pointer text-sm font-medium text-leaf-ink">
-            {t('greenest.planTrip.moreOptions')}
+            {t('greenest.planTrip.options')}
           </summary>
 
           <div className="mt-3 flex flex-col gap-4">
+            {OPTION_SLIDERS.map(spec => renderSlider(spec))}
+
             <label className="flex cursor-pointer items-start gap-2 text-sm text-leaf-ink/80">
               <input
                 checked={options.preferTime}
@@ -139,8 +244,6 @@ export default function TripForm({
                 </span>
               </span>
             </label>
-
-            {MORE_SLIDERS.map(spec => renderSlider(spec))}
 
             <div className="flex flex-col gap-1 text-sm text-leaf-ink/80">
               <label htmlFor="depart-time">
@@ -167,11 +270,18 @@ export default function TripForm({
                 </button>
               </div>
               <span className="text-xs text-leaf-muted">
-                {t('greenest.planTrip.departTimeHint')}
+                {sunUp === null
+                  ? t('greenest.planTrip.departTimeHint')
+                  : sunUp
+                    ? t('greenest.planTrip.sky.day')
+                    : t('greenest.planTrip.sky.night')}
+                {outsideSummer && ` ${t('greenest.planTrip.sky.summerShade')}`}
               </span>
             </div>
 
-            {TIME_SLIDERS.map(spec => renderSlider(spec, !hasTime))}
+            {TIME_SLIDERS.map(spec =>
+              renderSlider(spec, timeSliderOff(spec.key)),
+            )}
           </div>
         </details>
 
@@ -192,107 +302,3 @@ export default function TripForm({
     </Card>
   )
 }
-
-
-/* 'use client'
-
-import { useTranslation } from 'react-i18next'
-import Card, { CardTitle } from '@/components/Greenest/ui/Card'
-import type { LngLat, Penalties, RoutePreferences } from '@/types/greenest'
-
-export type TripFormValues = {
-  start: string
-  destination: string
-  preferences: RoutePreferences
-}
-
-type TripFormProps = {
-  start: LngLat | null
-  end: LngLat | null
-  penalties: Penalties
-  onPenaltiesChange: (_penalties: Penalties) => void
-  onReset: () => void
-  loading?: boolean
-}
-
-//One slider per penalty. Min, max and step match the backend limits. 
-const SLIDERS = [
-  { key: 'bump', min: 0, max: 50, step: 1 },
-  { key: 'danger', min: 0, max: 100, step: 5 },
-  { key: 'pm', min: 0, max: 5, step: 0.25 },
-] as const
-
-//Shows a point as "lat, lng" rounded to five decimals, or a placeholder. 
-function formatPoint(point: LngLat | null, notSet: string): string {
-  return point ? `${point[1].toFixed(5)}, ${point[0].toFixed(5)}` : notSet
-}
-
-export default function TripForm({
-  start,
-  end,
-  penalties,
-  onPenaltiesChange,
-  onReset,
-  loading = false,
-}: TripFormProps) {
-  const { t } = useTranslation()
-  const notSet = t('greenest.planTrip.notSet')
-
-  return (
-    <Card>
-      <div className="flex flex-col gap-4">
-        <CardTitle>{t('greenest.planTrip.formTitle')}</CardTitle>
-        <p className="text-xs text-leaf-muted">{t('greenest.planTrip.clickHint')}</p>
-
-        <dl className="flex flex-col gap-1 text-sm text-leaf-ink/80">
-          <div className="flex justify-between gap-2">
-            <dt>{t('greenest.planTrip.startPoint')}</dt>
-            <dd className="tabular-nums">{formatPoint(start, notSet)}</dd>
-          </div>
-          <div className="flex justify-between gap-2">
-            <dt>{t('greenest.planTrip.endPoint')}</dt>
-            <dd className="tabular-nums">{formatPoint(end, notSet)}</dd>
-          </div>
-        </dl>
-
-        {SLIDERS.map(({ key, min, max, step }) => (
-          <label
-            className="flex flex-col gap-1 text-sm text-leaf-ink/80"
-            htmlFor={`penalty-${key}`}
-            key={key}
-          >
-            <span>
-              {t(`greenest.planTrip.penalties.${key}`)}: {penalties[key]}
-            </span>
-            <input
-              className="accent-leaf-forest"
-              id={`penalty-${key}`}
-              max={max}
-              min={min}
-              onChange={e =>
-                onPenaltiesChange({ ...penalties, [key]: Number(e.target.value) })
-              }
-              step={step}
-              type="range"
-              value={penalties[key]}
-            />
-          </label>
-        ))}
-
-        {loading && (
-          <p className="text-xs text-leaf-muted" role="status">
-            {t('greenest.planTrip.loading')}
-          </p>
-        )}
-
-        <button
-          className="rounded-full border border-leaf-sand px-4 py-2 text-sm text-leaf-ink hover:bg-leaf-cream"
-          onClick={onReset}
-          type="button"
-        >
-          {t('greenest.planTrip.reset')}
-        </button>
-      </div>
-    </Card>
-  )
-} */

@@ -306,10 +306,7 @@
       "title": "Find your greenest route",
       "subtitle": "Compare the shortest route with a route planned around what you care about: smooth streets, safe overtaking, clean air and fewer stops.",
       "formTitle": "Your trip",
-      "clickHint": "Click the map to set the start, then the destination.",
-      "startPoint": "Start",
-      "endPoint": "Destination",
-      "notSet": "Not set",
+      "clickHint": "Search for a place, or click the map: first the start, then the destination.",
       "penalties": {
         "bump": "Dislike bumps",
         "danger": "Dislike close overtaking",
@@ -319,7 +316,7 @@
         "shade": "Prefer shade (by day)",
         "dark": "Prefer lit streets (after dark)"
       },
-      "moreOptions": "More options",
+      "options": "Options",
       "preferTime": "Fastest instead of shortest",
       "preferTimeHint": "Plans by riding time, using the speeds cyclists were measured at.",
       "departTime": "Departure time",
@@ -333,6 +330,7 @@
       "destination": "Destination",
       "destinationPlaceholder": "e.g. Pfühlpark",
       "comparisonTitle": "Route comparison",
+      "comparisonPaused": "Showing the trip with a rented vehicle on the map. This comparison is for riding your own bike, so it is greyed out until you switch the rental trip off.",
       "routes": {
         "shortest": "Shortest route",
         "shortestHint": "The most direct path, ignoring comfort.",
@@ -369,6 +367,126 @@
         },
         "unavailable": "Hills are not available: this server has no elevation data.",
         "credit": "Heights: LGL, www.lgl-bw.de, dl-de/by-2-0 (DGM1)"
+      },
+      "search": {
+        "noMatch": "No place found in Heilbronn. Try another spelling, or click the map.",
+        "unavailable": "Place search is not available right now. Click the map instead."
+      },
+      "sharing": {
+        "title": "Shared e-bikes & e-scooters",
+        "tripToggle": "No bike? Rent one for this trip",
+        "tripVehicleLabel": "Vehicle to rent",
+        "vehicleLabel": "Vehicles to show",
+        "choice": {
+          "quickest": "Quickest e-bike or e-scooter",
+          "both": "E-bikes and e-scooters"
+        },
+        "vehicle": {
+          "bike": "e-bike",
+          "scooter": "e-scooter"
+        },
+        "needRoute": "Set a start and destination first.",
+        "tripLoading": "Looking for a vehicle near your start… The first search after the server starts can take a minute.",
+        "total": "{{min}} min door to door",
+        "about": "about €{{price}}",
+        "kcal": "about {{kcal}} kcal",
+        "stepWalkTo": "Walk {{m}} m ({{min}} min) to pin 1, the {{vehicle}} (battery {{pct}} %).",
+        "stepRide": "Ride {{km}} km ({{min}} min) and leave it at pin P, {{where}}.",
+        "pushed": "Push it {{m}} m on footways where e-scooters may not ride.",
+        "stepWalkEnd": "Walk {{m}} m ({{min}} min) to your destination.",
+        "leaveAtZone": "at the parking zone \"{{zone}}\"",
+        "leaveAtEnd": "right at your destination",
+        "leaveOutside": "just outside the no-parking zone",
+        "noParking": "No parking for {{vehicle}}s",
+        "zonesOnly": "Parking zones only",
+        "rentThis": "Rent it in the {{provider}} app",
+        "showToggle": "Show vehicles free to rent on the map (live)",
+        "zone": "Parking zone",
+        "lowBattery": "faded = battery under {{pct}} %",
+        "summary": {
+          "all": "{{bikes}} e-bikes and {{scooters}} e-scooters free right now.",
+          "bike": "{{bikes}} e-bikes free right now.",
+          "scooter": "{{scooters}} e-scooters free right now."
+        },
+        "setStartHint": "Set a start to see the nearest vehicles. Click a dot on the map for its details.",
+        "away": "{{m}} m from your start",
+        "battery": "Battery {{pct}} %",
+        "range": "about {{km}} km left",
+        "rent": "Rent in the {{provider}} app",
+        "zoneCounts": "{{bikes}} e-bikes, {{scooters}} e-scooters here",
+        "updated": "Updated {{time}}",
+        "unavailable": "Shared vehicles are not available right now.",
+        "price": "{{unlock}} to unlock + {{perMin}}/min",
+        "pin": {
+          "pickUp": "Pick up: {{vehicle}}",
+          "walkThere": "Walk {{m}} m ({{min}} min) from your start to here.",
+          "rideCost": "This ride: {{min}} min, about {{price}}",
+          "leave": "Leave it here",
+          "atZone": "At the parking zone \"{{zone}}\".",
+          "atEnd": "Right at your destination.",
+          "outside": "Just outside the zone where {{vehicle}}s may not be parked.",
+          "rideHere": "Ride {{km}} km ({{min}} min) from pin 1 to here.",
+          "walkOn": "Then walk {{m}} m ({{min}} min) to your destination."
+        },
+        "compare": {
+          "title": "With and without your settings",
+          "plain": "Without settings",
+          "yours": "With your settings",
+          "doorToDoor": "Door to door",
+          "walk": "Walking",
+          "ride": "Riding",
+          "price": "Price",
+          "kcal": "kcal",
+          "hint": "Grey dashed on the map: the same trip with every slider at 0. The values for bumps, overtaking, air and stops are for the ride only. Each trip picks the quickest vehicle near your start, so the two can differ; an e-scooter only counts kcal where you push it.",
+          "same": "With your settings the trip is the same as without them.",
+          "vehicle": "Vehicle"
+        }
+      },
+      "info": {
+        "about": "About: {{name}}",
+        "ignore": "doesn’t matter",
+        "pointsRow": "{{x}}× as long",
+        "dangerRow": "up to {{m}} m detour per spot",
+        "yours": "(your setting)",
+        "bump": {
+          "question": "How much longer does a very bumpy street feel to you?",
+          "note": "Very bumpy = the bumpiest 10 % of streets measured in Heilbronn (roughness 20 or more). Bumpier ones count even more; typical or smoother ones nothing extra.",
+          "example": "With {{p}}, you’d ride up to {{m}} m extra to skip 100 m of very bumpy street."
+        },
+        "danger": {
+          "question": "How far would you ride out of your way to pass one fewer close-overtaking spot?",
+          "note": "Spots where sensor bikes measured cars overtaking too closely. Riskier spots count more."
+        },
+        "pm": {
+          "question": "How much longer does a street with bad air feel to you?",
+          "note": "Bad air = the worst 10 % of streets measured by the sensor bikes. Typical or cleaner air counts nothing extra.",
+          "example": "With {{p}}, you’d ride up to {{m}} m extra to skip 100 m of street with bad air."
+        },
+        "stop": {
+          "question": "How much longer does a street with lots of stop-and-go feel to you?",
+          "note": "Lots of stop-and-go = the worst 10 % of streets (traffic lights, congestion). Each lift on the way also counts as {{lift}} m.",
+          "example": "With {{p}}, you’d ride up to {{m}} m extra to skip 100 m of heavy stop-and-go."
+        },
+        "bikeFriendly": {
+          "question": "How much longer does a street without a bike path or lane feel to you?",
+          "note": "Bike paths, bike lanes and signposted bike routes from OpenStreetMap.",
+          "example": "With {{p}}, you’d ride up to {{m}} m extra to swap 100 m of ordinary street for a bike path or lane."
+        },
+        "shade": {
+          "question": "By day: how much longer does a street in full sun feel to you?",
+          "note": "Half-shaded streets count half. Only used when the sun is up at your departure time. Shade is calculated for 21 July (09, 12, 15 and 18 h; the closest hour is used).",
+          "example": "With {{p}}, you’d ride up to {{m}} m extra to skip 100 m in full sun."
+        },
+        "dark": {
+          "question": "After dark: how much longer does an unlit street feel to you?",
+          "note": "Streets that are probably lit count less. Only used with a departure time after sunset.",
+          "example": "With {{p}}, you’d ride up to {{m}} m extra to skip 100 m of unlit street."
+        }
+      },
+      "sky": {
+        "day": "The sun is up then: shade counts, the lighting slider is off.",
+        "night": "It is dark then: lit streets count, the shade slider is off.",
+        "summerShade": "Shade is calculated for a summer day (21 July), so outside summer it shows which streets buildings and trees shade, not that day’s exact shadows."
       }
     },
     "highlights": {
