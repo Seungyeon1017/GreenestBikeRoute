@@ -393,7 +393,26 @@
       },
       "search": {
         "noMatch": "Kein Ort in Heilbronn gefunden. Versuche eine andere Schreibweise oder klicke auf die Karte.",
-        "unavailable": "Die Ortssuche ist gerade nicht erreichbar. Klicke stattdessen auf die Karte."
+        "unavailable": "Die Ortssuche ist gerade nicht erreichbar. Klicke stattdessen auf die Karte.",
+        "kind": {
+          "sbahn": "S-Bahn-Haltestelle",
+          "train": "Bahnhof",
+          "bus": "Bushaltestelle",
+          "street": "Straße",
+          "park": "Park oder Grünfläche",
+          "address": "Adresse",
+          "food": "Restaurant",
+          "cafe": "Café",
+          "education": "Schule oder Hochschule",
+          "health": "Gesundheit",
+          "worship": "Kirche oder Gotteshaus",
+          "parking": "Parkplatz",
+          "shopping": "Geschäft",
+          "sight": "Sehenswürdigkeit",
+          "hotel": "Unterkunft",
+          "area": "Ort oder Stadtteil",
+          "place": "Ort"
+        }
       },
       "locate": {
         "button": "Meinen Standort als Start nehmen",

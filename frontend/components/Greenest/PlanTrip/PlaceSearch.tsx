@@ -6,6 +6,7 @@ import { useEffect, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchPlaces } from '@/services/greenestApi'
 import type { LngLat, PlaceCollection } from '@/types/greenest'
+import PlaceIcon from './PlaceIcon'
 
 /** The backend answers 422 below this many characters. */
 const MIN_CHARS = 3
@@ -167,7 +168,7 @@ export default function PlaceSearch({
                 <li
                   aria-selected={i === active}
                   className={cx(
-                    'flex cursor-pointer flex-col px-3 py-2',
+                    'flex cursor-pointer items-center gap-2.5 px-3 py-2',
                     i === active ? 'bg-leaf-mint' : 'hover:bg-leaf-cream',
                   )}
                   id={`${listId}-${i}`}
@@ -179,11 +180,17 @@ export default function PlaceSearch({
                   }}
                   role="option"
                 >
-                  <span className="font-medium text-leaf-ink">
-                    {f.properties.name ?? f.properties.label.split(',')[0]}
-                  </span>
-                  <span className="truncate text-xs text-leaf-muted">
-                    {f.properties.label}
+                  <PlaceIcon
+                    category={f.properties.category}
+                    type={f.properties.type}
+                  />
+                  <span className="flex min-w-0 flex-col">
+                    <span className="font-medium text-leaf-ink">
+                      {f.properties.name ?? f.properties.label.split(',')[0]}
+                    </span>
+                    <span className="truncate text-xs text-leaf-muted">
+                      {f.properties.label}
+                    </span>
                   </span>
                 </li>
               ))}

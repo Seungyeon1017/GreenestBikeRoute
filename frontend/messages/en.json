@@ -393,7 +393,26 @@
       },
       "search": {
         "noMatch": "No place found in Heilbronn. Try another spelling, or click the map.",
-        "unavailable": "Place search is not available right now. Click the map instead."
+        "unavailable": "Place search is not available right now. Click the map instead.",
+        "kind": {
+          "sbahn": "S-Bahn stop",
+          "train": "Train station",
+          "bus": "Bus stop",
+          "street": "Street",
+          "park": "Park or green space",
+          "address": "Address",
+          "food": "Restaurant",
+          "cafe": "Café",
+          "education": "School or university",
+          "health": "Health",
+          "worship": "Place of worship",
+          "parking": "Parking",
+          "shopping": "Shop",
+          "sight": "Sight",
+          "hotel": "Accommodation",
+          "area": "Town or district",
+          "place": "Place"
+        }
       },
       "locate": {
         "button": "Use my location as start",
