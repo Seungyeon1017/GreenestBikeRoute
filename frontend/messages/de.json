@@ -730,6 +730,12 @@
       "savedOn": "gespeichert am {{date}}",
       "open": "Öffnen",
       "delete": "Route löschen"
+    },
+    "senseBox": {
+      "title": "Fahren. Messen. Verbessern.",
+      "text": "Die Daten hinter diesen Routen stammen von Menschen, die mit einer senseBox:bike fahren. Sie misst Feinstaub, Straßenbelag und wie dicht Autos überholen. Viele Straßen in Heilbronn sind noch nicht gemessen: Fahr mit einem Sensor und hilf, die Lücken zu füllen.",
+      "button": "Zur senseBox:bike",
+      "newTab": "(öffnet in neuem Tab)"
     }
   }
 }
