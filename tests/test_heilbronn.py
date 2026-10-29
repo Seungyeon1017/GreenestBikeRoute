@@ -114,7 +114,9 @@ def test_docs_example_is_a_real_response(client):
     example = RouteComparison.model_config["json_schema_extra"]["example"]
     real = client.get("/route/compare", params=TRIP).json()
     for key in ("route", "shortest"):
-        assert real[key]["properties"] == example[key]["properties"]
+        real_props, example_props = dict(real[key]["properties"]), dict(example[key]["properties"])
+        assert real_props.pop("segments")[:2] == example_props.pop("segments")
+        assert real_props == example_props
         coords = real[key]["geometry"]["coordinates"]
         assert example[key]["geometry"]["coordinates"] == [coords[0], coords[len(coords) // 2], coords[-1]]
     assert (real["detour_pct"], real["same_path"]) == (example["detour_pct"], example["same_path"])

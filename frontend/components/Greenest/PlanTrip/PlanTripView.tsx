@@ -18,6 +18,8 @@ import type {
   GeofencingCollection,
   GradeCollection,
   LngLat,
+  RouteFlag,
+  RouteKind,
   RouteOptions,
   RouteComparison as RouteResult,
   SharingTrip,
@@ -27,6 +29,16 @@ import type {
 } from '@/types/greenest'
 import GradeCard from './GradeCard'
 import RouteComparisonCard, { ROUTE_COLORS } from './RouteComparison'
+import {
+  drawSegments,
+  flagBounds,
+  highlightFlag,
+  markSegment,
+  SEGMENT_HIT_LAYER,
+  segmentAt,
+  segmentPopup,
+} from './routeSegments'
+import type { SegmentLabels } from './routeSegments'
 import SharingCard, {
   localPrice,
   priceFor,
@@ -192,6 +204,19 @@ export default function PlanTripView() {
   const fencesRef = useRef<GeofencingCollection | null>(null)
   fencesRef.current = fences
   const popupRef = useRef<maplibregl.Popup | null>(null)
+  // The stretch popup: follows the mouse while hovering a route line, stays put once clicked or tapped.
+  const segmentPopupRef = useRef<{
+    popup: maplibregl.Popup
+    pinned: boolean
+  } | null>(null)
+  const segmentEventsRef = useRef(false)
+
+  // "Why this route?" row whose stretches are drawn: the hovered one, else the clicked one.
+  const [previewFlag, setPreviewFlag] = useState<RouteFlag | null>(null)
+  const [pinnedFlag, setPinnedFlag] = useState<RouteFlag | null>(null)
+  const shownFlag = previewFlag ?? pinnedFlag
+  const shownFlagRef = useRef<RouteFlag | null>(null)
+  shownFlagRef.current = shownFlag
 
   // 3. EFFECTS: code that runs when certain values change.
 
@@ -281,12 +306,58 @@ export default function PlanTripView() {
     }
   }, [grade])
 
-  // Draw (or clear) the two lines whenever a new result arrives.
+  // Draw (or clear) the two lines whenever a new result arrives; an open stretch popup belongs to the old one.
   useEffect(() => {
     if (mapRef.current) {
       drawRoutes(mapRef.current, result)
+      drawSegments(mapRef.current, result)
+      closeSegmentPopup()
     }
   }, [result])
+
+  // The chosen "Why this route?" row's stretches.
+  useEffect(() => {
+    if (mapRef.current) {
+      highlightFlag(mapRef.current, shownFlag)
+    }
+  }, [shownFlag])
+
+  // A clicked row zooms out to its stretches if some are off screen.
+  useEffect(() => {
+    const map = mapRef.current
+    const current = resultRef.current
+    if (!map || !current || !pinnedFlag) {
+      return
+    }
+    const bounds = flagBounds(current, pinnedFlag)
+    const view = map.getBounds()
+    if (
+      bounds &&
+      !(
+        view.contains(bounds.getSouthWest()) &&
+        view.contains(bounds.getNorthEast())
+      )
+    ) {
+      map.fitBounds(bounds.extend(view), {
+        padding: 60,
+        maxZoom: map.getZoom(),
+      })
+    }
+  }, [pinnedFlag])
+
+  // Esc lets go of the clicked row.
+  useEffect(() => {
+    if (!pinnedFlag) {
+      return
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setPinnedFlag(null)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [pinnedFlag])
 
   // Shared vehicles and parking zones.
   useEffect(() => {
@@ -444,6 +515,104 @@ export default function PlanTripView() {
 
   // 4. HANDLERS: functions called by clicks and buttons.
 
+  function segmentLabels(): SegmentLabels {
+    const g = (key: string, values?: Record<string, unknown>) =>
+      t(`greenest.planTrip.segment.${key}`, values)
+    return {
+      route: (kind: RouteKind) => t(`greenest.planTrip.routes.${kind}`),
+      unnamed: g('unnamed'),
+      way: kind => g(`ways.${kind}`),
+      beside: way => g('beside', { way }),
+      length: m => g('length', { m }),
+      row: key => g(`rows.${key}`),
+      notMeasured: g('notMeasured'),
+      yes: g('yes'),
+      no: g('no'),
+      number: (n, digits) =>
+        n.toLocaleString(i18n.language, {
+          minimumFractionDigits: digits,
+          maximumFractionDigits: digits,
+        }),
+    }
+  }
+
+  function closeSegmentPopup() {
+    segmentPopupRef.current?.popup.remove()
+    segmentPopupRef.current = null
+    if (mapRef.current) {
+      markSegment(mapRef.current, null)
+    }
+  }
+
+  /**
+   * Shows what the stretch of a route under `point` is like: on hover until the
+   * mouse leaves it, or (pinned) after a click or tap until closed. Returns
+   * whether a stretch was there.
+   */
+  function showSegment(
+    map: maplibregl.Map,
+    point: maplibregl.PointLike,
+    at: maplibregl.LngLatLike,
+    pinned: boolean,
+  ): boolean {
+    const current = resultRef.current
+    const hit = segmentAt(map, point, current)
+    if (!hit || !current) {
+      return false
+    }
+    const open = segmentPopupRef.current
+    if (open?.pinned && !pinned) {
+      return true // a clicked stretch stays until it's closed
+    }
+    open?.popup.remove()
+    const popup = new maplibregl.Popup({
+      className: 'greenest-popup',
+      closeButton: pinned,
+      closeOnClick: false,
+      focusAfterOpen: false,
+      offset: 12,
+      maxWidth: '260px',
+    })
+      .setLngLat(at)
+      .setDOMContent(
+        segmentPopup(
+          hit.kind,
+          hit.segment,
+          current.route.properties,
+          segmentLabels(),
+        ),
+      )
+      .addTo(map)
+    const entry = { popup, pinned }
+    popup.on('close', () => {
+      if (segmentPopupRef.current === entry) {
+        segmentPopupRef.current = null
+        markSegment(map, null)
+      }
+    })
+    segmentPopupRef.current = entry
+    markSegment(map, hit.line)
+    return true
+  }
+
+  /** Hovering a route line shows its stretch (once per map: the listeners outlive style reloads). */
+  function bindSegmentHover(map: maplibregl.Map) {
+    if (segmentEventsRef.current) {
+      return
+    }
+    segmentEventsRef.current = true
+    map.on('mousemove', SEGMENT_HIT_LAYER, e => {
+      map.getCanvas().style.cursor = 'pointer'
+      showSegment(map, e.point, e.lngLat, false)
+    })
+    map.on('mouseleave', SEGMENT_HIT_LAYER, () => {
+      map.getCanvas().style.cursor = ''
+      if (!segmentPopupRef.current?.pinned) {
+        closeSegmentPopup()
+      }
+    })
+  }
+
   /** Opens a popup if the click hit a shared vehicle or zone; returns whether it did. */
   function openSharingPopup(map: maplibregl.Map, point: LngLat): boolean {
     const layers = CLICKABLE_SHARING_LAYERS.filter(id => map.getLayer(id))
@@ -491,6 +660,15 @@ export default function PlanTripView() {
     if (map && openSharingPopup(map, point)) {
       return
     }
+    // A click on a route line explains that stretch instead of moving the destination there.
+    if (map && showSegment(map, map.project(point), point, true)) {
+      return
+    }
+    // The first click beside the line only closes the stretch popup.
+    if (segmentPopupRef.current) {
+      closeSegmentPopup()
+      return
+    }
     if (!start) {
       setStart(point)
       setStartLabel(formatPoint(point))
@@ -535,6 +713,8 @@ export default function PlanTripView() {
     setLoading(false)
     setGrade(null)
     setGradeError(null)
+    setPinnedFlag(null)
+    setPreviewFlag(null)
   }
 
   // 5. RENDER: what appears on the page.
@@ -572,6 +752,13 @@ export default function PlanTripView() {
             </p>
           )}
           <RouteComparisonCard
+            focus={{
+              shown: shownFlag,
+              pinned: pinnedFlag,
+              onPreview: setPreviewFlag,
+              onToggle: flag =>
+                setPinnedFlag(current => (current === flag ? null : flag)),
+            }}
             paused={Boolean(sharingTrip.trip)}
             result={result}
           />
@@ -608,9 +795,12 @@ export default function PlanTripView() {
             onClick={handleMapClick}
             onLoad={map => {
               mapRef.current = map
-              // Bottom to top: routes, hills, shared vehicles, the rented-vehicle trip.
+              // Bottom to top: routes, hills, highlighted stretches, shared vehicles, the rented-vehicle trip.
               drawRoutes(map, resultRef.current)
               drawGrade(map, gradeRef.current)
+              drawSegments(map, resultRef.current)
+              highlightFlag(map, shownFlagRef.current)
+              bindSegmentHover(map)
               drawSharing(
                 map,
                 sharingRef.current.vehicles,

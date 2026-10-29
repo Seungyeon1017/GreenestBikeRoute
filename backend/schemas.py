@@ -23,6 +23,11 @@ ROUTE_EXAMPLE = {
         "mean_shade": None, "shade_known_share": 0.95, "mean_lit": 0.986, "lit_known_share": 0.89, "lifts": 0,
         "reported_closures": 0,
         "bumpy_m": 202, "bad_air_m": 292, "stop_go_m": 379, "sunny_m": None, "unlit_m": None, "bike_friendly_m": 1160, "pushed_m": 0,
+        # Shortened: the real route has 44 stretches.
+        "segments": [
+            {"from_index": 0, "to_index": 4, "start_m": 0.0, "length_m": 36.4, "name": "Kleiststraße", "way": None, "along": False, "flags": [], "roughness": 11.833, "danger_points": 0, "pm_risk": 0.494, "stop_go": 0.652, "speed_kmh": 14.495, "shade": None, "lit": 1.0, "bike_friendly": False, "pushed": False},
+            {"from_index": 4, "to_index": 7, "start_m": 36.4, "length_m": 36.2, "name": "Sichererstraße", "way": None, "along": False, "flags": ["bike_friendly_m"], "roughness": 9.485, "danger_points": 0, "pm_risk": 0.507, "stop_go": 0.636, "speed_kmh": 13.248, "shade": None, "lit": 1.0, "bike_friendly": True, "pushed": False},
+        ],
     },
 }
 SHORTEST_EXAMPLE = {
@@ -38,6 +43,11 @@ SHORTEST_EXAMPLE = {
         "mean_shade": None, "shade_known_share": 1.0, "mean_lit": 0.93, "lit_known_share": 0.99, "lifts": 0,
         "reported_closures": 0,
         "bumpy_m": 1895, "bad_air_m": 733, "stop_go_m": 481, "sunny_m": None, "unlit_m": None, "bike_friendly_m": 874, "pushed_m": 0,
+        # Shortened: the real route has 35 stretches.
+        "segments": [
+            {"from_index": 0, "to_index": 4, "start_m": 0.0, "length_m": 36.4, "name": "Kleiststraße", "way": None, "along": False, "flags": [], "roughness": 11.833, "danger_points": 0, "pm_risk": 0.494, "stop_go": 0.652, "speed_kmh": 14.495, "shade": None, "lit": 1.0, "bike_friendly": False, "pushed": False},
+            {"from_index": 4, "to_index": 11, "start_m": 36.4, "length_m": 89.8, "name": "Sichererstraße", "way": None, "along": False, "flags": ["bike_friendly_m"], "roughness": 9.485, "danger_points": 0, "pm_risk": 0.491, "stop_go": 0.636, "speed_kmh": 13.248, "shade": None, "lit": 1.0, "bike_friendly": True, "pushed": False},
+        ],
     },
 }
 
@@ -81,6 +91,37 @@ class Point(BaseModel):
 
 
 PLANNED_WITH = "The penalty this route was planned with, as requested (0 for the shortest route)"
+
+
+Flag = Literal["bumpy_m", "danger_points", "bad_air_m", "stop_go_m", "sunny_m", "unlit_m", "bike_friendly_m"]
+
+
+class RouteSegment(BaseModel):
+    """A stretch of the route: consecutive streets with the same name and the same flags."""
+    from_index: int = Field(description="Index in the route's coordinates where the stretch starts")
+    to_index: int = Field(description="Index in the route's coordinates where it ends (inclusive)")
+    start_m: float = Field(description="Distance from the start of the route to the start of the stretch, in metres")
+    length_m: float = Field(description="Length of the stretch in metres")
+    name: Optional[str] = Field(description=(
+        "Street name from OpenStreetMap. A way without a name takes the name of the road it runs beside (along), e.g. "
+        "a sidewalk or bike path, or for a crossing the road it crosses; null if there is none (a park path, a farm track)"))
+    way: Optional[Literal["crossing", "sidewalk", "cycleway", "footway", "path", "track", "service", "pedestrian"]] = Field(
+        description=("The kind of way, from highway=* and footway=* in OSM: service is an access road or car park; null "
+                     "for an ordinary road, or for a stretch that is partly road and partly the sidewalk beside it"))
+    along: bool = Field(description="True if `name` is that of the road the way runs beside or crosses, not its own")
+    flags: list[Flag] = Field(description=(
+        "What the stretch counts towards, named after the route totals: bumpy_m, bad_air_m and stop_go_m by the same "
+        "thresholds, danger_points if it has a close-overtaking spot, sunny_m less than half in shade at shade_slot (by "
+        "day), unlit_m probably unlit (lit < 0.5, after dark), bike_friendly_m on a bike path, lane or route"))
+    roughness: Optional[float] = Field(description="Roughness, measured or estimated (length-weighted); null if unknown")
+    danger_points: int = Field(description="Close-overtaking spots on the stretch")
+    pm_risk: Optional[float] = Field(description="Air score 0-1, higher = more fine dust; null if not measured")
+    stop_go: Optional[float] = Field(description="Stop-and-go 0-1, higher = more stopping; null if not measured")
+    speed_kmh: Optional[float] = Field(description="Measured bike speed in km/h; null if not measured")
+    shade: Optional[float] = Field(description="Share in shade at shade_slot, 0-1; null at night, without a departure or data")
+    lit: Optional[float] = Field(description="Chance the street is lit at night, 0-1; null without lighting data")
+    bike_friendly: bool = Field(description="On a bike path, bike lane or bike route")
+    pushed: bool = Field(description="An e-scooter is pushed here (footway or pedestrian street); always false for bikes")
 
 
 class RouteProperties(BaseModel):
@@ -138,6 +179,9 @@ class RouteProperties(BaseModel):
     unlit_m: Optional[int] = Field(description="After dark: metres on probably unlit streets (chance not lit, over the streets with lighting data); null otherwise")
     bike_friendly_m: int = Field(description="Metres on bike paths, bike lanes and bike routes (see /bike-friendly-streets)")
     pushed_m: int = Field(description="Metres an e-scooter is pushed at walking pace, on footways and pedestrian streets it must not ride on (eKFV); 0 for bikes")
+    segments: list[RouteSegment] = Field(description=(
+        "The route as stretches with what is measured on them, in riding order, e.g. for a tooltip when pointing at the "
+        "line or to highlight where the bumpy or stop-and-go parts are"))
 
 
 class RouteFeature(BaseModel):

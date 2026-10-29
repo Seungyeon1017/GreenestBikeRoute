@@ -122,6 +122,56 @@ export type RouteProperties = {
   unlit_m: number | null
   /** More is better here. */
   bike_friendly_m: number
+
+  /** The route as stretches with what is measured on them, in riding order. */
+  segments: RouteSegment[]
+}
+
+/** The "Why this route?" factors, named after their totals in RouteProperties. */
+export type RouteFlag =
+  | 'bumpy_m'
+  | 'danger_points'
+  | 'bad_air_m'
+  | 'stop_go_m'
+  | 'sunny_m'
+  | 'unlit_m'
+  | 'bike_friendly_m'
+
+/** The kinds of way a stretch can be on (see backend/schemas.py). */
+export type WayKind =
+  | 'crossing'
+  | 'sidewalk'
+  | 'cycleway'
+  | 'footway'
+  | 'path'
+  | 'track'
+  | 'service'
+  | 'pedestrian'
+
+/** A stretch of a route: consecutive streets with the same name and flags (see backend/schemas.py). */
+export type RouteSegment = {
+  /** First and last index (inclusive) in the route's coordinates. */
+  from_index: number
+  to_index: number
+  start_m: number
+  length_m: number
+  /** OSM street name, or for a way without one the road it runs beside (`along`); null if none. */
+  name: string | null
+  /** Kind of way from OSM; null for an ordinary road (or road and sidewalk together). */
+  way: WayKind | null
+  along: boolean
+  /** The factors this stretch counts towards, by the backend's thresholds. */
+  flags: RouteFlag[]
+  roughness: number | null
+  danger_points: number
+  pm_risk: number | null
+  stop_go: number | null
+  speed_kmh: number | null
+  /** Share in shade, only by day with depart_time. */
+  shade: number | null
+  lit: number | null
+  bike_friendly: boolean
+  pushed: boolean
 }
 
 export type RouteFeature = Feature<LineString, RouteProperties>

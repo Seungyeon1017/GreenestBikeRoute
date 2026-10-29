@@ -2,18 +2,16 @@
 
 import { cx } from 'class-variance-authority'
 import { useTranslation } from 'react-i18next'
-import type { RouteComparison, RouteProperties } from '@/types/greenest'
+import type {
+  RouteComparison,
+  RouteFlag,
+  RouteProperties,
+} from '@/types/greenest'
 import { ROUTE_COLORS } from './RouteComparison'
+import { FLAG_COLORS } from './routeSegments'
 
 type Factor = {
-  key:
-    | 'bumpy_m'
-    | 'danger_points'
-    | 'bad_air_m'
-    | 'stop_go_m'
-    | 'sunny_m'
-    | 'unlit_m'
-    | 'bike_friendly_m'
+  key: RouteFlag
   /** Counted in metres (else in spots). */
   metres: boolean
   /** More is better (bike paths). */
@@ -52,12 +50,78 @@ function Bar({ value, max, color }: { value: number; max: number; color: string 
   )
 }
 
+/** Which row's stretches are drawn on the map, and how the rows change that. */
+export type FlagFocus = {
+  /** Shown on the map: the hovered row, else the pinned one. */
+  shown: RouteFlag | null
+  pinned: RouteFlag | null
+  /** Mouse over a row (or keyboard focus on it); null when it leaves. */
+  onPreview: (_flag: RouteFlag | null) => void
+  /** Click or tap: pin this row, or unpin it if it is pinned. */
+  onToggle: (_flag: RouteFlag) => void
+}
+
+/** A row as a button that previews its stretches on hover and pins them on click. */
+function FactorRow({
+  flag,
+  focus,
+  title,
+  children,
+}: {
+  flag: RouteFlag
+  focus?: FlagFocus
+  title?: string
+  children: React.ReactNode
+}) {
+  if (!focus) {
+    return (
+      <div className="flex flex-col gap-1" title={title}>
+        {children}
+      </div>
+    )
+  }
+  const pinned = focus.pinned === flag
+  return (
+    <button
+      aria-pressed={pinned}
+      className={cx(
+        '-mx-1.5 flex flex-col gap-1 rounded-r-lg border-l-[3px] px-1.5 py-1 text-left transition-colors hover:bg-white/70 focus-visible:bg-white/70 focus-visible:outline-none',
+        focus.shown === flag ? 'bg-white/70' : 'border-transparent',
+      )}
+      onBlur={() => focus.onPreview(null)}
+      onClick={() => focus.onToggle(flag)}
+      onFocus={() => focus.onPreview(flag)}
+      onPointerEnter={e => e.pointerType === 'mouse' && focus.onPreview(flag)}
+      onPointerLeave={e => e.pointerType === 'mouse' && focus.onPreview(null)}
+      style={
+        focus.shown === flag
+          ? {
+              borderColor:
+                flag === 'bike_friendly_m' ? FLAG_COLORS.good : FLAG_COLORS.bad,
+            }
+          : undefined
+      }
+      title={title}
+      type="button"
+    >
+      {children}
+    </button>
+  )
+}
+
 /**
  * "Why this route?": per factor, how many metres of bad streets the shortest
  * route has (grey bar) and yours has (green bar), so the rider sees what the
  * detour buys. When nothing is traded, what the route is like on the way.
+ * With `focus`, each row shows where those streets are on the map.
  */
-export default function WhyThisRoute({ result }: { result: RouteComparison }) {
+export default function WhyThisRoute({
+  result,
+  focus,
+}: {
+  result: RouteComparison
+  focus?: FlagFocus
+}) {
   const { t, i18n } = useTranslation()
   const w = (key: string, values?: Record<string, unknown>) =>
     t(`greenest.planTrip.why.${key}`, values)
@@ -92,8 +156,8 @@ export default function WhyThisRoute({ result }: { result: RouteComparison }) {
           })}
         </p>
         {shown.map(f => (
-          <div className="flex flex-col gap-1" key={f.key}>
-            <div className="flex justify-between gap-2">
+          <FactorRow flag={f.key} focus={focus} key={f.key}>
+            <div className="flex w-full justify-between gap-2">
               <span>{w(`rows.${f.key}`)}</span>
               <span className="font-semibold tabular-nums text-leaf-muted">
                 {amount(value(r, f) ?? 0, f)}
@@ -102,8 +166,11 @@ export default function WhyThisRoute({ result }: { result: RouteComparison }) {
             {f.metres && (
               <Bar color={ROUTE_COLORS.greenest} max={max} value={value(r, f) ?? 0} />
             )}
-          </div>
+          </FactorRow>
         ))}
+        {focus && shown.length > 0 && (
+          <p className="text-[11px] text-leaf-muted">{w('mapHint')}</p>
+        )}
       </div>
     )
   }
@@ -143,12 +210,13 @@ export default function WhyThisRoute({ result }: { result: RouteComparison }) {
                 amount: amount(Math.abs(d), f),
               })
         return (
-          <div
-            className="flex flex-col gap-1"
+          <FactorRow
+            flag={f.key}
+            focus={focus}
             key={f.key}
             title={w('bars', { shortest: amount(b, f), yours: amount(a, f) })}
           >
-            <div className="flex justify-between gap-2">
+            <div className="flex w-full justify-between gap-2">
               <span>{w(`rows.${f.key}`)}</span>
               <span
                 className={cx(
@@ -161,9 +229,12 @@ export default function WhyThisRoute({ result }: { result: RouteComparison }) {
             </div>
             <Bar color={ROUTE_COLORS.shortest} max={Math.max(a, b)} value={b} />
             <Bar color={ROUTE_COLORS.greenest} max={Math.max(a, b)} value={a} />
-          </div>
+          </FactorRow>
         )
       })}
+      {focus && shown.length > 0 && (
+        <p className="text-[11px] text-leaf-muted">{w('mapHint')}</p>
+      )}
     </div>
   )
 }

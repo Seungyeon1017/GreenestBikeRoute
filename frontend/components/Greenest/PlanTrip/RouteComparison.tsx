@@ -10,6 +10,7 @@ import type {
   RouteComparison as RouteResult,
 } from '@/types/greenest'
 import WhyThisRoute from './WhyThisRoute'
+import type { FlagFocus } from './WhyThisRoute'
 
 /** Colours used for each route on the map and in the comparison. */
 export const ROUTE_COLORS: Record<RouteKind, string> = {
@@ -69,6 +70,8 @@ type RouteComparisonProps = {
    * your own bike, so the card fades like their lines on the map.
    */
   paused?: boolean
+  /** Links the "Why this route?" rows to the map. */
+  focus?: FlagFocus
 }
 
 /** The route's line as drawn on the map: grey dashed for the shortest, green solid for yours. */
@@ -92,6 +95,7 @@ function RouteLine({ kind }: { kind: RouteKind }) {
 export default function RouteComparison({
   result,
   paused = false,
+  focus,
 }: RouteComparisonProps) {
   const { t, i18n } = useTranslation()
   const kinds: RouteKind[] = ['shortest', 'greenest']
@@ -176,7 +180,7 @@ export default function RouteComparison({
 
         {result ? (
           <div className="flex flex-col gap-2 rounded-xl bg-leaf-cream p-3 text-xs">
-            <WhyThisRoute result={result} />
+            <WhyThisRoute focus={paused ? undefined : focus} result={result} />
             {/* Which time-of-day factor the backend applied, if a departure time was set. */}
             {result.route.properties.daylight === true && (
               <p className="text-leaf-muted">

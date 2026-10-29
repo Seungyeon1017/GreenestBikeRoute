@@ -502,6 +502,7 @@
         "more": "{{amount}} mehr",
         "aboutSame": "etwa gleich",
         "bars": "Grau: kürzeste Route, {{shortest}}. Grün: deine Route, {{yours}}.",
+        "mapHint": "Zeig auf eine Zeile, um diese Straßen auf der Karte zu sehen; klick sie an, damit sie sichtbar bleiben. Zeig auf eine der Routenlinien, um zu sehen, wie eine Straße ist.",
         "rows": {
           "bumpy_m": "Auf holprigen Straßen",
           "danger_points": "Stellen mit engem Überholen",
@@ -510,6 +511,34 @@
           "sunny_m": "In der Sonne",
           "unlit_m": "Auf unbeleuchteten Straßen",
           "bike_friendly_m": "Auf Radwegen und Radspuren"
+        }
+      },
+      "segment": {
+        "unnamed": "Straße ohne Namen",
+        "beside": "{{way}} neben der Straße",
+        "ways": {
+          "crossing": "Überweg",
+          "sidewalk": "Gehweg",
+          "cycleway": "Radweg",
+          "footway": "Fußweg",
+          "path": "Weg",
+          "track": "Feldweg",
+          "service": "Zufahrt",
+          "pedestrian": "Fußgängerzone"
+        },
+        "length": "{{m}} m",
+        "notMeasured": "nicht gemessen",
+        "yes": "ja",
+        "no": "nein",
+        "rows": {
+          "roughness": "Unebenheit (0–100)",
+          "overtaking": "Stellen mit engem Überholen",
+          "fineDust": "Feinstaub (0,5 = üblich)",
+          "stopGo": "Stop-and-go (0–1)",
+          "speed": "Übliches Radtempo",
+          "shade": "Im Schatten",
+          "lit": "Nachts beleuchtet",
+          "bikePath": "Radweg oder Radspur"
         }
       }
     },

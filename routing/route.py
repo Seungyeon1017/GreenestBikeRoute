@@ -327,6 +327,156 @@ def route_duration(G, edges, scooter=False):
     return duration
 
 
+# Roads a footway, bike path or access road without a name can run beside (see _NamedRoads).
+ROAD_HIGHWAYS = {"motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential",
+                 "living_street", "service", "motorway_link", "trunk_link", "primary_link", "secondary_link",
+                 "tertiary_link"}
+# An unnamed way runs beside a named road when at least 2 of 3 points along it are this close to the road and head the
+# same way (either direction) to within this angle; a crossing takes the road it crosses within CROSSING_M.
+ALONG_M = 20
+ALONG_DEG = 25
+CROSSING_M = 3
+# The kind of way a stretch is on, from its OSM tags, in this order; null for an ordinary road.
+WAY_KINDS = ("crossing", "sidewalk", "cycleway", "footway", "path", "track", "service", "pedestrian")
+
+
+def _tags(d, key):
+    value = d.get(key)
+    return {str(v) for v in (value if isinstance(value, list) else [value])}
+
+
+def _street_name(d):
+    name = d.get("name")
+    return (name[0] if isinstance(name, list) else name) or None
+
+
+def way_kind(d):
+    """What kind of way the edge is (WAY_KINDS), from highway=* and footway=*; None for an ordinary road."""
+    tags = _tags(d, "highway") | _tags(d, "footway")
+    return next((kind for kind in WAY_KINDS if kind in tags), None)
+
+
+class _NamedRoads:
+    """The named roads (ROAD_HIGHWAYS) as lines in metres around the graph's mean latitude, in an STRtree."""
+
+    def __init__(self, G):
+        self.plane = _Plane(sum(y for _, y in G.nodes(data="y")) / G.number_of_nodes())
+        roads = [(u, v, d) for u, v, d in G.edges(data=True)
+                 if _street_name(d) and _tags(d, "highway") & ROAD_HIGHWAYS]
+        self.names = [_street_name(d) for *_, d in roads]
+        self.lines = [self.plane.to_m(_edge_line(G, u, v, d)) for u, v, d in roads]
+        self.tree = STRtree(self.lines)
+
+    def along(self, line, crossing=False):
+        """Name of the road the line (lon, lat) runs beside, or for a crossing the road it crosses; None if none."""
+        line = self.plane.to_m(line)
+        found = self.tree.query(line, predicate="dwithin", distance=CROSSING_M if crossing else ALONG_M)
+        if crossing or not len(found):
+            return min(((line.distance(self.lines[i]), self.names[i]) for i in found), default=(0, None))[1]
+        samples = [line.interpolate(f, normalized=True) for f in (0.2, 0.5, 0.8)]
+        headings = [_heading(line, p) for p in samples]
+        best = {}
+        for i in found:
+            road, matched, metres = self.lines[i], 0, 0.0
+            for p, heading in zip(samples, headings):
+                dist = road.distance(p)
+                turn = abs(heading - _heading(road, p)) % 180
+                if dist <= ALONG_M and min(turn, 180 - turn) <= ALONG_DEG:
+                    matched, metres = matched + 1, metres + dist
+            if matched >= 2:
+                best[self.names[i]] = max(best.get(self.names[i], (0, 0.0)), (matched, -metres))
+        return max(best, key=best.get, default=None)
+
+
+def _heading(line, point):
+    """Direction in degrees of `line` (metres) where it passes nearest to `point`, over 6 m."""
+    at = line.project(point)
+    a, b = line.interpolate(max(at - 3, 0)), line.interpolate(min(at + 3, line.length))
+    return math.degrees(math.atan2(b.y - a.y, b.x - a.x))
+
+
+# One _NamedRoads per graph; rebuilt when its nodes change, not counting the temporary start and end points.
+_NAMED_ROADS = weakref.WeakKeyDictionary()
+
+
+def _named_roads(G):
+    size = G.number_of_nodes() - sum(n in G for n in ("snap-start", "snap-end"))
+    cached = _NAMED_ROADS.get(G)
+    if cached is None or cached[0] != size:
+        cached = _NAMED_ROADS[G] = (size, _NamedRoads(G))
+    return cached[1]
+
+
+# Fields of a stretch (see _stretches) that are length-weighted means over its edges with data.
+_STRETCH_MEANS = ("roughness", "pm_risk", "stop_go", "speed_kmh", "shade", "lit")
+
+
+def _edge_facts(G, u, v, d, slot, dark, scooter):
+    """What a stretch shows for one edge: street name, kind of way, the measured values (None where unknown) and
+    `flags`, the bad or good things it counts towards (the route's bumpy_m, danger_points, ... with the same
+    thresholds). A way without a name (a sidewalk, a bike path) takes the name of the road it runs beside, `along`."""
+    name, way = _street_name(d), way_kind(d)
+    beside = None if name else _named_roads(G).along(_edge_line(G, u, v, d), crossing=way == "crossing")
+    facts = {
+        "name": name or beside,
+        "way": way,
+        "along": beside is not None,
+        "roughness": d["roughness"],
+        "danger_points": int(d.get("danger_points", 0)),
+        "pm_risk": d.get("pm_risk"),
+        "stop_go": d.get("stop_go"),
+        "speed_kmh": d.get("speed_kmh"),
+        "shade": d["shade"][slot] if slot is not None and d.get("shade") is not None else None,
+        "lit": d.get("lit"),
+        "bike_friendly": bool(d.get("bike_friendly")),
+        "pushed": bool(scooter and scooter_pushes(d)),
+    }
+    flags = [key for key, bad in (
+        ("bumpy_m", facts["roughness"] is not None and facts["roughness"] >= BUMPY_ROUGHNESS),
+        ("danger_points", facts["danger_points"] > 0),
+        ("bad_air_m", facts["pm_risk"] is not None and facts["pm_risk"] >= BAD_AIR_RISK),
+        ("stop_go_m", facts["stop_go"] is not None and facts["stop_go"] >= STOP_GO_HEAVY),
+        ("sunny_m", facts["shade"] is not None and facts["shade"] < 0.5),
+        ("unlit_m", dark and facts["lit"] is not None and facts["lit"] < 0.5),
+        ("bike_friendly_m", facts["bike_friendly"]),
+    ) if bad]
+    return {**facts, "flags": flags}
+
+
+def _stretches(pieces):
+    """The route as stretches for the map: runs of consecutive edges on the same street with the same flags, from
+    `pieces` [(first coordinate index, last coordinate index, length, _edge_facts)]. Values are length-weighted over
+    the edges with data. Unnamed ways are told apart by their kind; a sidewalk joins the road it runs beside, and then
+    the stretch has no single `way`."""
+    out, start_m = [], 0.0
+    for first, last, length, facts in pieces:
+        prev = out[-1] if out else None
+        key = (facts["name"] or facts["way"], facts["flags"], facts["pushed"])
+        if prev is None or (prev["name"] or prev["way"], prev["flags"], prev["pushed"]) != key:
+            prev = {"from_index": first, "start_m": start_m, "length_m": 0.0, "name": facts["name"], "way": facts["way"],
+                    "along": facts["along"], "danger_points": 0, "bike_friendly": facts["bike_friendly"],
+                    "pushed": facts["pushed"], "flags": facts["flags"], "_sums": {k: [0.0, 0.0] for k in _STRETCH_MEANS}}
+            out.append(prev)
+        elif prev["way"] != facts["way"]:
+            prev["way"] = None
+        prev["along"] = prev["along"] and facts["along"]
+        prev["to_index"] = last
+        prev["length_m"] += length
+        prev["danger_points"] += facts["danger_points"]
+        for k in _STRETCH_MEANS:
+            if facts[k] is not None:
+                prev["_sums"][k][0] += float(facts[k]) * length
+                prev["_sums"][k][1] += length
+        start_m += length
+    means = [{k: round(total / known, 3) if known else None for k, (total, known) in s.pop("_sums").items()} for s in out]
+    return [{"from_index": s["from_index"], "to_index": s["to_index"], "start_m": round(s["start_m"], 1),
+             "length_m": round(s["length_m"], 1), "name": s["name"], "way": s["way"], "along": s["along"],
+             "flags": s["flags"], "roughness": m["roughness"],
+             "danger_points": s["danger_points"], "pm_risk": m["pm_risk"], "stop_go": m["stop_go"],
+             "speed_kmh": m["speed_kmh"], "shade": m["shade"], "lit": m["lit"], "bike_friendly": s["bike_friendly"],
+             "pushed": s["pushed"]} for s, m in zip(out, means)]
+
+
 def _route_feature(G, a, b, penalties, weight_kg=DEFAULT_WEIGHT_KG, e_bike=False, scooter=False):
     """The cheapest route between graph nodes a and b for `penalties` (the six penalties, prefer_time,
     prefer_bike_friendly and depart_time), as one GeoJSON Feature. kcal is for a rider of weight_kg; for an e-scooter
@@ -344,15 +494,17 @@ def _route_feature(G, a, b, penalties, weight_kg=DEFAULT_WEIGHT_KG, e_bike=False
     shade_len, shade_known_len, lit_len, lit_known_len = 0.0, 0.0, 0.0, 0.0
     bumpy_m, bad_air_m, stop_go_m, sunny_m, unlit_m, bike_friendly_m, pushed_m = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
     speed_measured_len = 0.0
-    closures, edges = set(), []
+    closures, edges, pieces = set(), [], []
     for u, v in zip(path[:-1], path[1:]):
         d = _edge(G, u, v, plan)
         edges.append((u, v, d))
         if d.get("closure"):
             closures.add(str(d["osmid"]))
         pts = edge_coords(G, u, v, d)
+        first = max(len(coords) - 1, 0)
         coords.extend(pts if not coords else pts[1:])
         edge_len = float(d["length"])  # numpy float when loaded from GraphML
+        pieces.append((first, len(coords) - 1, edge_len, _edge_facts(G, u, v, d, slot, dark, scooter)))
         length += edge_len
         if d.get("roughness_source") == "estimated":
             estimated_len += edge_len
@@ -446,6 +598,8 @@ def _route_feature(G, a, b, penalties, weight_kg=DEFAULT_WEIGHT_KG, e_bike=False
         "bike_friendly_m": round(bike_friendly_m),
         # Metres an e-scooter is pushed (footways and pedestrian streets); 0 for bikes.
         "pushed_m": round(pushed_m),
+        # The route as stretches with what is measured on them, to show when the rider points at the line.
+        "segments": _stretches(pieces),
     }
     return {"type": "Feature", "geometry": {"type": "LineString", "coordinates": coords}, "properties": properties}
 

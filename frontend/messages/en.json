@@ -502,6 +502,7 @@
         "more": "{{amount}} more",
         "aboutSame": "about the same",
         "bars": "Grey: shortest route, {{shortest}}. Green: your route, {{yours}}.",
+        "mapHint": "Point at a row to see where those streets are on the map; click it to keep them shown. Point at either route line to see what a street is like.",
         "rows": {
           "bumpy_m": "On bumpy streets",
           "danger_points": "Close-overtaking spots",
@@ -510,6 +511,34 @@
           "sunny_m": "In the sun",
           "unlit_m": "On unlit streets",
           "bike_friendly_m": "On bike paths and lanes"
+        }
+      },
+      "segment": {
+        "unnamed": "Unnamed street",
+        "beside": "{{way}} beside the road",
+        "ways": {
+          "crossing": "Crossing",
+          "sidewalk": "Sidewalk",
+          "cycleway": "Bike path",
+          "footway": "Footpath",
+          "path": "Path",
+          "track": "Farm track",
+          "service": "Access road",
+          "pedestrian": "Pedestrian street"
+        },
+        "length": "{{m}} m",
+        "notMeasured": "not measured",
+        "yes": "yes",
+        "no": "no",
+        "rows": {
+          "roughness": "Roughness (0–100)",
+          "overtaking": "Close-overtaking spots",
+          "fineDust": "Fine dust (0.5 = usual)",
+          "stopGo": "Stop-and-go (0–1)",
+          "speed": "Usual bike speed",
+          "shade": "In shade",
+          "lit": "Lit at night",
+          "bikePath": "Bike path or lane"
         }
       }
     },

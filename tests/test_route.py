@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 
+import networkx as nx
 import pytest
 
 from routing import graph
@@ -364,3 +365,38 @@ def test_day_routes_split_the_day_by_sky(sunny_unlit_shortcut):
     # By day the sunny shortcut is avoided, after dark (dark_penalty 0) it is taken.
     assert [p["route"]["properties"]["length_m"] for p in periods] == [100, 140, 140, 140, 140, 100]
     assert [p["same_path"] for p in periods] == [True, False, False, False, False, True]
+
+
+def test_segments_cover_the_route_with_its_flags(toy_graph):
+    toy_graph.edges[C, B, 0]["name"] = "Oststraße"
+    f = find_route(toy_graph, COORDS[A], COORDS[B], 10)["features"][0]  # the detour A -> C -> B
+    segments = f["properties"]["segments"]
+    assert [(s["from_index"], s["to_index"], s["start_m"], s["name"]) for s in segments] == [(0, 1, 0, None), (1, 2, 70, "Oststraße")]
+    assert segments[0]["roughness"] is None and segments[1]["roughness"] == 0
+    # Unnamed streets with the same flags make one stretch, length-weighted over the measured part.
+    del toy_graph.edges[C, B, 0]["name"]
+    merged = find_route(toy_graph, COORDS[A], COORDS[B], 10)["features"][0]["properties"]["segments"]
+    assert [(s["to_index"], s["length_m"], s["roughness"]) for s in merged] == [(2, 140, 0)]
+    shortest = find_route(toy_graph, COORDS[A], COORDS[B], 0)["features"][0]["properties"]["segments"]
+    assert [(s["to_index"], s["flags"], s["roughness"]) for s in shortest] == [(2, ["bumpy_m"], 80)]
+
+
+def test_a_sidewalk_without_a_name_is_named_after_the_road_beside_it():
+    G = nx.MultiDiGraph(crs="epsg:4326")
+    points = {"r1": (49.1400, 9.2100), "r2": (49.1400, 9.2120), "s1": (49.14009, 9.2100), "s2": (49.14009, 9.2120),
+              "p1": (49.1420, 9.2100), "p2": (49.1420, 9.2120)}
+    for n, (lat, lon) in points.items():
+        G.add_node(n, y=lat, x=lon)
+    for a, b, osmid, tags in (("r1", "r2", 1, {"name": "Allee", "highway": "residential"}),
+                              ("s1", "s2", 2, {"highway": "footway", "footway": "sidewalk"}),
+                              ("p1", "p2", 3, {"highway": "path"}),  # 220 m away: no road beside it
+                              ("s2", "p2", 4, {"highway": "path"})):  # leaves the road at a right angle
+        for u, v in ((a, b), (b, a)):
+            G.add_edge(u, v, osmid=osmid, length=146.0, roughness=None, **tags)
+
+    def segments(start, end):
+        f = find_route(G, points[start], points[end], 0)["features"][0]
+        return [(s["name"], s["way"], s["along"]) for s in f["properties"]["segments"]]
+
+    assert segments("s1", "s2") == [("Allee", "sidewalk", True)]
+    assert segments("s1", "p1") == [("Allee", "sidewalk", True), (None, "path", False)]
