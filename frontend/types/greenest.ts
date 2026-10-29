@@ -346,6 +346,26 @@ export type PlaceCollection = FeatureCollection<Point, PlaceProperties> & {
   attribution: string
 }
 
+/** A station from `/transit/stops`: a Stadtbahn or train line of the region calls here. */
+export type TransitStopProperties = {
+  /** IFOPT stop place, e.g. de:08121:26, for `/transit/departures`. */
+  stop_id: string
+  name: string
+  /** Lines calling here, e.g. ["S4", "S41", "S42"] or ["MEX18", "RE 8"]. */
+  lines: string[]
+  /** Metres from near_lat/near_lon, when given. */
+  distance_m?: number
+}
+
+export type TransitStopCollection = FeatureCollection<
+  Point,
+  TransitStopProperties
+> & {
+  /** Last day the timetable covers. */
+  valid_until: string | null
+  attribution: string
+}
+
 export type SharingVehicleKind = 'bike' | 'scooter'
 /** Which shared vehicles to show or rent: e-bikes, e-scooters or both. */
 export type SharingVehicleChoice = 'all' | SharingVehicleKind

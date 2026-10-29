@@ -27,6 +27,7 @@ import type {
   SharingVehicleChoice,
   StreetSegmentFeature,
   TourCollection,
+  TransitStopCollection,
   VehicleCollection,
   ZoneCollection,
 } from '@/types/greenest'
@@ -209,6 +210,16 @@ export function fetchPlaces(
 ): Promise<PlaceCollection> {
   const params = new URLSearchParams({ q: query, limit: String(limit) })
   return getJson<PlaceCollection>(`/geocode?${params}`, signal)
+}
+
+/**
+ * GET /transit/stops: every Stadtbahn and train station of the region. The first call
+ * after a backend start reads the timetable (a few seconds); 503 if there is none.
+ */
+export function fetchTransitStops(
+  signal?: AbortSignal,
+): Promise<TransitStopCollection> {
+  return getJson('/transit/stops', signal)
 }
 
 /** near_lat / near_lon: the backend then sorts by distance and adds `distance_m`. */

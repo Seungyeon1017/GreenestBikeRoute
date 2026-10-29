@@ -1,7 +1,7 @@
 'use client'
 
 import { cx } from 'class-variance-authority'
-import { Construction, Layers, Mountain } from 'lucide-react'
+import { Construction, Layers, Mountain, TrainFront } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -13,6 +13,8 @@ type MapLayersProps = {
   onShowHillsChange: (_show: boolean) => void
   showReports: boolean
   onShowReportsChange: (_show: boolean) => void
+  showStations: boolean
+  onShowStationsChange: (_show: boolean) => void
   /** Legends and notices of the layers that are on, in a row beside the button; hidden while the panel is open. */
   children?: ReactNode
 }
@@ -56,7 +58,7 @@ function LayerTile({
 
 /**
  * "Layers" at the bottom left of the map, as in Google Maps: a button that
- * opens tiles to switch hills and riders' reports on and off. The legend or
+ * opens tiles to switch hills, riders' reports and stations on and off. The legend or
  * question of a layer that is on sits beside the button.
  */
 export default function MapLayers({
@@ -64,6 +66,8 @@ export default function MapLayers({
   onShowHillsChange,
   showReports,
   onShowReportsChange,
+  showStations,
+  onShowStationsChange,
   children,
 }: MapLayersProps) {
   const { t } = useTranslation()
@@ -115,6 +119,13 @@ export default function MapLayers({
                 label={t('greenest.planTrip.reports.title')}
                 on={showReports}
                 onToggle={() => onShowReportsChange(!showReports)}
+              />
+              <LayerTile
+                hint={t('greenest.planTrip.stations.show')}
+                icon={TrainFront}
+                label={t('greenest.planTrip.stations.title')}
+                on={showStations}
+                onToggle={() => onShowStationsChange(!showStations)}
               />
             </div>
             {showReports && <ReportsLegend />}

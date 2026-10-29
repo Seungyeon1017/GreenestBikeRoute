@@ -21,6 +21,7 @@ import {
   fetchRouteComparison,
   fetchRouteDay,
   fetchRouteGrade,
+  fetchTransitStops,
 } from '@/services/greenestApi'
 import { fromSavedOptions } from '@/services/usersApi'
 import type {
@@ -42,6 +43,7 @@ import type {
   SharingTrip,
   SharingVehicleChoice,
   StreetSegmentFeature,
+  TransitStopCollection,
   VehicleCollection,
   ZoneCollection,
 } from '@/types/greenest'
@@ -58,6 +60,8 @@ import {
 import ReportProblem from './ReportProblem'
 import { closureText, ReportsNotice } from './ReportsLegend'
 import RouteComparisonCard, { ROUTE_COLORS } from './RouteComparison'
+import StationsLegend from './StationsLegend'
+import { drawStations } from './transitLayers'
 import SaveRouteButton from './SaveRouteButton'
 import {
   drawSegments,
@@ -275,6 +279,11 @@ export default function PlanTripView() {
   const [grade, setGrade] = useState<GradeCollection | null>(null)
   const [gradeError, setGradeError] = useState<string | null>(null)
 
+  // Stadtbahn and train stations: loaded the first time the layer is switched on.
+  const [showStations, setShowStations] = useState(false)
+  const [stations, setStations] = useState<TransitStopCollection | null>(null)
+  const [stationsError, setStationsError] = useState<string | null>(null)
+
   // Shared vehicles: on the map, and a trip with a rented one. Nothing loads while unticked.
   const [showSharing, setShowSharing] = useState(false)
   const [sharingVehicle, setSharingVehicle] =
@@ -323,6 +332,8 @@ export default function PlanTripView() {
   resultRef.current = shown
   const gradeRef = useRef<GradeCollection | null>(null)
   gradeRef.current = grade
+  const stationsRef = useRef<TransitStopCollection | null>(null)
+  stationsRef.current = showStations ? stations : null
   // The map's style can reload (fallback style), so keep what's needed to redraw.
   const sharingRef = useRef<{
     vehicles: VehicleCollection | null
@@ -453,6 +464,37 @@ export default function PlanTripView() {
       controller.abort()
     }
   }, [showHills, start, end, tripOptions, t])
+
+  // The stations change only with the timetable: load them once, the first time the layer is on.
+  useEffect(() => {
+    if (!showStations || stations) {
+      return
+    }
+    const controller = new AbortController()
+    fetchTransitStops(controller.signal)
+      .then(data => {
+        setStations(data)
+        setStationsError(null)
+      })
+      .catch(err => {
+        if (err.name === 'AbortError') {
+          return
+        }
+        setStationsError(
+          err.status === 503
+            ? t('greenest.planTrip.stations.unavailable')
+            : err.message,
+        )
+      })
+    return () => controller.abort()
+  }, [showStations, stations, t])
+
+  // Draw (or clear) the stations.
+  useEffect(() => {
+    if (mapRef.current) {
+      drawStations(mapRef.current, showStations ? stations : null)
+    }
+  }, [showStations, stations])
 
   // The parking rules change rarely: load them once, the first time a trip is shown.
   useEffect(() => {
@@ -1399,13 +1441,14 @@ export default function PlanTripView() {
                 }
                 window.history.replaceState(null, '', window.location.pathname)
               }
-              // Bottom to top: routes, hills, highlighted stretches, riders' reports, shared vehicles,
-              // the rented-vehicle trip.
+              // Bottom to top: routes, hills, highlighted stretches, stations, riders' reports, shared
+              // vehicles, the rented-vehicle trip.
               drawRoutes(map, resultRef.current)
               drawGrade(map, gradeRef.current)
               drawSegments(map, resultRef.current)
               highlightFlag(map, shownFlagRef.current)
               bindSegmentHover(map)
+              drawStations(map, stationsRef.current)
               drawReports(
                 map,
                 reportsRef.current.closures,
@@ -1445,8 +1488,10 @@ export default function PlanTripView() {
           <MapLayers
             onShowHillsChange={setShowHills}
             onShowReportsChange={setShowReports}
+            onShowStationsChange={setShowStations}
             showHills={showHills}
             showReports={showReports}
+            showStations={showStations}
           >
             {showHills && (
               <HillsLegend
@@ -1455,6 +1500,7 @@ export default function PlanTripView() {
                 hasRoute={Boolean(start && end)}
               />
             )}
+            {showStations && <StationsLegend error={stationsError} />}
             <ReportsNotice
               error={reports.error}
               near={nearClosure}

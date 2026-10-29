@@ -721,6 +721,15 @@
         "savedHint": "Du findest sie in deinem",
         "loginToOpen": "Melde dich an, um deine gespeicherte Route zu öffnen.",
         "notFound": "Diese gespeicherte Route gibt es nicht mehr."
+      },
+      "stations": {
+        "title": "Bahnhöfe",
+        "show": "S-Bahn-Haltestellen und Bahnhöfe auf der Karte zeigen",
+        "sbahn": "S-Bahn",
+        "train": "Bahnhof",
+        "hint": "Wo du mit dem Rad in die Stadtbahn (S4, S41, S42) oder in einen Regionalzug steigen kannst. Ein Bahnhof hält auch Regionalzüge (RE, RB, MEX). Namen erscheinen beim Hineinzoomen.",
+        "credit": "Fahrplandaten: NVBW / MobiData BW (ODbL)",
+        "unavailable": "Die Bahnhöfe sind gerade nicht verfügbar. Versuche es später noch einmal."
       }
     },
     "highlights": {
