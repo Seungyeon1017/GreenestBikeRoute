@@ -41,6 +41,11 @@ export type EnvironmentLayer = {
   availability: DataAvailability
   /** Backend endpoint the layer is loaded from (when first switched on); static layers have none. */
   overlay?: OverlayName
+  /**
+   * Colours the streets themselves. Only one such layer is shown at a time,
+   * since two would paint over each other on the same streets.
+   */
+  colorsStreets?: boolean
   /** Legend entries from best to worst environmental condition. */
   legend: Array<{ color: string; label: string }>
 }

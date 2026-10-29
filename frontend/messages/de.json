@@ -272,6 +272,7 @@
       "title": "Entdecke die Umwelt deiner Stadt",
       "subtitle": "Luftqualität, Lärm, Grün und Radinfrastruktur in Heilbronn. Ebenen ein- und ausblenden und ein Gebiet für Details anklicken.",
       "layersTitle": "Umweltebenen",
+      "streetLayersHint": "Ebenen, die Straßen einfärben, werden einzeln gezeigt.",
       "detailsTitle": "Gebietsdetails",
       "detailsEmpty": "Klicke ein Gebiet auf der Karte an, um gemessene Indikatoren, Datenquelle und Einheit zu sehen.",
       "mapLabel": "Umweltkarte von Heilbronn",

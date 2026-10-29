@@ -272,6 +272,7 @@
       "title": "Explore your city's environment",
       "subtitle": "See air quality, noise, greenery and cycling infrastructure across Heilbronn. Turn layers on and off and click an area for details.",
       "layersTitle": "Environmental layers",
+      "streetLayersHint": "Layers that colour the streets are shown one at a time.",
       "detailsTitle": "Area details",
       "detailsEmpty": "Click an area on the map to see its measured indicators, data source and unit.",
       "mapLabel": "Environmental map of Heilbronn",

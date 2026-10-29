@@ -13,6 +13,12 @@ import LayerPanel from './LayerPanel'
 import { ENVIRONMENT_LAYERS } from './layers'
 import OverviewMap from './OverviewMap'
 
+const STREET_LAYERS = new Set(
+  ENVIRONMENT_LAYERS.filter(layer => layer.colorsStreets).map(
+    layer => layer.id,
+  ),
+)
+
 export default function OverviewView() {
   const { t } = useTranslation()
   const overview = useOverviewData()
@@ -44,9 +50,14 @@ export default function OverviewView() {
       const next = new Set(prev)
       if (next.has(id)) {
         next.delete(id)
-      } else {
-        next.add(id)
+        return next
       }
+      // Street layers would paint over each other, so switching one on
+      // switches the others off. Areas and points stack on top.
+      if (STREET_LAYERS.has(id)) {
+        STREET_LAYERS.forEach(other => next.delete(other))
+      }
+      next.add(id)
       return next
     })
 

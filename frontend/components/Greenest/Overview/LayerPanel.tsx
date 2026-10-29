@@ -26,7 +26,12 @@ export default function LayerPanel({
   return (
     // On wide screens the title stays put and only the list scrolls, inside the card.
     <Card className="flex flex-col gap-3 lg:max-h-full lg:min-h-0">
-      <CardTitle>{t('greenest.overview.layersTitle')}</CardTitle>
+      <div className="space-y-1">
+        <CardTitle>{t('greenest.overview.layersTitle')}</CardTitle>
+        <p className="text-xs text-leaf-muted">
+          {t('greenest.overview.streetLayersHint')}
+        </p>
+      </div>
       <ul className="flex flex-col gap-2 lg:-mr-3 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:pr-3">
         {layers.map(layer => {
           const inputId = `layer-${layer.id}`
