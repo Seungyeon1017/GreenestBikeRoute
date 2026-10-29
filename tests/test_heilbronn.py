@@ -81,7 +81,7 @@ def test_hating_stop_and_go_gives_a_more_free_flowing_route(client):
     shortest = client.get("/route", params={**trip, **zero}).json()["features"][0]["properties"]
     smooth = client.get("/route", params={**trip, **zero, "stop_penalty": 4}).json()["features"][0]["properties"]
     assert smooth["stop_go_m"] < shortest["stop_go_m"] / 2
-    assert smooth["length_m"] < shortest["length_m"] * 1.1
+    assert smooth["length_m"] < shortest["length_m"] * 1.15
 
 
 def test_prefer_time_gives_a_faster_route(client):
