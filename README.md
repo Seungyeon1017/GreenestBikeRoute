@@ -78,7 +78,14 @@ ports:
 ```
 ### 3. Run the Backend with Docker Compose
 
-Build the Docker image and start the backend in the background:
+`compose.yml` starts the backend and the PostgreSQL database for user accounts. Once, create `.env` from the example and set your own password and secret:
+
+```powershell
+copy .env.users.example .env
+python -c "import secrets; print(secrets.token_urlsafe(48))"   # paste after USERS_JWT_SECRET_KEY=
+```
+
+Build the Docker image and start the backend and database in the background (the backend creates the users tables itself on start):
 
 ```powershell
 docker compose up --build -d
@@ -103,6 +110,8 @@ Stop the backend:
 ```powershell
 docker compose down
 ```
+
+The users and saved routes stay in the `postgres-data` volume; `docker compose down -v` deletes them.
 
 Rebuild and restart after changing the Dockerfile, dependencies, or application code:
 

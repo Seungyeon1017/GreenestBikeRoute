@@ -1,7 +1,7 @@
 """Fixtures for the users tests.
 
 They run against a separate PostgreSQL database, <USERS_DATABASE_NAME>_test, on the same
-server as your normal one (the Docker database from compose.users.yml). It's created if it
+server as your normal one (the Docker database from compose.yml). It's created if it
 doesn't exist, and emptied after every test, so your real users are never touched.
 
 If that server isn't reachable (e.g. Docker isn't running), these tests are skipped,
@@ -46,7 +46,7 @@ def engine() -> Iterator[Engine]:
             if not exists:
                 conn.execute(text(f'CREATE DATABASE "{test_db}"'))
     except OperationalError as error:
-        pytest.skip(f"users tests need the PostgreSQL from compose.users.yml: {str(error).splitlines()[0]}")
+        pytest.skip(f"users tests need the PostgreSQL from compose.yml: {str(error).splitlines()[0]}")
     finally:
         admin.dispose()
 

@@ -15,8 +15,8 @@ log = logging.getLogger(__name__)
 
 class UserSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="USERS_", env_file=".env", extra="ignore")
-    # The database, in parts like the practice repo. Defaults match compose.users.yml,
-    # which publishes PostgreSQL on port 5433 (5432 is often taken by a local install).
+    # The database, in parts like the practice repo. In Docker, compose.yml publishes
+    # PostgreSQL on USERS_DATABASE_PORT, e.g. 5434 (5432 is often taken by a local install).
     database_hostname: str
     database_port: int
     database_username: str
