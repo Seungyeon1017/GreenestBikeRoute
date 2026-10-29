@@ -152,6 +152,9 @@ const LOCATE_OPTIONS: PositionOptions = {
   maximumAge: 60000,
 }
 
+/** No answer by then, not even a timeout: the browser has dropped the request. */
+const LOCATE_GIVE_UP_MS = 30000
+
 /** A clicked point as "lat, lng", the text shown in the search field. */
 function formatPoint([lng, lat]: LngLat): string {
   return `${lat.toFixed(5)}, ${lng.toFixed(5)}`
@@ -330,6 +333,22 @@ export default function PlanTripView() {
   const shownFlag = previewFlag ?? pinnedFlag
   const shownFlagRef = useRef<RouteFlag | null>(null)
   shownFlagRef.current = shownFlag
+  // The destination now, for a GPS answer that arrives after it was set.
+  const endRef = useRef<LngLat | null>(null)
+  endRef.current = end
+  // "Use my location": which lookup is still awaited (a reset or another start drops
+  // it, so its late answer is ignored) and the timer that gives up on it.
+  const locateRef = useRef<{
+    id: number
+    timer?: ReturnType<typeof setTimeout>
+  }>({ id: 0 })
+
+  /** Drops the awaited location lookup, if any. */
+  const stopLocating = useCallback(() => {
+    clearTimeout(locateRef.current.timer)
+    locateRef.current = { id: locateRef.current.id + 1 }
+    setLocating(false)
+  }, [])
 
   // 3. EFFECTS: code that runs when certain values change.
 
@@ -635,8 +654,12 @@ export default function PlanTripView() {
       })
   }, [sharingTrip.trip, t, i18n.language])
 
-  // A start set any other way answers the location message.
-  useEffect(() => setLocateError(null), [start])
+  // A start set any other way answers the location message and wins over a
+  // location still being looked up.
+  useEffect(() => {
+    stopLocating()
+    setLocateError(null)
+  }, [start, stopLocating])
 
   // Green pin at the start, red pin at the destination. Drag a pin to move the
   // point; while it is dragged the map stays put. The cleanup removes the pin
@@ -961,7 +984,7 @@ export default function PlanTripView() {
       setEndLabel(label)
     }
     const map = mapRef.current
-    const other = which === 'start' ? end : start
+    const other = which === 'start' ? endRef.current : start
     if (!map) {
       return
     }
@@ -984,11 +1007,21 @@ export default function PlanTripView() {
       setLocateError(l('unsupported'))
       return
     }
+    stopLocating()
+    const id = locateRef.current.id
     setLocating(true)
     setLocateError(null)
+    // Firefox never answers when its permission prompt is just closed.
+    locateRef.current.timer = setTimeout(() => {
+      stopLocating()
+      setLocateError(l('failed'))
+    }, LOCATE_GIVE_UP_MS)
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
-        setLocating(false)
+        if (locateRef.current.id !== id) {
+          return
+        }
+        stopLocating()
         const point: LngLat = [coords.longitude, coords.latitude]
         const [west, south, east, north] = HEILBRONN_BBOX
         if (
@@ -1003,7 +1036,10 @@ export default function PlanTripView() {
         pickPlace('start', point, l('here'))
       },
       err => {
-        setLocating(false)
+        if (locateRef.current.id !== id) {
+          return
+        }
+        stopLocating()
         setLocateError(
           l(err.code === err.PERMISSION_DENIED ? 'denied' : 'failed'),
         )
@@ -1027,6 +1063,7 @@ export default function PlanTripView() {
     setPreviewFlag(null)
     setDraft(null)
     setReportStatus(null)
+    stopLocating()
     setLocateError(null)
   }
 
