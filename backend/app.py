@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.reports import SNAP_M, ReportError, Reports
-from backend.schemas import EXAMPLE_TRIP, AirCollection, BikeFriendlyCollection, ClosureAnswer, ClosureCollection, ClosureFeature, ClosureReport,     DangerCollection, DayRoutes, Error, FlowCollection, GeofencingCollection, GradeCollection, LightingCollection, MappingCollection,     MappingFeature, MappingReport, PlaceCollection, FootwayFeature, StreetSegmentFeature, RouteCollection, RouteComparison, RoughnessCollection, ScoreCollection,     ShadeCollection, SharingTrip, SpeedCollection, VehicleCollection, ZoneCollection
+from backend.schemas import EXAMPLE_TRIP, AirCollection, BikeFriendlyCollection, ClosureAnswer, ClosureCollection, ClosureFeature, ClosureReport,     DangerCollection, DayRoutes, Error, FlowCollection, GeofencingCollection, GradeCollection, GreenStreetCollection, LightingCollection, MappingCollection,     MappingFeature, MappingReport, PlaceCollection, FootwayFeature, StreetSegmentFeature, RouteCollection, RouteComparison, RoughnessCollection, ScoreCollection,     ShadeCollection, SharingTrip, SpeedCollection, VehicleCollection, ZoneCollection
 from backend.geocoding import Geocoder, GeocodingUnavailable, normalize
 from backend.sharing import ATTRIBUTION, Sharing, SharingUnavailable
 from backend.users.router import router as users_router
@@ -22,6 +22,7 @@ from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_
 from routing.elevation import attach_elevation, load_crests, load_elevation
 from routing.grade import NoElevationError, route_grade
 from routing.graph import load_graph
+from routing.highlights import greenest_streets
 from routing.footways import Footways
 from routing.route import RouteError, compare_routes, day_routes, edge_coords, find_route, nearest_street, segment_id, set_closures, street_name,     sky, street_scores
 from routing.sharing_trip import WalkNetwork, load_walk_graph, plan_sharing_trip
@@ -178,6 +179,8 @@ grade doesn't change which route is picked).
   Heilbronn streets ranked by routing cost per metre. It takes the same penalties, `prefer_time`, `prefer_bike_friendly` and `depart_time` as
   `/route`, so it shows the streets the way that route request weighs them. Overtaking spots and air points count for
   the street they are snapped to.
+- **Greenest streets:** `/highlights/greenest-streets` ranks named streets by street trees, clean air and bike paths
+  (`green_score` 0-100). Only streets ATRAI bikes have ridden qualify, and only their ridden stretches count.
 
 Heights for `/route/grade`: Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0 (DGM1).
 Shade: LGL BW LoD2 (dl-de/by-2-0) and Stadt Heilbronn Baumkataster (dl-de/by-2-0).
@@ -263,13 +266,14 @@ ROUTE_ERRORS = {400: {"description": "Start or end is outside Heilbronn, or no r
                           "detail": "start point is 812 m from the nearest Heilbronn street"}}}}}
 
 
-ROUTING, PLACES, OVERLAYS, SHARING, REPORTS = "Routing", "Places", "Map overlays", "Sharing", "Reports"
+ROUTING, PLACES, OVERLAYS, HIGHLIGHTS, SHARING, REPORTS = "Routing", "Places", "Map overlays", "Highlights", "Sharing", "Reports"
 TAGS_METADATA = [
     {"name": ROUTING, "description": "Plan a bike route from A to B, compare it with the shortest one, "
                                        "or show its grade."},
     {"name": PLACES, "description": "Find a landmark, address or street in Heilbronn, to route to its coordinates "
                                      "(OpenStreetMap via Nominatim)."},
     {"name": OVERLAYS, "description": "Static GeoJSON layers of the measured data, to draw on a map."},
+    {"name": HIGHLIGHTS, "description": "Rankings for the app's Highlights tab, e.g. the greenest streets bikes have ridden."},
     {"name": SHARING, "description": "Shared e-bikes and e-scooters free to rent right now and their parking zones, "
                                        "live from MobiData BW (Heilbronn: Dott). Each vehicle links to the provider's app."},
     {"name": REPORTS, "description": "Riders report closed streets (routing uses them right away) and mapping mistakes "
@@ -461,6 +465,18 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
                 del scores[next(iter(scores))]  # the oldest
             scores[key] = street_scores(app.state.graph, *penalties)
         return GeoJSONResponse(scores[key])
+
+    @app.get("/highlights/greenest-streets", tags=[HIGHLIGHTS],
+             summary="Grünste Straßen: the greenest streets bikes have ridden, ranked, as GeoJSON",
+             response_class=GeoJSONResponse, response_model=GreenStreetCollection,
+             response_description="MultiLineStrings of the ridden stretches with `rank`, `green_score` 0-100 and its parts")
+    def greenest(limit: int = Query(10, ge=1, le=500, description="Return the greenest this many")):
+        """Named streets with at least 150 m ridden by ATRAI bikes, greenest first: street trees, clean air and bike
+        paths, over the ridden stretches only. Streets no bike has ridden don't rank, however leafy."""
+        if not hasattr(app.state, "greenest"):
+            app.state.greenest = greenest_streets(app.state.graph)
+        ranked = app.state.greenest
+        return GeoJSONResponse({**ranked, "features": ranked["features"][:limit]})
 
     @app.get("/sharing", tags=[SHARING], summary="Shared e-bikes and e-scooters free to rent right now, as GeoJSON points",
              response_class=GeoJSONResponse, response_model=VehicleCollection, responses=SHARING_ERRORS,

@@ -409,6 +409,39 @@ class BikeFriendlyCollection(BaseModel):
     model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"osm_id": 4087087}})
 
 
+class GreenStreetProperties(BaseModel):
+    rank: int = Field(description="1 = greenest")
+    name: str = Field(description="Street name; sidewalks and bike paths count for the road they run beside")
+    green_score: float = Field(description=(
+        "0-100, higher = greener: 50% street trees (half the street under crowns = full), 30% clean air "
+        "(pm_risk 0.58 = 0, 0.44 = full), 20% bike paths, bike lanes and bike routes"))
+    tree_cover: float = Field(description="Share of the ridden street under street-tree crowns, 0-1 (Baumkataster)")
+    pm_risk: float = Field(description="Air score 0-1 as in /air (0.5 = usual, higher = worse); its prior where no air sensor passed")
+    bike_friendly_share: float = Field(description="Share of the ridden street on bike paths, bike lanes or bike routes, 0-1")
+    ridden_m: int = Field(description="Metres of the street ATRAI bikes measured; only these count")
+    air_rides: int = Field(description="Most bike rides that measured the air on one of its stretches")
+
+
+class GreenStreetFeature(BaseModel):
+    type: Literal["Feature"]
+    geometry: MultiLineString = Field(description="The ridden stretches of the street")
+    properties: GreenStreetProperties
+
+
+class GreenStreetCollection(BaseModel):
+    """Grünste Straßen: Heilbronn's named streets ranked by how green they are to ride. A street qualifies only where
+    ATRAI bikes have ridden it (a roughness, speed, stop-and-go or air measurement), at least 150 m of it.
+    Sources: Stadt Heilbronn Baumkataster (dl-de/by-2-0), ATRAI bike sensors, OpenStreetMap contributors (ODbL)."""
+    type: Literal["FeatureCollection"]
+    features: list[GreenStreetFeature]
+    total: int = Field(description="How many streets qualify; `features` holds the first `limit` of them")
+
+    model_config = {"json_schema_extra": {"example": {"type": "FeatureCollection", "total": 412, "features": [
+        {"type": "Feature", "geometry": {"type": "MultiLineString", "coordinates": [LINE_EXAMPLE["coordinates"]]},
+         "properties": {"rank": 1, "name": "Allee", "green_score": 78.4, "tree_cover": 0.52, "pm_risk": 0.49,
+                        "bike_friendly_share": 0.9, "ridden_m": 1240, "air_rides": 37}}]}}}
+
+
 class ScoreFeature(BaseModel):
     type: Literal["Feature"]
     geometry: LineString
