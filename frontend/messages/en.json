@@ -374,6 +374,8 @@
       "appliedDark": "Departure after dark: lit streets were preferred.",
       "emptyState": "Set a start and destination to compare routes. Values only appear when they come from real data.",
       "mapLabel": "Route map",
+      "fullscreen": "Show map full screen",
+      "exitFullscreen": "Exit full screen",
       "hills": {
         "title": "Hills",
         "show": "Show hills on the route",

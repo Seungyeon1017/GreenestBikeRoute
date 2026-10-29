@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import BaseMap from '@/components/Greenest/Map'
 import PageIntro from '@/components/Greenest/ui/PageIntro'
+import useFullscreenMap from '@/hooks/useFullscreenMap'
 import { closureNear, useReports } from '@/hooks/useReports'
 import useSavedRouteFromUrl from '@/hooks/useSavedRouteFromUrl'
 import { useSharedVehicles, useSharingTrip } from '@/hooks/useSharing'
@@ -43,6 +44,7 @@ import type {
   ZoneCollection,
 } from '@/types/greenest'
 import DaySlider, { dayStops, stopAt } from './DaySlider'
+import FullscreenButton from './FullscreenButton'
 import GradeCard from './GradeCard'
 import {
   CLICKABLE_REPORT_LAYERS,
@@ -310,6 +312,8 @@ export default function PlanTripView() {
 
   // 2. REFS: values kept between redraws that don't trigger a redraw themselves.
   const mapRef = useRef<maplibregl.Map | null>(null)
+  // Phones: the map can cover the whole screen (button on the map).
+  const [fullMap, toggleFullMap] = useFullscreenMap(mapRef)
   const resultRef = useRef<RouteResult | null>(null)
   resultRef.current = shown
   const gradeRef = useRef<GradeCollection | null>(null)
@@ -1344,7 +1348,14 @@ export default function PlanTripView() {
             show={showHills}
           />
         </div>
-        <section className="relative h-[60vh] min-h-[420px] overflow-hidden rounded-3xl border border-leaf-sand shadow-soft lg:h-auto lg:min-h-0">
+        <section
+          className={
+            fullMap
+              ? // Above the header; dvh so the browser's bars don't cut it off.
+                'fixed inset-0 z-50 h-dvh overflow-hidden bg-leaf-cream'
+              : 'relative h-[60vh] min-h-[420px] overflow-hidden rounded-3xl border border-leaf-sand shadow-soft lg:h-auto lg:min-h-0'
+          }
+        >
           <BaseMap
             ariaLabel={t('greenest.planTrip.mapLabel')}
             onClick={handleMapClick}
@@ -1401,6 +1412,7 @@ export default function PlanTripView() {
             picking={pending > 0}
             picks={picks}
           />
+          <FullscreenButton full={fullMap} onToggle={toggleFullMap} />
         </section>
       </div>
     </div>
