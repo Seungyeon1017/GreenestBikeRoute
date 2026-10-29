@@ -258,6 +258,32 @@ export type HighlightPlace = {
   demo: boolean
 }
 
+/** One street of `/highlights/greenest-streets` (Grünste Straßen); see the backend's /docs. */
+export type GreenStreetProperties = {
+  /** 1 = greenest. */
+  rank: number
+  name: string
+  /** 0–100: 50 % street trees, 30 % clean air, 20 % bike paths. */
+  green_score: number
+  /** Share under street-tree crowns, 0–1. */
+  tree_cover: number
+  /** Air score 0–1 (0.5 = usual, higher = worse). */
+  pm_risk: number
+  /** Share on bike paths, bike lanes or bike routes, 0–1. */
+  bike_friendly_share: number
+  /** Metres ATRAI bikes have ridden; only these count. */
+  ridden_m: number
+  air_rides: number
+}
+
+export type GreenStreetCollection = FeatureCollection<
+  MultiLineString,
+  GreenStreetProperties
+> & {
+  /** How many streets qualify; `features` holds the greenest `limit`. */
+  total: number
+}
+
 /** One piece of the route from `/route/grade`, all with the same steepness class. */
 export type GradeProperties = {
   /** Rise / length in %, positive uphill in the travel direction. */

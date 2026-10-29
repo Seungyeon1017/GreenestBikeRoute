@@ -205,10 +205,12 @@ def attach_speed(G, way_kmh):
 def attach_shade(G, slots, way_shadow, way_tree_shade=None):
     """Set edge attribute `shade`: a list with the share in shade (0-1) per time slot of `slots` (stored as
     G.graph["shade_slots"]), from routing.shadow; where a way has no shadow value, its static tree shade from
-    routing.shade for every slot; None where neither is known.
+    routing.shade for every slot; None where neither is known. Also `trees`: the street-tree canopy alone (0-1, or None
+    where unknown), for the greenest streets (routing.highlights).
     """
     G.graph["shade_slots"] = list(slots)
     for _, _, d in G.edges(data=True):
+        d["trees"] = edge_roughness(d["osmid"], way_tree_shade or {})
         ids = d["osmid"] if isinstance(d["osmid"], list) else [d["osmid"]]
         per_way = [way_shadow[i] if i in way_shadow else [way_tree_shade[i]] * len(slots)
                    for i in ids if i in way_shadow or i in (way_tree_shade or {})]

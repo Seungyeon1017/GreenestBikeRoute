@@ -13,10 +13,10 @@ import {
 import Link from 'next/link'
 import { useTranslation } from 'react-i18next'
 import BaseMap from '@/components/Greenest/Map'
-import AvailabilityBadge from '@/components/Greenest/ui/AvailabilityBadge'
 import Card from '@/components/Greenest/ui/Card'
 import SenseBoxCta from '@/components/Greenest/ui/SenseBoxCta'
 import { EXPERIENCES, SAMPLE_PLACES } from './content'
+import GreenestStreets from './GreenestStreets'
 import PlaceCard from './PlaceCard'
 
 const EXPERIENCE_ICONS: Record<(typeof EXPERIENCES)[number], LucideIcon> = {
@@ -101,12 +101,7 @@ export default function HighlightsView() {
           text={t('greenest.highlights.roadsText')}
           title={t('greenest.highlights.roadsTitle')}
         />
-        <Card className="flex flex-col items-start gap-2 bg-leaf-cream md:flex-row md:items-center">
-          <AvailabilityBadge availability="unavailable" />
-          <p className="text-sm text-leaf-muted">
-            {t('greenest.highlights.roadsEmpty')}
-          </p>
-        </Card>
+        <GreenestStreets />
       </section>
 
       {/* C. Suggested Cycling Experiences */}

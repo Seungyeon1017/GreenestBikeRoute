@@ -13,6 +13,7 @@ import type {
   FootwayFeature,
   GeofencingCollection,
   GradeCollection,
+  GreenStreetCollection,
   LngLat,
   MappingCollection,
   MappingFeature,
@@ -178,6 +179,14 @@ export function fetchRoughness(
   signal?: AbortSignal,
 ): Promise<FeatureCollection<LineString, { roughness: number | null }>> {
   return getJson('/roughness', signal)
+}
+
+/** GET /highlights/greenest-streets: the greenest streets bikes have ridden, greenest first. */
+export function fetchGreenestStreets(
+  limit: number,
+  signal?: AbortSignal,
+): Promise<GreenStreetCollection> {
+  return getJson(`/highlights/greenest-streets?limit=${limit}`, signal)
 }
 
 /**
