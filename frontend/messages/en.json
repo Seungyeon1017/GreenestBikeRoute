@@ -812,13 +812,12 @@
       "unsave": "Remove from saved",
       "loginToHeart": "Log in to give hearts and save routes",
       "kicker": "Riders' route",
-      "close": "Hide route",
       "status": {
         "hidden": "Several riders flagged this route. It is hidden until we have checked it.",
         "removed": "This route was removed and only you can see it."
       },
       "rideThere": "Ride there",
-      "rideThereHint": "The route's start becomes your destination. Then follow the blue line.",
+      "rideThereHint": "Opens Plan trip with this route's start as the destination. Then follow the route on the spot.",
       "delete": "Delete route",
       "confirmDelete": "Delete this route for everyone?",
       "flag": "Flag",
@@ -829,10 +828,6 @@
       "upload": {
         "title": "Share your own route",
         "intro": "Upload a ride you recorded with another app (a GPX file) and share it with everyone.",
-        "cancel": "Cancel",
-        "published": "Published! Your route is now on the map and on Highlights.",
-        "loginToUpload": "Log in to share a route",
-        "start": "Upload a GPX file",
         "howTo": "How to get the GPX file",
         "apps": {
           "komoot": "Komoot: open your recorded tour → \"…\" → \"Download\" → GPX.",
@@ -863,8 +858,15 @@
           "too_fast": "The ride averages more than 40 km/h and doesn't look like a bike ride.",
           "outside": "The ride must pass through Heilbronn and stay in the area around it.",
           "too_big": "The file is larger than 5 MB."
-        }
-      }
+        },
+        "mapLabel": "Preview of your uploaded ride"
+      },
+      "loginToShare": "Log in to share a route",
+      "loadingRoute": "Loading route…",
+      "mapLabel": "Map of the route {{name}}"
+    },
+    "dialog": {
+      "close": "Close"
     }
   }
 }

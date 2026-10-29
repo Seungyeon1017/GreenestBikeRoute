@@ -14,7 +14,10 @@ import {
   ROUTE_TAGS,
   type RouteTag,
 } from '@/types/users'
+import Dialog from '@/components/Greenest/ui/Dialog'
 import RidersRouteCard from './RidersRouteCard'
+import RouteDetailDialog from './RouteDetailDialog'
+import ShareRouteForm from './ShareRouteForm'
 
 const PAGE = 8
 
@@ -28,10 +31,14 @@ const chip = (on: boolean) =>
       : 'border-leaf-sand bg-white text-leaf-ink hover:bg-leaf-mint',
   )
 
+/** After logging in, the login page comes back here with the upload popup open. */
+const SHARE_HREF = '/highlights?share=1'
+
 /**
  * Highlights' "Routen von Fahrer:innen": leisure routes riders recorded and
- * shared, most hearted first (or newest), filtered by tag, with a way to share
- * your own.
+ * shared, most hearted first (or newest), filtered by tag. A route opens in a
+ * popup with its map; "Eigene Route teilen" opens the GPX upload in a popup.
+ * Links open them too: /highlights?route=<id> and /highlights?share=1.
  */
 export default function RidersRoutesSection() {
   const { t } = useTranslation()
@@ -42,6 +49,27 @@ export default function RidersRoutesSection() {
   const [total, setTotal] = useState(0)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [openId, setOpenId] = useState<number | null>(null)
+  const [sharing, setSharing] = useState(false)
+  // Bumped after publishing, to load the list again with the new route.
+  const [reload, setReload] = useState(0)
+
+  // Opened from a link: a route (?route=<id>) or the upload (?share=1, after logging in).
+  useEffect(() => {
+    if (status === 'loading') {
+      return
+    }
+    const params = new URLSearchParams(window.location.search)
+    const id = Number(params.get('route'))
+    if (id) {
+      setOpenId(id)
+    } else if (params.get('share') && status === 'authenticated') {
+      setSharing(true)
+    }
+    if (params.has('route') || params.has('share')) {
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+  }, [status])
 
   // First page again when the sort, the tag or the login changes.
   useEffect(() => {
@@ -62,7 +90,7 @@ export default function RidersRoutesSection() {
     return () => {
       current = false
     }
-  }, [sort, tag, token, status])
+  }, [sort, tag, token, status, reload])
 
   async function loadMore() {
     setLoadingMore(true)
@@ -83,7 +111,29 @@ export default function RidersRoutesSection() {
   }
 
   const updated = (route: CommunityRouteSummary) =>
-    setRoutes(prev => prev?.map(r => (r.id === route.id ? route : r)) ?? null)
+    setRoutes(
+      prev =>
+        prev?.map(r =>
+          // The popup's route has its whole line; the list keeps summaries.
+          r.id === route.id
+            ? {
+                ...r,
+                hearts: route.hearts,
+                hearted: route.hearted,
+                saved: route.saved,
+              }
+            : r,
+        ) ?? null,
+    )
+
+  function deleted(id: number) {
+    setOpenId(null)
+    setRoutes(prev => prev?.filter(r => r.id !== id) ?? null)
+    setTotal(n => Math.max(n - 1, 0))
+  }
+
+  const shareClass =
+    'flex shrink-0 items-center gap-2 self-start rounded-full bg-leaf-forest px-4 py-2 text-sm font-semibold text-leaf-cream hover:bg-leaf-moss md:self-auto'
 
   return (
     <section className="flex flex-col gap-4">
@@ -96,17 +146,24 @@ export default function RidersRoutesSection() {
             {t('greenest.ridersRoutes.text')}
           </p>
         </div>
-        <Link
-          className="flex shrink-0 items-center gap-2 self-start rounded-full bg-leaf-forest px-4 py-2 text-sm font-semibold text-leaf-cream hover:bg-leaf-moss md:self-auto"
-          href={
-            status === 'authenticated'
-              ? '/plan-trip?contribute=1'
-              : `/login?next=${encodeURIComponent('/plan-trip?contribute=1')}`
-          }
-        >
-          <Upload aria-hidden className="h-4 w-4" />
-          {t('greenest.ridersRoutes.shareYours')}
-        </Link>
+        {status === 'authenticated' ? (
+          <button
+            className={shareClass}
+            onClick={() => setSharing(true)}
+            type="button"
+          >
+            <Upload aria-hidden className="h-4 w-4" />
+            {t('greenest.ridersRoutes.shareYours')}
+          </button>
+        ) : (
+          <Link
+            className={shareClass}
+            href={`/login?next=${encodeURIComponent(SHARE_HREF)}`}
+          >
+            <Upload aria-hidden className="h-4 w-4" />
+            {t('greenest.ridersRoutes.loginToShare')}
+          </Link>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -179,7 +236,12 @@ export default function RidersRoutesSection() {
       {routes && routes.length > 0 && (
         <div className="grid gap-4 xs:grid-cols-2 lg:grid-cols-4">
           {routes.map(route => (
-            <RidersRouteCard key={route.id} onChange={updated} route={route} />
+            <RidersRouteCard
+              key={route.id}
+              onChange={updated}
+              onOpen={() => setOpenId(route.id)}
+              route={route}
+            />
           ))}
         </div>
       )}
@@ -193,6 +255,27 @@ export default function RidersRoutesSection() {
           {t('greenest.ridersRoutes.more')}
         </button>
       )}
+
+      <RouteDetailDialog
+        onChange={updated}
+        onClose={() => setOpenId(null)}
+        onDeleted={deleted}
+        routeId={openId}
+        summary={routes?.find(r => r.id === openId)}
+      />
+      <Dialog
+        onClose={() => setSharing(false)}
+        open={sharing}
+        title={t('greenest.ridersRoutes.upload.title')}
+      >
+        <ShareRouteForm
+          onPublished={route => {
+            setSharing(false)
+            setReload(n => n + 1)
+            setOpenId(route.id)
+          }}
+        />
+      </Dialog>
     </section>
   )
 }

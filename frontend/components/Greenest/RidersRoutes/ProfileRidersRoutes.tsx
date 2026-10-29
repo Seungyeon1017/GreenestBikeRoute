@@ -82,7 +82,7 @@ export default function ProfileRidersRoutes({
           {t(`greenest.profile.ridersRoutes.${which}Empty`)}{' '}
           <Link
             className="font-medium text-leaf-forest underline"
-            href={which === 'mine' ? '/plan-trip?contribute=1' : '/highlights'}
+            href={which === 'mine' ? '/highlights?share=1' : '/highlights'}
           >
             {t(
               which === 'mine'
@@ -124,7 +124,7 @@ export default function ProfileRidersRoutes({
             <div className="flex items-center gap-2">
               <Link
                 className="rounded-full bg-leaf-forest px-3 py-1.5 text-xs font-semibold text-leaf-cream hover:bg-leaf-moss"
-                href={`/plan-trip?route=${route.id}`}
+                href={`/highlights?route=${route.id}`}
               >
                 {t('greenest.profile.open')}
               </Link>

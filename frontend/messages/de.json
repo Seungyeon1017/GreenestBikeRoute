@@ -812,13 +812,12 @@
       "unsave": "Nicht mehr merken",
       "loginToHeart": "Anmelden, um Herzen zu geben und Routen zu merken",
       "kicker": "Route von Fahrer:innen",
-      "close": "Route ausblenden",
       "status": {
         "hidden": "Mehrere Fahrer:innen haben diese Route gemeldet. Sie ist ausgeblendet, bis wir sie geprüft haben.",
         "removed": "Diese Route wurde entfernt und ist nur für dich sichtbar."
       },
       "rideThere": "Dorthin fahren",
-      "rideThereHint": "Der Startpunkt der Route wird dein Ziel. Folge dann der blauen Linie.",
+      "rideThereHint": "Öffnet „Route planen“ mit dem Startpunkt dieser Route als Ziel. Folge dann der Route vor Ort.",
       "delete": "Route löschen",
       "confirmDelete": "Diese Route für alle löschen?",
       "flag": "Melden",
@@ -829,10 +828,6 @@
       "upload": {
         "title": "Eigene Route teilen",
         "intro": "Lade eine Fahrt hoch, die du mit einer anderen App aufgezeichnet hast (GPX-Datei), und teile sie mit allen.",
-        "cancel": "Abbrechen",
-        "published": "Veröffentlicht! Deine Route ist jetzt auf der Karte und unter Highlights.",
-        "loginToUpload": "Anmelden, um eine Route zu teilen",
-        "start": "GPX-Datei hochladen",
         "howTo": "So bekommst du die GPX-Datei",
         "apps": {
           "komoot": "Komoot: deine aufgezeichnete Tour öffnen → „…“ → „Herunterladen“ → GPX.",
@@ -863,8 +858,15 @@
           "too_fast": "Die Fahrt ist im Schnitt schneller als 40 km/h und sieht nicht nach Fahrrad aus.",
           "outside": "Die Fahrt muss durch Heilbronn führen und in der Umgebung bleiben.",
           "too_big": "Die Datei ist größer als 5 MB."
-        }
-      }
+        },
+        "mapLabel": "Vorschau deiner hochgeladenen Fahrt"
+      },
+      "loginToShare": "Anmelden, um eine Route zu teilen",
+      "loadingRoute": "Route wird geladen…",
+      "mapLabel": "Karte der Route {{name}}"
+    },
+    "dialog": {
+      "close": "Schließen"
     }
   }
 }

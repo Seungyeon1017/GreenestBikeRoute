@@ -6,7 +6,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import BaseMap from '@/components/Greenest/Map'
 import PageIntro from '@/components/Greenest/ui/PageIntro'
-import useCommunityRouteFromUrl from '@/hooks/useCommunityRouteFromUrl'
 import { closureNear, useReports } from '@/hooks/useReports'
 import useSavedRouteFromUrl from '@/hooks/useSavedRouteFromUrl'
 import { useSharedVehicles, useSharingTrip } from '@/hooks/useSharing'
@@ -22,7 +21,6 @@ import {
   fetchRouteGrade,
 } from '@/services/greenestApi'
 import { fromSavedOptions } from '@/services/usersApi'
-import type { CommunityRoute } from '@/types/users'
 import type {
   ClosureCollection,
   ClosureStatus,
@@ -45,11 +43,8 @@ import type {
   VehicleCollection,
   ZoneCollection,
 } from '@/types/greenest'
-import ContributeRouteCard from './ContributeRouteCard'
 import DaySlider, { dayStops, stopAt } from './DaySlider'
 import GradeCard from './GradeCard'
-import LeisureRouteCard from './LeisureRouteCard'
-import { drawLeisure, lineBounds } from './leisureLayers'
 import {
   CLICKABLE_REPORT_LAYERS,
   drawReportPicks,
@@ -355,15 +350,6 @@ export default function PlanTripView() {
   const [previewFlag, setPreviewFlag] = useState<RouteFlag | null>(null)
   const [pinnedFlag, setPinnedFlag] = useState<RouteFlag | null>(null)
   const shownFlag = previewFlag ?? pinnedFlag
-
-  // A riders' leisure route on the map (?route=<id>, or just published), and a GPX upload not yet published.
-  const [leisure, setLeisure] = useState<CommunityRoute | null>(null)
-  const [leisureDraft, setLeisureDraft] = useState<[number, number][] | null>(
-    null,
-  )
-  const leisureLine = leisureDraft ?? leisure?.coordinates ?? null
-  const leisureRef = useRef({ line: leisureLine, draft: Boolean(leisureDraft) })
-  leisureRef.current = { line: leisureLine, draft: Boolean(leisureDraft) }
   const shownFlagRef = useRef<RouteFlag | null>(null)
   shownFlagRef.current = shownFlag
 
@@ -453,18 +439,6 @@ export default function PlanTripView() {
       .catch(() => undefined)
     return () => controller.abort()
   }, [sharingTrip.trip, fences])
-
-  // Draw (or clear) the leisure route or upload, and bring all of it into view.
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map) {
-      return
-    }
-    drawLeisure(map, leisureLine, Boolean(leisureDraft))
-    if (leisureLine && leisureLine.length >= 2) {
-      map.fitBounds(lineBounds(leisureLine), { padding: 60, maxZoom: 15 })
-    }
-  }, [leisureLine, leisureDraft])
 
   // Draw (or clear) the hills whenever they change.
   useEffect(() => {
@@ -1206,20 +1180,6 @@ export default function PlanTripView() {
     )
   })
 
-  // A leisure route from Highlights, the Profile tab or a shared link (/plan-trip?route=<id>).
-  function openLeisure(route: CommunityRoute) {
-    setLeisureDraft(null)
-    setLeisure(route)
-  }
-  const communityFromUrl = useCommunityRouteFromUrl(mapReady, openLeisure)
-
-  // "Dorthin fahren": the route's start becomes the destination; the rider's start stays.
-  function rideToLeisure(route: CommunityRoute) {
-    const point = route.coordinates[0]
-    setEnd(point)
-    setEndLabel(route.name)
-  }
-
   function handleReset() {
     setStart(null)
     setEnd(null)
@@ -1252,22 +1212,6 @@ export default function PlanTripView() {
       />
       <div className="grid flex-1 grid-cols-1 gap-4 lg:min-h-0 lg:grid-cols-[24rem_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
         <div className="flex flex-col gap-4 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:pb-1 lg:pr-2">
-          {leisure && (
-            <LeisureRouteCard
-              onClose={() => setLeisure(null)}
-              onDeleted={() => setLeisure(null)}
-              onRideThere={() => rideToLeisure(leisure)}
-              route={leisure}
-            />
-          )}
-          {communityFromUrl.error && (
-            <p
-              className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800"
-              role="alert"
-            >
-              {communityFromUrl.error}
-            </p>
-          )}
           <TripForm
             dayMode={dayMode}
             daySlider={
@@ -1325,11 +1269,6 @@ export default function PlanTripView() {
             result={result}
             start={start}
             startLabel={startLabel}
-          />
-          <ContributeRouteCard
-            onPreview={setLeisureDraft}
-            onPublished={openLeisure}
-            startOpen={communityFromUrl.contribute}
           />
           <ReportsCard
             error={reports.error}
@@ -1399,13 +1338,8 @@ export default function PlanTripView() {
                 }
                 window.history.replaceState(null, '', window.location.pathname)
               }
-              // Bottom to top: riders' leisure route, routes, hills, highlighted stretches, riders'
-              // reports, shared vehicles, the rented-vehicle trip.
-              drawLeisure(
-                map,
-                leisureRef.current.line,
-                leisureRef.current.draft,
-              )
+              // Bottom to top: routes, hills, highlighted stretches, riders' reports, shared vehicles,
+              // the rented-vehicle trip.
               drawRoutes(map, resultRef.current)
               drawGrade(map, gradeRef.current)
               drawSegments(map, resultRef.current)

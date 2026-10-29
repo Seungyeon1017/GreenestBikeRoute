@@ -1,7 +1,7 @@
 /**
- * Links that open Plan trip for someone else: a planned trip (start,
- * destination and the options that differ from the defaults) or a riders'
- * leisure route. Nothing is stored: the link carries it all.
+ * Links to share: a planned trip on Plan trip (start, destination and the
+ * options that differ from the defaults; nothing is stored, the link carries
+ * it all), or a riders' leisure route on Highlights.
  */
 import { DEFAULT_ROUTE_OPTIONS } from '@/services/greenestApi'
 import { fromSavedOptions, toSavedOptions } from '@/services/usersApi'
@@ -86,9 +86,9 @@ export function readTripLink(params: URLSearchParams): SharedTrip | null {
   }
 }
 
-/** /plan-trip?route=<id>: a riders' leisure route on the map. */
+/** /highlights?route=<id>: a riders' leisure route in its popup. */
 export function communityRouteLink(id: number): string {
-  return `${window.location.origin}/plan-trip?route=${id}`
+  return `${window.location.origin}/highlights?route=${id}`
 }
 
 export type ShareResult = 'shared' | 'copied' | 'cancelled' | 'manual'
