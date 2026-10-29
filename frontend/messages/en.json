@@ -721,6 +721,15 @@
         "savedHint": "Find it on your",
         "loginToOpen": "Log in to open your saved route.",
         "notFound": "This saved route no longer exists."
+      },
+      "stations": {
+        "title": "Stations",
+        "show": "Show S-Bahn stops and train stations on the map",
+        "sbahn": "S-Bahn",
+        "train": "Train station",
+        "hint": "Where you can take your bike on the Stadtbahn (S4, S41, S42) or a regional train. A train station is also served by regional trains (RE, RB, MEX). Names show when you zoom in.",
+        "credit": "Timetable data: NVBW / MobiData BW (ODbL)",
+        "unavailable": "Stations aren't available right now. Try again later."
       }
     },
     "highlights": {
