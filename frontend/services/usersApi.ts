@@ -12,7 +12,7 @@ import type {
   User,
 } from '@/types/users'
 
-/** Turns FastAPI's `detail` (a sentence, or a list for 422) into one readable line. */
+/** Turns FastAPI's `detail` (a sentence, a list for 422, or {code, message}) into one readable line. */
 function errorMessage(detail: unknown, status: number): string {
   if (typeof detail === 'string') {
     return detail
@@ -20,11 +20,14 @@ function errorMessage(detail: unknown, status: number): string {
   if (Array.isArray(detail)) {
     return detail.map(d => d?.msg ?? String(d)).join(' ')
   }
+  if (detail && typeof detail === 'object' && 'message' in detail) {
+    return String(detail.message)
+  }
   return `Request failed with status ${status}`
 }
 
 /** fetch() against the backend, with the login token if there is one. Throws GreenestApiError. */
-async function request<T>(
+export async function request<T>(
   path: string,
   init: RequestInit & { token?: string | null } = {},
 ): Promise<T> {
@@ -48,6 +51,7 @@ async function request<T>(
     throw new GreenestApiError(
       errorMessage(body?.detail, response.status),
       response.status,
+      typeof body?.detail?.code === 'string' ? body.detail.code : undefined,
     )
   }
   // 204 No Content (DELETE) has no body.

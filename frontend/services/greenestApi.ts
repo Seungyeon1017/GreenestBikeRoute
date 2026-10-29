@@ -47,11 +47,14 @@ export const DEFAULT_ROUTE_OPTIONS: RouteOptions = {
 
 export class GreenestApiError extends Error {
   status?: number
+  /** Why, when the backend says so in `detail.code` (e.g. "no_times" for a GPX upload). */
+  code?: string
 
-  constructor(message: string, status?: number) {
+  constructor(message: string, status?: number, code?: string) {
     super(message)
     this.name = 'GreenestApiError'
     this.status = status
+    this.code = code
   }
 }
 

@@ -1,5 +1,5 @@
 """Request and response shapes (Pydantic) for the users endpoints. Separate from the database tables in models.py."""
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
@@ -77,3 +77,61 @@ class SavedRouteOut(SavedRouteCreate):
 
     id: int
     created_at: datetime
+
+# --- Riders' leisure routes (community_routes.py) -------------------------------------------------------------------
+
+# The tags a rider can give a route; the app translates them.
+RouteTag = Literal["family", "view", "quiet", "river", "nature", "gravel"]
+
+
+class TrackPreview(BaseModel):
+    """Response of POST /community-routes/preview: the ride as it would be published."""
+    coordinates: list[list[float]] = Field(description="[lon, lat] points, without the first and last 200 m")
+    length_m: float = Field(description="Length of the published line")
+    moving_s: int = Field(description="How long the recorded ride took while moving")
+    recorded_on: date = Field(description="The day of the ride (Heilbronn time)")
+    creator: str | None = Field(description="The app that wrote the file, from GPX `creator`")
+    is_loop: bool = Field(description="The ride ends near where it started")
+
+
+class CommunityRouteSummary(BaseModel):
+    """A route in the list: everything but the full line."""
+    id: int
+    name: str
+    description: str
+    tags: list[str]
+    author: str | None = Field(description="The author's display name, or null")
+    length_m: float
+    moving_s: int
+    recorded_on: date
+    creator: str | None
+    is_loop: bool
+    start: list[float] = Field(description="[lon, lat] where the published line starts")
+    preview: list[list[float]] = Field(description="At most 40 [lon, lat] points, to draw the route's shape small")
+    hearts: int
+    hearted: bool = Field(description="The logged-in rider hearted it (false when logged out)")
+    saved: bool = Field(description="The logged-in rider saved it (false when logged out)")
+    mine: bool = Field(description="The logged-in rider published it")
+    status: Literal["published", "hidden", "removed"] = Field(
+        description="Only the author sees routes that aren't published: hidden after riders flagged it, removed by a "
+                    "maintainer")
+    created_at: datetime
+
+
+class CommunityRoute(CommunityRouteSummary):
+    """GET /community-routes/{id}: a route with its whole line."""
+    coordinates: list[list[float]] = Field(description="[lon, lat] points of the ride")
+
+
+class CommunityRouteList(BaseModel):
+    routes: list[CommunityRouteSummary]
+    total: int = Field(description="How many routes match, for paging with offset")
+
+
+class HeartState(BaseModel):
+    hearts: int
+    hearted: bool
+
+
+class FlagBody(BaseModel):
+    reason: str | None = Field(None, max_length=300, description="What is wrong with it, for the maintainer")

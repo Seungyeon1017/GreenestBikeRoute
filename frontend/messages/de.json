@@ -761,7 +761,110 @@
       "noRoutes": "Noch keine gespeicherten Routen. Plane eine Route und tippe auf „Route speichern“:",
       "savedOn": "gespeichert am {{date}}",
       "open": "Öffnen",
-      "delete": "Route löschen"
+      "delete": "Route löschen",
+      "ridersRoutes": {
+        "mineTitle": "Deine geteilten Routen",
+        "mineEmpty": "Du hast noch keine Route geteilt.",
+        "savedTitle": "Gemerkte Routen von Fahrer:innen",
+        "savedEmpty": "Noch keine gemerkt. Stöbere unter"
+      }
+    },
+    "share": {
+      "share": "Teilen",
+      "copied": "Link kopiert",
+      "copyManually": "Kopiere diesen Link:",
+      "tripTitle": "Radroute {{from}} → {{to}}"
+    },
+    "ridersRoutes": {
+      "title": "Routen von Fahrer:innen",
+      "text": "Lieblingsrunden, die Radfahrende in und um Heilbronn aufgezeichnet und geteilt haben. Die beliebtesten zuerst.",
+      "shareYours": "Eigene Route teilen",
+      "sortLabel": "Sortieren",
+      "sort": {
+        "hearts": "Beliebteste",
+        "newest": "Neueste"
+      },
+      "tagLabel": "Nach Merkmal filtern",
+      "allTags": "Alle",
+      "tags": {
+        "family": "Familie",
+        "view": "Aussicht",
+        "quiet": "Ruhig",
+        "river": "Am Neckar",
+        "nature": "Natur",
+        "gravel": "Schotter"
+      },
+      "loop": "Runde",
+      "loading": "Routen werden geladen…",
+      "empty": "Noch keine Routen geteilt. Lade deine Lieblingsfahrt hoch und sei die erste Person!",
+      "emptyTag": "Noch keine Route mit diesem Merkmal.",
+      "more": "Mehr anzeigen",
+      "by": "von {{name}}",
+      "byRider": "von einer Fahrerin oder einem Fahrer",
+      "recordedOn": "gefahren am {{date}}",
+      "recordedWith": "Aufgezeichnet mit {{app}}",
+      "hearts_one": "{{count}} Herz",
+      "hearts_other": "{{count}} Herzen",
+      "heart": "Gefällt mir",
+      "ownRoute": "Deine eigene Route",
+      "save": "Merken",
+      "saved": "Gemerkt",
+      "unsave": "Nicht mehr merken",
+      "loginToHeart": "Anmelden, um Herzen zu geben und Routen zu merken",
+      "kicker": "Route von Fahrer:innen",
+      "close": "Route ausblenden",
+      "status": {
+        "hidden": "Mehrere Fahrer:innen haben diese Route gemeldet. Sie ist ausgeblendet, bis wir sie geprüft haben.",
+        "removed": "Diese Route wurde entfernt und ist nur für dich sichtbar."
+      },
+      "rideThere": "Dorthin fahren",
+      "rideThereHint": "Der Startpunkt der Route wird dein Ziel. Folge dann der blauen Linie.",
+      "delete": "Route löschen",
+      "confirmDelete": "Diese Route für alle löschen?",
+      "flag": "Melden",
+      "flagReason": "Was stimmt nicht? (optional)",
+      "flagSend": "Route melden",
+      "flagThanks": "Danke! Nach mehreren Meldungen wird die Route ausgeblendet und geprüft.",
+      "notFound": "Diese Route gibt es nicht mehr.",
+      "upload": {
+        "title": "Eigene Route teilen",
+        "intro": "Lade eine Fahrt hoch, die du mit einer anderen App aufgezeichnet hast (GPX-Datei), und teile sie mit allen.",
+        "cancel": "Abbrechen",
+        "published": "Veröffentlicht! Deine Route ist jetzt auf der Karte und unter Highlights.",
+        "loginToUpload": "Anmelden, um eine Route zu teilen",
+        "start": "GPX-Datei hochladen",
+        "howTo": "So bekommst du die GPX-Datei",
+        "apps": {
+          "komoot": "Komoot: deine aufgezeichnete Tour öffnen → „…“ → „Herunterladen“ → GPX.",
+          "strava": "Strava (im Browser): Aktivität öffnen → „…“ → „GPX exportieren“.",
+          "garmin": "Garmin Connect: Aktivität öffnen → Zahnrad → „In GPX exportieren“.",
+          "osmand": "OsmAnd: „Meine Orte“ → „Tracks“ → Track → „Teilen“ → GPX."
+        },
+        "rules": "Nur aufgezeichnete Fahrten mit Zeitstempeln, keine geplanten Routen. Die Fahrt muss durch Heilbronn führen, 1 bis 200 km lang sein und nach Fahrrad aussehen. Die ersten und letzten 200 m werden nicht veröffentlicht, damit niemand sieht, wo du wohnst.",
+        "file": "GPX-Datei",
+        "chooseFile": "GPX-Datei auswählen",
+        "noFile": "Keine Datei ausgewählt",
+        "checking": "Datei wird geprüft…",
+        "trimmed": "Die gestrichelte Linie auf der Karte ist das, was alle sehen werden: ohne die ersten und letzten 200 m.",
+        "name": "Name",
+        "namePlaceholder": "z. B. Neckarrunde nach Lauffen",
+        "description": "Beschreibung (optional)",
+        "descriptionPlaceholder": "Was macht die Fahrt schön? Wo lohnt sich eine Pause?",
+        "tags": "Merkmale (höchstens {{count}})",
+        "publicNote": "Mit dem Veröffentlichen sehen alle die Route mit deinem Anzeigenamen. Du kannst sie jederzeit in deinem Profil löschen.",
+        "publish": "Veröffentlichen",
+        "publishing": "Wird veröffentlicht…",
+        "errors": {
+          "invalid": "Das ist keine GPX-Datei. Exportiere die Fahrt in deiner App als GPX.",
+          "no_track": "In der Datei ist keine Strecke.",
+          "no_times": "Die Datei hat keine Zeitstempel. Lade eine aufgezeichnete Fahrt hoch, keine geplante Route.",
+          "too_short": "Die Fahrt ist kürzer als 1 km.",
+          "too_long": "Die Fahrt ist länger als 200 km.",
+          "too_fast": "Die Fahrt ist im Schnitt schneller als 40 km/h und sieht nicht nach Fahrrad aus.",
+          "outside": "Die Fahrt muss durch Heilbronn führen und in der Umgebung bleiben.",
+          "too_big": "Die Datei ist größer als 5 MB."
+        }
+      }
     }
   }
 }

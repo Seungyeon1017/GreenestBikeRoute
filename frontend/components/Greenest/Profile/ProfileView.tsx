@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/components/Greenest/Auth/AuthProvider'
+import ProfileRidersRoutes from '@/components/Greenest/RidersRoutes/ProfileRidersRoutes'
 import Card, { CardTitle } from '@/components/Greenest/ui/Card'
 import PageIntro from '@/components/Greenest/ui/PageIntro'
 import { deleteSavedRoute, fetchSavedRoutes } from '@/services/usersApi'
@@ -181,6 +182,13 @@ export default function ProfileView() {
           ))}
         </ul>
       </Card>
+
+      {token && (
+        <>
+          <ProfileRidersRoutes token={token} which="mine" />
+          <ProfileRidersRoutes token={token} which="saved" />
+        </>
+      )}
     </div>
   )
 }

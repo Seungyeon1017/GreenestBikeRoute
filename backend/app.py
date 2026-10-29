@@ -309,7 +309,7 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
 
     app = FastAPI(title="Greenest Bike Route", description=API_DESCRIPTION, lifespan=lifespan,
                   openapi_tags=TAGS_METADATA)
-    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST", "DELETE"],
+    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST", "PUT", "DELETE"],
                        allow_headers=["Content-Type", "Authorization"])
     sharing = sharing if sharing is not None else Sharing()
     reports = reports if reports is not None else Reports()
