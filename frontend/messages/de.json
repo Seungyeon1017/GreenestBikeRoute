@@ -580,13 +580,13 @@
           "other": "Anderer Fehler in der Karte"
         },
         "clickHint": {
-          "closure": "Klicke auf der Karte auf die gesperrte Straße.",
-          "rideable": "Klicke auf der Karte auf den Gehweg.",
+          "closure": "Klicke auf der Karte auf die gesperrte Straße. Du kannst mehrere Abschnitte einer Sperrung wählen.",
+          "rideable": "Klicke auf der Karte auf den Gehweg. Du kannst mehrere Stücke davon wählen.",
           "other": "Klicke auf der Karte auf die Stelle, an der die Karte falsch ist."
         },
         "form": {
           "title": {
-            "closure": "Gesperrte Straße hier melden",
+            "closure": "Gesperrte Straße melden",
             "rideable": "Gehweg melden, auf dem Räder fahren",
             "other": "Kartenfehler hier melden"
           },
@@ -634,8 +634,11 @@
           "stillClosed": "Danke! Routen meiden sie weiterhin.",
           "openAgain": "Danke! Sagt noch eine Person, dass sie offen ist, wird die Sperre aufgehoben.",
           "lifted": "Danke! Die Straße ist wieder für die Routenplanung offen.",
-          "rideable": "Danke! Jemand aus dem Team prüft es; danach können Routen den Weg nutzen.",
-          "other": "Danke! Jemand aus dem Team prüft es und korrigiert die Karte; bis dahin bleiben die Routen, wie sie sind."
+          "rideable_one": "Danke! Jemand aus dem Team prüft es; danach können Routen den Weg nutzen.",
+          "rideable_other": "Danke! Jemand aus dem Team prüft sie; danach können Routen die Wege nutzen.",
+          "other": "Danke! Jemand aus dem Team prüft es und korrigiert die Karte; bis dahin bleiben die Routen, wie sie sind.",
+          "closures_one": "Danke! Routen meiden diese Straße jetzt; drei Meldungen sperren sie.",
+          "closures_other": "Danke! Routen meiden diese {{count}} Abschnitte jetzt; drei Meldungen sperren einen Abschnitt."
         },
         "mappingTitle": {
           "rideable": "Gehweg, auf dem Räder fahren (wird geprüft)",
@@ -651,7 +654,28 @@
         },
         "warning_one": "Deine Route führt über {{count}} Straße, die als gesperrt gemeldet ist (gestrichelt): Prüfe sie vor der Fahrt.",
         "warning_other": "Deine Route führt über {{count}} Straßen, die als gesperrt gemeldet sind (gestrichelt): Prüfe sie vor der Fahrt.",
-        "reportHint": "Gesperrte Straßen und Fehler in der Karte meldest du mit „Problem melden“ oben rechts auf der Karte."
+        "reportHint": "Gesperrte Straßen und Fehler in der Karte meldest du mit „Problem melden“ oben rechts auf der Karte.",
+        "pick": {
+          "looking": "Straße wird gesucht…",
+          "noStreet": "Dort ist keine Straße in der Nähe. Klicke näher an die gesperrte Straße.",
+          "noFootway": "Dort ist kein Gehweg in der Nähe, den Routen auslassen. Dürfen Räder dort schon fahren, nutzen Routen ihn; alles andere meldest du als anderen Fehler in der Karte.",
+          "remove": "Entfernen",
+          "unnamed": {
+            "closure": "Straße ohne Namen",
+            "rideable": "Gehweg ohne Namen"
+          },
+          "count": {
+            "closure_one": "{{count}} Abschnitt gewählt",
+            "closure_other": "{{count}} Abschnitte gewählt",
+            "rideable_one": "{{count}} Gehweg gewählt",
+            "rideable_other": "{{count}} Gehwege gewählt"
+          },
+          "addHint": {
+            "closure": "Klicke weitere Abschnitte derselben Sperrung an, um sie hinzuzufügen; ein zweiter Klick entfernt einen wieder.",
+            "rideable": "Klicke weitere Stücke des Gehwegs an, um sie hinzuzufügen; ein zweiter Klick entfernt eines wieder."
+          }
+        },
+        "reportStretch": "Hier gesperrt melden"
       },
       "save": {
         "idle": "Route speichern",

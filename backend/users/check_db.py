@@ -1,7 +1,7 @@
 """Shows which users settings were read and whether the database answers. From the repo root:
 
     uv run python -m backend.users.check_db
-    docker compose -f compose.yml -f compose.users.yml exec backend python -m backend.users.check_db
+    docker compose exec backend python -m backend.users.check_db
 """
 import sys
 

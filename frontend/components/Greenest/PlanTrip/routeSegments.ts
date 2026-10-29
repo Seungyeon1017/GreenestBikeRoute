@@ -286,6 +286,8 @@ export function segmentPopup(
   s: RouteSegment,
   settings: RouteProperties,
   labels: SegmentLabels,
+  /** A button under the values, e.g. to report the stretch closed. */
+  action?: { label: string; onClick: () => void },
 ): HTMLElement {
   const box = el(
     'div',
@@ -327,6 +329,16 @@ export function segmentPopup(
     }
     line.append(el('span', 'text-leaf-muted', labels.row(row.key)), value)
     box.appendChild(line)
+  }
+  if (action) {
+    const button = el(
+      'button',
+      'mt-1.5 self-start rounded-full border border-leaf-sand bg-leaf-cream px-3 py-1 font-semibold text-leaf-forest hover:bg-leaf-sand/60',
+      action.label,
+    )
+    button.type = 'button'
+    button.addEventListener('click', action.onClick)
+    box.appendChild(button)
   }
   return box
 }

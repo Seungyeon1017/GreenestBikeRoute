@@ -4,7 +4,7 @@ import { Flag, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { LngLat, ReportKind } from '@/types/greenest'
+import type { LngLat, ReportKind, ReportPick } from '@/types/greenest'
 
 /** The backend keeps a closure report through its `until` day, at most 30 days ahead. */
 const MAX_UNTIL_DAYS = 30
@@ -25,28 +25,36 @@ type ReportProblemProps = {
   /** What is being reported; null while the map plans the route. */
   kind: ReportKind | null
   onKindChange: (_kind: ReportKind | null) => void
-  /** Where the rider clicked the map to report, until it is sent or cancelled. */
+  /** Another map mistake: where the rider clicked, until it is sent or cancelled. */
   draft: LngLat | null
-  /** Sends the draft; resolves to the thank-you line, rejects with the backend's message. */
+  /** A closed street or a footway: the segments or ways picked on the map. */
+  picks: ReportPick[]
+  onRemovePick: (_key: string) => void
+  /** Looking up the street or footway under a click. */
+  picking: boolean
+  pickError: string | null
+  /** Sends the report; resolves to the thank-you line, rejects with the backend's message. */
   onSubmit: (_note: string, _until: string) => Promise<string>
 }
 
-const BUTTON =
-  'rounded-full px-4 py-1.5 text-xs font-semibold disabled:opacity-50'
-
 /**
  * "Report a problem" at the top right of the map. A map click always plans the
- * route; only after picking what to report here (a closed street, a footway bikes
- * ride on, another map mistake) does the next click mark the spot, and the form
- * for it opens in this panel.
+ * route; only after picking what to report here does a click pick a street
+ * segment (a closed street), a footway (one bikes ride on) or a spot (another map
+ * mistake), and the form for it opens in this panel. Streets and footways can be
+ * picked several at a time: one building site often spans several segments.
  */
 export default function ReportProblem({
   kind,
   onKindChange,
   draft,
+  picks,
+  onRemovePick,
+  picking,
+  pickError,
   onSubmit,
 }: ReportProblemProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const r = (key: string, values?: Record<string, unknown>) =>
     t(`greenest.planTrip.reports.${key}`, values)
 
@@ -58,6 +66,8 @@ export default function ReportProblem({
   const [formError, setFormError] = useState<string | null>(null)
   const [thanks, setThanks] = useState<string | null>(null)
   const open = menu || kind !== null || thanks !== null
+  // Ready for the form: a spot for another mistake, at least one street or footway otherwise.
+  const ready = kind === 'other' ? draft !== null : picks.length > 0
 
   function close() {
     setMenu(false)
@@ -65,13 +75,13 @@ export default function ReportProblem({
     onKindChange(null)
   }
 
-  // A different kind or spot starts a fresh form.
+  // A different kind starts a fresh form.
   useEffect(() => {
     setNote('')
     setUntilDay('')
     setFormError(null)
   }, [kind])
-  useEffect(() => setFormError(null), [draft])
+  useEffect(() => setFormError(null), [draft, picks])
 
   // The thank-you closes the panel after a while.
   useEffect(() => {
@@ -152,22 +162,74 @@ export default function ReportProblem({
                 </button>
               ))}
             </>
-          ) : !draft ? (
+          ) : !ready ? (
             <>
               <strong className="text-sm text-leaf-forest">
                 {r(`mode.${kind}`)}
               </strong>
               <p>{r(`clickHint.${kind}`)}</p>
+              {picking && (
+                <p className="text-leaf-muted">{r('pick.looking')}</p>
+              )}
+              {pickError && (
+                <p className="text-red-700" role="alert">
+                  {pickError}
+                </p>
+              )}
             </>
           ) : (
             <form className="flex flex-col gap-2" onSubmit={submit}>
               <strong className="text-sm text-leaf-forest">
                 {r(`form.title.${kind}`)}
               </strong>
+              {kind !== 'other' && (
+                <>
+                  <span className="text-leaf-muted">
+                    {r(`pick.count.${kind}`, { count: picks.length })}
+                  </span>
+                  <ul className="flex flex-col gap-1">
+                    {picks.map(p => (
+                      <li
+                        className="flex items-center gap-2 rounded-lg bg-leaf-cream px-2 py-1"
+                        key={p.key}
+                      >
+                        <span className="min-w-0 flex-1 truncate">
+                          {p.name ?? r(`pick.unnamed.${kind}`)}
+                        </span>
+                        {p.status && (
+                          <span className="shrink-0 text-[10px] text-amber-800">
+                            {r(`status.${p.status}`)}
+                          </span>
+                        )}
+                        <span className="shrink-0 tabular-nums text-leaf-muted">
+                          {Math.round(p.length_m).toLocaleString(i18n.language)}{' '}
+                          m
+                        </span>
+                        <button
+                          aria-label={r('pick.remove')}
+                          className="shrink-0 rounded-full p-0.5 text-leaf-muted hover:bg-white hover:text-leaf-forest"
+                          onClick={() => onRemovePick(p.key)}
+                          type="button"
+                        >
+                          <X aria-hidden className="h-3 w-3" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  {picking && (
+                    <p className="text-leaf-muted">{r('pick.looking')}</p>
+                  )}
+                  {pickError && (
+                    <p className="text-red-700" role="alert">
+                      {pickError}
+                    </p>
+                  )}
+                </>
+              )}
               <label className="flex flex-col gap-1">
                 {r(`form.note.${kind}`)}
                 <input
-                  autoFocus
+                  autoFocus={kind === 'other'}
                   className="rounded-lg border border-leaf-sand bg-white px-2 py-1 text-sm"
                   maxLength={500}
                   onChange={e => setNote(e.target.value)}
@@ -190,15 +252,19 @@ export default function ReportProblem({
                   <span className="text-leaf-muted">{r('form.untilHint')}</span>
                 </label>
               )}
-              <p className="text-leaf-muted">{r('form.moveHint')}</p>
+              <p className="text-leaf-muted">
+                {kind === 'other'
+                  ? r('form.moveHint')
+                  : r(`pick.addHint.${kind}`)}
+              </p>
               {formError && (
                 <p className="text-red-700" role="alert">
                   {formError}
                 </p>
               )}
               <button
-                className={`${BUTTON} self-start bg-leaf-forest text-white`}
-                disabled={sending}
+                className="self-start rounded-full bg-leaf-forest px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                disabled={sending || picking}
                 type="submit"
               >
                 {sending ? r('form.sending') : r('form.send')}

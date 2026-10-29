@@ -127,6 +127,12 @@ def _metres_apart(G, node, point_lonlat, plane):
     return Point(a).distance(Point(plane.to_m_point(*point_lonlat)))
 
 
+def segment_id(u, v):
+    """A street segment (graph edge between two junctions, either direction) as riders' closure reports name it:
+    "u-v" with the smaller OSM node id first."""
+    return f"{min(u, v)}-{max(u, v)}"
+
+
 def _split_edge(G, u, v, data, node, point_lonlat, plane):
     """Replace edge u->v by u->node and node->v, cut where it passes `point_lonlat`.
 
@@ -145,9 +151,12 @@ def _split_edge(G, u, v, data, node, point_lonlat, plane):
         if hu is not None and hv is not None:
             G.nodes[node]["elevation"] = (hu + (top - hu) * share / frac if share <= frac
                                           else top + (hv - top) * (share - frac) / (1 - frac))
-    G.add_edge(u, node, **{**data, "length": data["length"] * share, "geometry": first, "lift_end": False, "crest": crests[0]})
+    # Both pieces keep the segment of the street they were cut from, for riders' closure reports.
+    segment = data.get("segment", segment_id(u, v))
+    G.add_edge(u, node, **{**data, "length": data["length"] * share, "geometry": first, "lift_end": False, "crest": crests[0],
+                           "segment": segment})
     G.add_edge(node, v, **{**data, "length": data["length"] * (1 - share), "geometry": second, "lift_start": False,
-                           "crest": crests[1]})
+                           "crest": crests[1], "segment": segment})
 
 
 @contextmanager
@@ -411,6 +420,13 @@ def _named_roads(G):
 _STRETCH_MEANS = ("roughness", "pm_risk", "stop_go", "speed_kmh", "shade", "lit")
 
 
+def street_name(G, u, v, d):
+    """The street name of edge (u, v); a way without one (a sidewalk, a bike path) takes the name of the road it runs
+    beside or, for a crossing, crosses. None if there is neither."""
+    name = _street_name(d)
+    return name or _named_roads(G).along(_edge_line(G, u, v, d), crossing=way_kind(d) == "crossing")
+
+
 def _edge_facts(G, u, v, d, slot, dark, scooter):
     """What a stretch shows for one edge: street name, kind of way, the measured values (None where unknown) and
     `flags`, the bad or good things it counts towards (the route's bumpy_m, danger_points, ... with the same
@@ -445,23 +461,27 @@ def _edge_facts(G, u, v, d, slot, dark, scooter):
 
 def _stretches(pieces):
     """The route as stretches for the map: runs of consecutive edges on the same street with the same flags, from
-    `pieces` [(first coordinate index, last coordinate index, length, _edge_facts)]. Values are length-weighted over
-    the edges with data. Unnamed ways are told apart by their kind; a sidewalk joins the road it runs beside, and then
-    the stretch has no single `way`."""
+    `pieces` [(first coordinate index, last coordinate index, length, _edge_facts, segment_id)]. Values are
+    length-weighted over the edges with data. Unnamed ways are told apart by their kind; a sidewalk joins the road it
+    runs beside, and then the stretch has no single `way`. `segments` are the street segments it rides, for reporting
+    the stretch closed."""
     out, start_m = [], 0.0
-    for first, last, length, facts in pieces:
+    for first, last, length, facts, segment in pieces:
         prev = out[-1] if out else None
         key = (facts["name"] or facts["way"], facts["flags"], facts["pushed"])
         if prev is None or (prev["name"] or prev["way"], prev["flags"], prev["pushed"]) != key:
             prev = {"from_index": first, "start_m": start_m, "length_m": 0.0, "name": facts["name"], "way": facts["way"],
                     "along": facts["along"], "danger_points": 0, "bike_friendly": facts["bike_friendly"],
-                    "pushed": facts["pushed"], "flags": facts["flags"], "_sums": {k: [0.0, 0.0] for k in _STRETCH_MEANS}}
+                    "pushed": facts["pushed"], "flags": facts["flags"], "segments": [],
+                    "_sums": {k: [0.0, 0.0] for k in _STRETCH_MEANS}}
             out.append(prev)
         elif prev["way"] != facts["way"]:
             prev["way"] = None
         prev["along"] = prev["along"] and facts["along"]
         prev["to_index"] = last
         prev["length_m"] += length
+        if segment not in prev["segments"]:
+            prev["segments"].append(segment)
         prev["danger_points"] += facts["danger_points"]
         for k in _STRETCH_MEANS:
             if facts[k] is not None:
@@ -474,7 +494,7 @@ def _stretches(pieces):
              "flags": s["flags"], "roughness": m["roughness"],
              "danger_points": s["danger_points"], "pm_risk": m["pm_risk"], "stop_go": m["stop_go"],
              "speed_kmh": m["speed_kmh"], "shade": m["shade"], "lit": m["lit"], "bike_friendly": s["bike_friendly"],
-             "pushed": s["pushed"]} for s, m in zip(out, means)]
+             "pushed": s["pushed"], "segments": s["segments"]} for s, m in zip(out, means)]
 
 
 def _route_feature(G, a, b, penalties, weight_kg=DEFAULT_WEIGHT_KG, e_bike=False, scooter=False):
@@ -504,7 +524,8 @@ def _route_feature(G, a, b, penalties, weight_kg=DEFAULT_WEIGHT_KG, e_bike=False
         first = max(len(coords) - 1, 0)
         coords.extend(pts if not coords else pts[1:])
         edge_len = float(d["length"])  # numpy float when loaded from GraphML
-        pieces.append((first, len(coords) - 1, edge_len, _edge_facts(G, u, v, d, slot, dark, scooter)))
+        pieces.append((first, len(coords) - 1, edge_len, _edge_facts(G, u, v, d, slot, dark, scooter),
+                       d.get("segment") or segment_id(u, v)))
         length += edge_len
         if d.get("roughness_source") == "estimated":
             estimated_len += edge_len
