@@ -21,6 +21,8 @@ _DUMMY_HASH = password_hash.hash("not-a-real-password")
 
 # Tells /docs where to log in (the "Authorize" button) and reads the Bearer token from requests.
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+# The same, for endpoints where logging in is optional: no token is None instead of a 401.
+optional_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 
 def hash_password(password: str) -> str:
@@ -39,27 +41,45 @@ def create_access_token(user_id: int) -> str:
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
-def get_current_user(
-    token: Annotated[str, Depends(oauth2_scheme)],
-    db: Annotated[Session, Depends(get_db)],
-) -> User:
-    """FastAPI dependency for endpoints that need a logged-in user. Answers 401 otherwise."""
-    unauthorized = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Not logged in, or the login has expired",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+def _user_from_token(token: str | None, db: Session) -> User | None:
+    """The active user the token belongs to, or None if it is missing, invalid or expired."""
+    if not token:
+        return None
     settings = get_settings()
     try:
         payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
         user_id = int(payload["sub"])
     except (jwt.InvalidTokenError, KeyError, ValueError):
-        raise unauthorized from None
+        return None
     user = db.get(User, user_id)
-    if user is None or not user.is_active:
-        raise unauthorized
+    return user if user is not None and user.is_active else None
+
+
+def get_current_user(
+    token: Annotated[str, Depends(oauth2_scheme)],
+    db: Annotated[Session, Depends(get_db)],
+) -> User:
+    """FastAPI dependency for endpoints that need a logged-in user. Answers 401 otherwise."""
+    user = _user_from_token(token, db)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not logged in, or the login has expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return user
+
+
+def get_optional_user(
+    token: Annotated[str | None, Depends(optional_oauth2_scheme)],
+    db: Annotated[Session, Depends(get_db)],
+) -> User | None:
+    """FastAPI dependency for endpoints anyone may call that answer a logged-in user with more (e.g. "you hearted
+    this"). A missing or expired login is simply nobody, not an error."""
+    return _user_from_token(token, db)
 
 
 # Shorthand for endpoint parameters: `user: CurrentUser`.
 CurrentUser = Annotated[User, Depends(get_current_user)]
+# `user: OptionalUser`: the logged-in user, or None.
+OptionalUser = Annotated[User | None, Depends(get_optional_user)]

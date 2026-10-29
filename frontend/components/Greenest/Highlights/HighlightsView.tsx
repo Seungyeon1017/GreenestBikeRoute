@@ -13,6 +13,7 @@ import {
 import Link from 'next/link'
 import { useTranslation } from 'react-i18next'
 import BaseMap from '@/components/Greenest/Map'
+import RidersRoutesSection from '@/components/Greenest/RidersRoutes/RidersRoutesSection'
 import Card from '@/components/Greenest/ui/Card'
 import SenseBoxCta from '@/components/Greenest/ui/SenseBoxCta'
 import { EXPERIENCES, SAMPLE_PLACES } from './content'
@@ -94,6 +95,9 @@ export default function HighlightsView() {
           ))}
         </div>
       </section>
+
+      {/* Riders' leisure routes */}
+      <RidersRoutesSection />
 
       {/* B. Greenest Roads */}
       <section className="flex flex-col gap-4">

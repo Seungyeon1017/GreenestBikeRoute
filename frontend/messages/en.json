@@ -786,13 +786,118 @@
       "noRoutes": "No saved routes yet. Plan a route and press \"Save route\":",
       "savedOn": "saved {{date}}",
       "open": "Open",
-      "delete": "Delete route"
+      "delete": "Delete route",
+      "ridersRoutes": {
+        "mineTitle": "Routes you shared",
+        "mineEmpty": "You haven't shared a route yet.",
+        "savedTitle": "Saved riders' routes",
+        "savedEmpty": "None saved yet. Browse"
+      }
     },
     "senseBox": {
       "title": "Ride. Measure. Improve.",
       "text": "The data behind these routes comes from people riding with a senseBox:bike, which measures fine dust, road surface and how closely cars overtake. Many streets in Heilbronn haven't been measured yet: ride with a sensor and help fill the gaps.",
       "button": "Get a senseBox:bike",
       "newTab": "(opens in a new tab)"
+    },
+    "share": {
+      "share": "Share",
+      "copied": "Link copied",
+      "copyManually": "Copy this link:",
+      "tripTitle": "Bike route {{from}} → {{to}}"
+    },
+    "ridersRoutes": {
+      "title": "Riders' routes",
+      "text": "Favourite rides that cyclists in and around Heilbronn recorded and shared. Most loved first.",
+      "shareYours": "Share your route",
+      "sortLabel": "Sort",
+      "sort": {
+        "hearts": "Most loved",
+        "newest": "Newest"
+      },
+      "tagLabel": "Filter by feature",
+      "allTags": "All",
+      "tags": {
+        "family": "Family",
+        "view": "Views",
+        "quiet": "Quiet",
+        "river": "Along the Neckar",
+        "nature": "Nature",
+        "gravel": "Gravel"
+      },
+      "loop": "Loop",
+      "loading": "Loading routes…",
+      "empty": "No routes shared yet. Upload your favourite ride and be the first!",
+      "emptyTag": "No route with this feature yet.",
+      "more": "Show more",
+      "by": "by {{name}}",
+      "byRider": "by a rider",
+      "recordedOn": "ridden on {{date}}",
+      "recordedWith": "Recorded with {{app}}",
+      "hearts_one": "{{count}} heart",
+      "hearts_other": "{{count}} hearts",
+      "heart": "Love it",
+      "ownRoute": "Your own route",
+      "save": "Save",
+      "saved": "Saved",
+      "unsave": "Remove from saved",
+      "loginToHeart": "Log in to give hearts and save routes",
+      "kicker": "Riders' route",
+      "status": {
+        "hidden": "Several riders flagged this route. It is hidden until we have checked it.",
+        "removed": "This route was removed and only you can see it."
+      },
+      "rideThere": "Ride there",
+      "rideThereHint": "Opens Plan trip with this route's start as the destination. Then follow the route on the spot.",
+      "delete": "Delete route",
+      "confirmDelete": "Delete this route for everyone?",
+      "flag": "Flag",
+      "flagReason": "What's wrong? (optional)",
+      "flagSend": "Flag route",
+      "flagThanks": "Thanks! After several flags the route is hidden and checked.",
+      "notFound": "This route no longer exists.",
+      "upload": {
+        "title": "Share your own route",
+        "intro": "Upload a ride you recorded with another app (a GPX file) and share it with everyone.",
+        "howTo": "How to get the GPX file",
+        "apps": {
+          "komoot": "Komoot: open your recorded tour → \"…\" → \"Download\" → GPX.",
+          "strava": "Strava (in the browser): open the activity → \"…\" → \"Export GPX\".",
+          "garmin": "Garmin Connect: open the activity → gear icon → \"Export to GPX\".",
+          "osmand": "OsmAnd: \"My places\" → \"Tracks\" → the track → \"Share\" → GPX."
+        },
+        "rules": "Recorded rides with timestamps only, no planned routes. The ride must pass through Heilbronn, be 1 to 200 km long and look like a bike ride. The first and last 200 m are not published, so nobody sees where you live.",
+        "file": "GPX file",
+        "chooseFile": "Choose GPX file",
+        "noFile": "No file chosen",
+        "checking": "Checking the file…",
+        "trimmed": "The dashed line on the map is what everyone will see: without the first and last 200 m.",
+        "name": "Name",
+        "namePlaceholder": "e.g. Neckar loop to Lauffen",
+        "description": "Description (optional)",
+        "descriptionPlaceholder": "What makes the ride nice? Where is a good place for a break?",
+        "tags": "Features (at most {{count}})",
+        "publicNote": "Once published, everyone sees the route with your display name. You can delete it on your profile at any time.",
+        "publish": "Publish",
+        "publishing": "Publishing…",
+        "errors": {
+          "invalid": "This isn't a GPX file. Export the ride from your app as GPX.",
+          "no_track": "The file has no track.",
+          "no_times": "The file has no timestamps. Upload a recorded ride, not a planned route.",
+          "too_short": "The ride is shorter than 1 km.",
+          "too_long": "The ride is longer than 200 km.",
+          "too_fast": "The ride averages more than 40 km/h and doesn't look like a bike ride.",
+          "outside": "The ride must pass through Heilbronn and stay in the area around it.",
+          "too_big": "The file is larger than 5 MB."
+        },
+        "mapLabel": "Preview of your uploaded ride"
+      },
+      "loginToShare": "Log in to share a route",
+      "loadingRoute": "Loading route…",
+      "mapLabel": "Map of the route {{name}}"
+    },
+    "dialog": {
+      "close": "Close"
     }
   }
 }

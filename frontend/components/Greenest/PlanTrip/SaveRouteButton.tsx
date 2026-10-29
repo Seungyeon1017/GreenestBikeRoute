@@ -6,6 +6,8 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/components/Greenest/Auth/AuthProvider'
 import Card from '@/components/Greenest/ui/Card'
+import ShareButton from '@/components/Greenest/ui/ShareButton'
+import { tripLink } from '@/lib/shareLink'
 import { saveRoute, toSavedOptions } from '@/services/usersApi'
 import type {
   LngLat,
@@ -28,8 +30,9 @@ type SaveRouteButtonProps = {
 type State = 'idle' | 'saving' | 'saved' | 'error'
 
 /**
- * "Save route" under the route comparison. Logged out, it links to the login
- * page and back. Saved routes appear on the Profile tab (the newest 3 are kept).
+ * "Save route" and "Share" under the route comparison. Logged out, Save links to
+ * the login page and back. Saved routes appear on the Profile tab (the newest 3
+ * are kept). Share needs no login: the link carries the trip and its options.
  */
 export default function SaveRouteButton({
   start,
@@ -78,29 +81,43 @@ export default function SaveRouteButton({
 
   return (
     <Card className="flex flex-col gap-2">
-      {status === 'authenticated' ? (
-        <button
-          className="flex items-center justify-center gap-2 rounded-full bg-leaf-forest px-4 py-2.5 text-sm font-semibold text-leaf-cream hover:bg-leaf-moss disabled:cursor-not-allowed disabled:bg-leaf-sand disabled:text-leaf-muted"
-          disabled={!result || state === 'saving' || state === 'saved'}
-          onClick={save}
-          type="button"
-        >
-          {state === 'saved' ? (
-            <Check aria-hidden className="h-4 w-4" />
-          ) : (
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
+        {status === 'authenticated' ? (
+          <button
+            className="flex items-center justify-center gap-2 rounded-full bg-leaf-forest px-4 py-2.5 text-sm font-semibold text-leaf-cream hover:bg-leaf-moss disabled:cursor-not-allowed disabled:bg-leaf-sand disabled:text-leaf-muted"
+            disabled={!result || state === 'saving' || state === 'saved'}
+            onClick={save}
+            type="button"
+          >
+            {state === 'saved' ? (
+              <Check aria-hidden className="h-4 w-4" />
+            ) : (
+              <Bookmark aria-hidden className="h-4 w-4" />
+            )}
+            {t(`greenest.planTrip.save.${state === 'error' ? 'idle' : state}`)}
+          </button>
+        ) : (
+          <Link
+            className="flex items-center justify-center gap-2 rounded-full border border-leaf-sand px-4 py-2.5 text-sm font-medium text-leaf-ink hover:bg-leaf-mint"
+            href="/login?next=/plan-trip"
+          >
             <Bookmark aria-hidden className="h-4 w-4" />
-          )}
-          {t(`greenest.planTrip.save.${state === 'error' ? 'idle' : state}`)}
-        </button>
-      ) : (
-        <Link
-          className="flex items-center justify-center gap-2 rounded-full border border-leaf-sand px-4 py-2.5 text-sm font-medium text-leaf-ink hover:bg-leaf-mint"
-          href="/login?next=/plan-trip"
-        >
-          <Bookmark aria-hidden className="h-4 w-4" />
-          {t('greenest.planTrip.save.loginToSave')}
-        </Link>
-      )}
+            {t('greenest.planTrip.save.loginToSave')}
+          </Link>
+        )}
+        <ShareButton
+          disabled={!start || !end || !result}
+          link={() =>
+            start && end
+              ? tripLink(start, end, startLabel, endLabel, options)
+              : window.location.href
+          }
+          title={t('greenest.share.tripTitle', {
+            from: startLabel,
+            to: endLabel,
+          })}
+        />
+      </div>
       <p className="text-[11px] text-leaf-muted">
         {state === 'saved' ? (
           <>

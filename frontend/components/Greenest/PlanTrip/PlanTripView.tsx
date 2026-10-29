@@ -10,6 +10,7 @@ import { closureNear, useReports } from '@/hooks/useReports'
 import useSavedRouteFromUrl from '@/hooks/useSavedRouteFromUrl'
 import { useSharedVehicles, useSharingTrip } from '@/hooks/useSharing'
 import { GRADE_COLOR } from '@/lib/hillColors'
+import { readTripLink } from '@/lib/shareLink'
 import {
   DEFAULT_ROUTE_OPTIONS,
   fetchGeofencing,
@@ -1350,14 +1351,30 @@ export default function PlanTripView() {
             onClick={handleMapClick}
             onLoad={map => {
               mapRef.current = map
-              // Coming from Highlights ("Auf Karte zeigen"): that place is the destination.
-              const params = new URLSearchParams(window.location.search)
-              const [lng, lat] = (params.get('to') ?? '').split(',').map(Number)
-              if (Number.isFinite(lng) && Number.isFinite(lat)) {
-                const point: LngLat = [lng, lat]
-                setEnd(point)
-                setEndLabel(params.get('name') || formatPoint(point))
-                map.jumpTo({ center: point, zoom: 15 })
+              // Coming from Highlights ("Auf Karte zeigen": that place is the destination) or from
+              // a shared trip link (start, destination and options).
+              const shared = readTripLink(
+                new URLSearchParams(window.location.search),
+              )
+              if (shared) {
+                const { start: from, end: to } = shared
+                setOptions(shared.options)
+                if (from) {
+                  setStart(from)
+                  setStartLabel(shared.startLabel || formatPoint(from))
+                }
+                if (to) {
+                  setEnd(to)
+                  setEndLabel(shared.endLabel || formatPoint(to))
+                }
+                if (from && to) {
+                  map.fitBounds(
+                    new maplibregl.LngLatBounds(from, from).extend(to),
+                    { padding: 80, maxZoom: 16, duration: 0 },
+                  )
+                } else {
+                  map.jumpTo({ center: (from ?? to) as LngLat, zoom: 15 })
+                }
                 window.history.replaceState(null, '', window.location.pathname)
               }
               // Bottom to top: routes, hills, highlighted stretches, riders' reports, shared vehicles,
