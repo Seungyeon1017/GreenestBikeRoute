@@ -344,12 +344,12 @@
         "duration": "Riding time",
         "roughness": "Roughness",
         "overtaking": "Close overtakes",
-        "airQuality": "Air",
+        "airQuality": "Fine dust",
         "stopGo": "Stop-and-go",
         "shade": "Shade",
         "lit": "Lit",
         "kcal": "kcal",
-        "scales": "Roughness 0–100 · air 0.5 = typical · stop-and-go, shade and lit 0–1 (share of the way) · kcal a rough estimate."
+        "scales": "Roughness 0–100 · fine dust 0.5 = usual, higher = more dust · stop-and-go, shade and lit 0–1 (share of the way) · kcal a rough estimate."
       },
       "appliedShade": "Departure by day: shaded streets were preferred.",
       "appliedDark": "Departure after dark: lit streets were preferred.",

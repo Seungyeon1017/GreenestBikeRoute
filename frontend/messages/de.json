@@ -344,12 +344,12 @@
         "duration": "Fahrzeit",
         "roughness": "Unebenheit",
         "overtaking": "Enge Überholungen",
-        "airQuality": "Luft",
+        "airQuality": "Feinstaub",
         "stopGo": "Stop-and-go",
         "shade": "Schatten",
         "lit": "Beleuchtet",
         "kcal": "kcal",
-        "scales": "Unebenheit 0–100 · Luft 0,5 = typisch · Stop-and-go, Schatten und Beleuchtet 0–1 (Anteil der Strecke) · kcal grob geschätzt."
+        "scales": "Unebenheit 0–100 · Feinstaub 0,5 = üblich, höher = mehr Feinstaub · Stop-and-go, Schatten und Beleuchtet 0–1 (Anteil der Strecke) · kcal grob geschätzt."
       },
       "appliedShade": "Abfahrt bei Tag: schattige Straßen wurden bevorzugt.",
       "appliedDark": "Abfahrt nach Einbruch der Dunkelheit: beleuchtete Straßen wurden bevorzugt.",
