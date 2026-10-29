@@ -95,7 +95,8 @@ export default function MapLayers({
   return (
     // Bottom left: MapLibre's attribution takes the bottom right corner.
     <div className="pointer-events-none absolute inset-x-2.5 bottom-2.5 z-10 flex flex-wrap-reverse items-end gap-2 pr-8">
-      <div className="pointer-events-auto relative" ref={ref}>
+      {/* z-20: the open panel covers the legends, which wrap above the button on phones. */}
+      <div className="pointer-events-auto relative z-20" ref={ref}>
         {open && (
           <div className="absolute bottom-full left-0 mb-2 flex w-72 flex-col gap-3 rounded-2xl border border-leaf-sand bg-white p-3 shadow-soft">
             <strong className="text-sm text-leaf-forest">
