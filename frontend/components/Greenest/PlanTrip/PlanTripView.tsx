@@ -2,7 +2,7 @@
 
 import type { FeatureCollection } from 'geojson'
 import maplibregl from 'maplibre-gl'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import BaseMap from '@/components/Greenest/Map'
 import PageIntro from '@/components/Greenest/ui/PageIntro'
@@ -12,9 +12,11 @@ import {
   DEFAULT_ROUTE_OPTIONS,
   fetchGeofencing,
   fetchRouteComparison,
+  fetchRouteDay,
   fetchRouteGrade,
 } from '@/services/greenestApi'
 import type {
+  DayRoutes,
   GeofencingCollection,
   GradeCollection,
   LngLat,
@@ -27,6 +29,7 @@ import type {
   VehicleCollection,
   ZoneCollection,
 } from '@/types/greenest'
+import DaySlider, { dayStops, stopAt } from './DaySlider'
 import GradeCard from './GradeCard'
 import RouteComparisonCard, { ROUTE_COLORS } from './RouteComparison'
 import {
@@ -170,6 +173,38 @@ export default function PlanTripView() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
+  // Through the day: one /route/day request, then each time of day is only a redraw.
+  const [dayMode, setDayMode] = useState(false)
+  const [day, setDay] = useState<DayRoutes | null>(null)
+  // The stop the rider picked ("12:00", "night"); kept when the settings change.
+  const [dayKey, setDayKey] = useState<string | null>(null)
+  const stops = useMemo(() => (day ? dayStops(day) : []), [day])
+  const picked = stops.findIndex(s => s.key === dayKey)
+  // Until one is picked: the time of day of the departure, else now.
+  const stopIndex =
+    picked >= 0
+      ? picked
+      : stopAt(
+          stops,
+          options.departTime.slice(11, 16) ||
+            new Date().toTimeString().slice(0, 5),
+        )
+  const stop = dayMode ? stops[stopIndex] : undefined
+  const pickStop = useCallback(
+    (i: number) => setDayKey(stops[i]?.key ?? null),
+    [stops],
+  )
+  // What the map and the comparison show: the chosen time of day, or the single departure.
+  const shown = dayMode ? (stop?.period ?? null) : result
+  // The hills and the rental trip follow the chosen time of day.
+  const tripOptions = useMemo(
+    () =>
+      stop && day
+        ? { ...options, departTime: `${day.date}T${stop.departAt}` }
+        : options,
+    [options, stop, day],
+  )
+
   // Hills: only requested while "Show hills" is ticked.
   const [showHills, setShowHills] = useState(false)
   const [grade, setGrade] = useState<GradeCollection | null>(null)
@@ -183,12 +218,18 @@ export default function PlanTripView() {
   const [tripVehicle, setTripVehicle] = useState<SharingVehicleChoice>('all')
   const [fences, setFences] = useState<GeofencingCollection | null>(null)
   const sharing = useSharedVehicles(showSharing, sharingVehicle, start)
-  const sharingTrip = useSharingTrip(tripOn, tripVehicle, start, end, options)
+  const sharingTrip = useSharingTrip(
+    tripOn,
+    tripVehicle,
+    start,
+    end,
+    tripOptions,
+  )
 
   // 2. REFS: values kept between redraws that don't trigger a redraw themselves.
   const mapRef = useRef<maplibregl.Map | null>(null)
   const resultRef = useRef<RouteResult | null>(null)
-  resultRef.current = result
+  resultRef.current = shown
   const gradeRef = useRef<GradeCollection | null>(null)
   gradeRef.current = grade
   // The map's style can reload (fallback style), so keep what's needed to redraw.
@@ -220,24 +261,26 @@ export default function PlanTripView() {
 
   // 3. EFFECTS: code that runs when certain values change.
 
-  // Ask the backend for a route when the points or any option change.
+  // Ask the backend for a route (or, through the day, all of the day's routes) when the points or any option change.
   useEffect(() => {
     if (!start || !end) {
       return
     }
     const controller = new AbortController()
     setLoading(true)
+    const request = { from: start, to: end, options }
 
     // Wait 300 ms after the last change, so dragging a slider sends one request, not dozens.
     const timer = setTimeout(() => {
-      fetchRouteComparison({ from: start, to: end, options }, controller.signal)
-        .then(data => {
-          setResult(data)
-          setError(null)
-        })
+      ;(dayMode
+        ? fetchRouteDay(request, controller.signal).then(setDay)
+        : fetchRouteComparison(request, controller.signal).then(setResult)
+      )
+        .then(() => setError(null))
         .catch(err => {
           if (err.name !== 'AbortError') {
             setResult(null)
+            setDay(null)
             setError(err.message)
           }
         })
@@ -252,7 +295,7 @@ export default function PlanTripView() {
       clearTimeout(timer)
       controller.abort()
     }
-  }, [start, end, options])
+  }, [start, end, options, dayMode])
 
   // Ask for the route's hills when "Show hills" is on and the points or options change.
   useEffect(() => {
@@ -262,7 +305,10 @@ export default function PlanTripView() {
     }
     const controller = new AbortController()
     const timer = setTimeout(() => {
-      fetchRouteGrade({ from: start, to: end, options }, controller.signal)
+      fetchRouteGrade(
+        { from: start, to: end, options: tripOptions },
+        controller.signal,
+      )
         .then(data => {
           setGrade(data)
           setGradeError(null)
@@ -284,7 +330,7 @@ export default function PlanTripView() {
       clearTimeout(timer)
       controller.abort()
     }
-  }, [showHills, start, end, options, t])
+  }, [showHills, start, end, tripOptions, t])
 
   // The parking rules change rarely: load them once, the first time a trip is shown.
   useEffect(() => {
@@ -309,11 +355,11 @@ export default function PlanTripView() {
   // Draw (or clear) the two lines whenever a new result arrives; an open stretch popup belongs to the old one.
   useEffect(() => {
     if (mapRef.current) {
-      drawRoutes(mapRef.current, result)
-      drawSegments(mapRef.current, result)
+      drawRoutes(mapRef.current, shown)
+      drawSegments(mapRef.current, shown)
       closeSegmentPopup()
     }
-  }, [result])
+  }, [shown])
 
   // The chosen "Why this route?" row's stretches.
   useEffect(() => {
@@ -709,6 +755,7 @@ export default function PlanTripView() {
     setStartLabel('')
     setEndLabel('')
     setResult(null)
+    setDay(null)
     setError(null)
     setLoading(false)
     setGrade(null)
@@ -732,8 +779,23 @@ export default function PlanTripView() {
       <div className="grid flex-1 grid-cols-1 gap-4 lg:min-h-0 lg:grid-cols-[24rem_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
         <div className="flex flex-col gap-4 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:pb-1 lg:pr-2">
           <TripForm
+            dayMode={dayMode}
+            daySlider={
+              start && end ? (
+                <DaySlider
+                  index={stopIndex}
+                  onIndexChange={pickStop}
+                  stops={stops}
+                />
+              ) : (
+                <span className="text-xs text-leaf-muted">
+                  {t('greenest.planTrip.day.needRoute')}
+                </span>
+              )
+            }
             endLabel={endLabel}
             loading={loading}
+            onDayModeChange={setDayMode}
             onEndLabelChange={setEndLabel}
             onOptionsChange={setOptions}
             onPickEnd={(point, label) => pickPlace('end', point, label)}
@@ -760,7 +822,7 @@ export default function PlanTripView() {
                 setPinnedFlag(current => (current === flag ? null : flag)),
             }}
             paused={Boolean(sharingTrip.trip)}
-            result={result}
+            result={shown}
           />
           <SharingCard
             error={sharing.error}

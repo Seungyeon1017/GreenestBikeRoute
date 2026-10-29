@@ -349,7 +349,25 @@
         "shade": "Shade",
         "lit": "Lit",
         "kcal": "kcal",
-        "scales": "Roughness 0–100 · fine dust 0.5 = usual, higher = more dust · stop-and-go, shade and lit 0–1 (share of the way) · kcal a rough estimate."
+        "scales": "Roughness 0–100 · fine dust 0.5 = usual, higher = more dust · stop-and-go, shade and lit 0–1 (share of the way) · kcal a rough estimate.",
+        "tips": {
+          "roughnessRoute": "{{measured}} measured, {{estimated}} estimated, {{unknown}} unknown",
+          "roughness": "Estimated from nearby measured streets where sensor bikes didn’t ride.",
+          "kcalRoute": "includes {{m}} m of climbing",
+          "kcalNoHeight": "no height data, climbs not counted",
+          "kcal": "For a 70 kg rider on a normal bike."
+        }
+      },
+      "day": {
+        "toggle": "Through the day",
+        "info": "Shade is worked out for 09:00, 12:00, 15:00 and 18:00, and lit streets count after dark. So your route can only change at these times of day: pick one to see it.",
+        "label": "Time of day",
+        "night": "Night",
+        "play": "Play through the day",
+        "pause": "Pause",
+        "range": "{{from}}–{{to}}",
+        "departures": "For departures {{ranges}}",
+        "needRoute": "Set a start and destination first."
       },
       "appliedShade": "Departure by day: shaded streets were preferred.",
       "appliedDark": "Departure after dark: lit streets were preferred.",

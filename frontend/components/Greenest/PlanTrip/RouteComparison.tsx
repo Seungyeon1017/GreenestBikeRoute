@@ -4,6 +4,7 @@ import { cx } from 'class-variance-authority'
 import { useTranslation } from 'react-i18next'
 import AvailabilityBadge from '@/components/Greenest/ui/AvailabilityBadge'
 import Card, { CardTitle } from '@/components/Greenest/ui/Card'
+import InfoTip from '@/components/Greenest/ui/InfoTip'
 import type {
   RouteKind,
   RouteProperties,
@@ -62,6 +63,60 @@ const METRICS: Array<{
   },
   { key: 'kcal', format: p => `~${Math.round(p.kcal)}` },
 ]
+
+const percent = (share: number) => `${Math.round(share * 100)} %`
+
+/** Info for a metric, one line per route: where roughness comes from, and whether kcal counts the climbs. */
+const TIPS: Record<
+  string,
+  (_p: RouteProperties) => [key: string, values: Record<string, unknown>]
+> = {
+  roughness: p => [
+    'roughnessRoute',
+    {
+      measured: percent(p.measured_share),
+      estimated: percent(p.estimated_share),
+      unknown: percent(Math.max(0, 1 - p.measured_share - p.estimated_share)),
+    },
+  ],
+  kcal: p =>
+    p.climb_m == null
+      ? ['kcalNoHeight', {}]
+      : ['kcalRoute', { m: Math.round(p.climb_m) }],
+}
+
+function MetricTip({
+  metric,
+  result,
+}: {
+  metric: string
+  result: RouteResult
+}) {
+  const { t } = useTranslation()
+  const routes: Array<[RouteKind, RouteProperties]> = [
+    // In the order of the table's columns.
+    ['shortest', result.shortest.properties],
+    ['greenest', result.route.properties],
+  ]
+  return (
+    <>
+      {routes.map(([kind, p]) => {
+        const [key, values] = TIPS[metric](p)
+        return (
+          <span className="block" key={kind}>
+            <span className="font-medium text-leaf-ink">
+              {t(`greenest.planTrip.routes.${kind}Short`)}:
+            </span>{' '}
+            {t(`greenest.planTrip.metrics.tips.${key}`, values)}
+          </span>
+        )
+      })}
+      <span className="mt-1 block text-leaf-muted">
+        {t(`greenest.planTrip.metrics.tips.${metric}`)}
+      </span>
+    </>
+  )
+}
 
 type RouteComparisonProps = {
   result: RouteResult | null
@@ -152,12 +207,24 @@ export default function RouteComparison({
           </thead>
           <tbody>
             {rows.map(({ key, format }) => (
-              <tr className="border-t border-leaf-sand/50" key={key}>
+              // relative: a row's info panel spans the table's width.
+              <tr className="relative border-t border-leaf-sand/50" key={key}>
                 <th
                   className="py-1 text-left font-normal text-leaf-muted"
                   scope="row"
                 >
-                  {t(`greenest.planTrip.metrics.${key}`)}
+                  <span className="inline-flex items-center gap-1">
+                    {t(`greenest.planTrip.metrics.${key}`)}
+                    {result && key in TIPS && (
+                      <InfoTip
+                        label={t('greenest.planTrip.info.about', {
+                          name: t(`greenest.planTrip.metrics.${key}`),
+                        })}
+                      >
+                        <MetricTip metric={key} result={result} />
+                      </InfoTip>
+                    )}
+                  </span>
                 </th>
                 {kinds.map(kind => {
                   const properties = propertiesFor(kind)

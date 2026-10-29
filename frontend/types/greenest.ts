@@ -88,14 +88,20 @@ export type RouteProperties = {
   depart_time: string | null
   /** True if the sun is up at depart_time (shade counted), false after dark (lighting counted), null without depart_time. */
   daylight: boolean | null
+  /** The shade time slot used by day (ISO 8601, e.g. "2026-07-21T12:00+02:00"), null otherwise. */
+  shade_slot: string | null
 
   // What the route is like.
   length_m: number
   /** Expected riding time in seconds, from measured cyclist speeds. */
   duration_s: number
+  /** Height gained in metres; null without elevation data (kcal then leaves climbs out). */
+  climb_m: number | null
   /** Roughness 0–100 over the measured part; null if nothing was measured. */
   mean_roughness: number | null
   measured_share: number
+  /** Share whose roughness is estimated from nearby measured streets. */
+  estimated_share: number
   danger_points: number
   danger_risk: number
   /** Air rank 0–1 (0.5 = typical); null if nothing was measured. */
@@ -185,6 +191,16 @@ export type RouteComparison = {
   /** How much more time the route takes than the shortest one, in %; negative if faster. */
   extra_time_pct: number
   same_path: boolean
+}
+
+/** /route/compare for every departure in [from, to), "HH:MM" Heilbronn time. */
+export type DayPeriod = RouteComparison & { from: string; to: string }
+
+/** GET /route/day: the periods of one day with the same sky (one shade slot by day, or dark), in order. */
+export type DayRoutes = {
+  /** "YYYY-MM-DD" */
+  date: string
+  periods: DayPeriod[]
 }
 
 /** Everything the rider can set in the Plan a Trip form. Limits match the backend. */

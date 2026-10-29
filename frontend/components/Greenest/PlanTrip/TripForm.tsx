@@ -1,6 +1,7 @@
 'use client'
 
 import { cx } from 'class-variance-authority'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import Card, { CardTitle } from '@/components/Greenest/ui/Card'
 import type { LngLat, RouteOptions } from '@/types/greenest'
@@ -20,6 +21,11 @@ type TripFormProps = {
   options: RouteOptions
   onOptionsChange: (_options: RouteOptions) => void
   onReset: () => void
+  /** "Through the day": the route for each time of day instead of one departure. */
+  dayMode: boolean
+  onDayModeChange: (_on: boolean) => void
+  /** The day slider, shown in place of the departure hint while dayMode is on. */
+  daySlider?: ReactNode
   loading?: boolean
 }
 
@@ -139,6 +145,9 @@ export default function TripForm({
   options,
   onOptionsChange,
   onReset,
+  dayMode,
+  onDayModeChange,
+  daySlider,
   loading = false,
 }: TripFormProps) {
   const { t } = useTranslation()
@@ -149,9 +158,13 @@ export default function TripForm({
   const month = Number(options.departTime.slice(5, 7))
   const outsideSummer = sunUp === true && (month < 5 || month > 8)
 
-  /** Without a departure neither time slider applies; with one, only shade by day or lighting after dark. */
+  /**
+   * Without a departure neither time slider applies; with one, only shade by day or lighting after dark.
+   * Through the day both do, each at its own times.
+   */
   const timeSliderOff = (key: SliderKey) =>
-    sunUp === null || (key === 'shade' && !sunUp) || (key === 'dark' && sunUp)
+    !dayMode &&
+    (sunUp === null || (key === 'shade' && !sunUp) || (key === 'dark' && sunUp))
 
   /** Changes one option and keeps the others. */
   const set = <K extends keyof RouteOptions>(key: K, value: RouteOptions[K]) =>
@@ -252,14 +265,16 @@ export default function TripForm({
               </label>
               <div className="flex gap-2">
                 <input
-                  className="min-w-0 flex-1 rounded-lg border border-leaf-sand bg-white px-2 py-1 text-sm"
+                  className="min-w-0 flex-1 rounded-lg border border-leaf-sand bg-white px-2 py-1 text-sm disabled:opacity-40"
+                  disabled={dayMode}
                   id="depart-time"
                   onChange={e => set('departTime', e.target.value)}
                   type="datetime-local"
                   value={options.departTime}
                 />
                 <button
-                  className="rounded-lg border border-leaf-sand px-2 py-1 text-xs hover:bg-leaf-cream"
+                  className="rounded-lg border border-leaf-sand px-2 py-1 text-xs hover:bg-leaf-cream disabled:opacity-40"
+                  disabled={dayMode}
                   onClick={() =>
                     set('departTime', hasTime ? '' : nowForInput())
                   }
@@ -270,24 +285,46 @@ export default function TripForm({
                     : t('greenest.planTrip.now')}
                 </button>
               </div>
-              <span className="text-xs text-leaf-muted">
-                {sunUp === null
-                  ? t('greenest.planTrip.departTimeHint')
-                  : sunUp
-                    ? t('greenest.planTrip.sky.day')
-                    : t('greenest.planTrip.sky.night')}
-                {/* The 21 July caveat stays one tap away, so the line is no longer than the night one. */}
-                {outsideSummer && (
-                  <InfoTip
-                    className="ml-1 align-middle"
-                    label={t('greenest.planTrip.info.about', {
-                      name: t('greenest.planTrip.penalties.shade'),
-                    })}
-                  >
-                    {t('greenest.planTrip.sky.summerShade')}
-                  </InfoTip>
-                )}
+              <span className="flex items-center gap-1.5">
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    checked={dayMode}
+                    className="h-4 w-4 accent-leaf-forest"
+                    onChange={e => onDayModeChange(e.target.checked)}
+                    type="checkbox"
+                  />
+                  {t('greenest.planTrip.day.toggle')}
+                </label>
+                <InfoTip
+                  label={t('greenest.planTrip.info.about', {
+                    name: t('greenest.planTrip.day.toggle'),
+                  })}
+                >
+                  {t('greenest.planTrip.day.info')}
+                </InfoTip>
               </span>
+              {dayMode ? (
+                daySlider
+              ) : (
+                <span className="text-xs text-leaf-muted">
+                  {sunUp === null
+                    ? t('greenest.planTrip.departTimeHint')
+                    : sunUp
+                      ? t('greenest.planTrip.sky.day')
+                      : t('greenest.planTrip.sky.night')}
+                  {/* The 21 July caveat stays one tap away, so the line is no longer than the night one. */}
+                  {outsideSummer && (
+                    <InfoTip
+                      className="ml-1 align-middle"
+                      label={t('greenest.planTrip.info.about', {
+                        name: t('greenest.planTrip.penalties.shade'),
+                      })}
+                    >
+                      {t('greenest.planTrip.sky.summerShade')}
+                    </InfoTip>
+                  )}
+                </span>
+              )}
             </div>
 
             {TIME_SLIDERS.map(spec =>

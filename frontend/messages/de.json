@@ -349,7 +349,25 @@
         "shade": "Schatten",
         "lit": "Beleuchtet",
         "kcal": "kcal",
-        "scales": "Unebenheit 0–100 · Feinstaub 0,5 = üblich, höher = mehr Feinstaub · Stop-and-go, Schatten und Beleuchtet 0–1 (Anteil der Strecke) · kcal grob geschätzt."
+        "scales": "Unebenheit 0–100 · Feinstaub 0,5 = üblich, höher = mehr Feinstaub · Stop-and-go, Schatten und Beleuchtet 0–1 (Anteil der Strecke) · kcal grob geschätzt.",
+        "tips": {
+          "roughnessRoute": "{{measured}} gemessen, {{estimated}} geschätzt, {{unknown}} unbekannt",
+          "roughness": "Geschätzt aus gemessenen Straßen in der Nähe, wo keine Sensorräder gefahren sind.",
+          "kcalRoute": "inklusive {{m}} m Anstieg",
+          "kcalNoHeight": "keine Höhendaten, Anstiege nicht mitgezählt",
+          "kcal": "Für 70 kg auf einem normalen Fahrrad."
+        }
+      },
+      "day": {
+        "toggle": "Über den Tag",
+        "info": "Schatten wird für 09:00, 12:00, 15:00 und 18:00 Uhr berechnet, nach Einbruch der Dunkelheit zählen beleuchtete Straßen. Deine Route kann sich also nur zu diesen Tageszeiten ändern: Wähle eine aus, um sie zu sehen.",
+        "label": "Tageszeit",
+        "night": "Nacht",
+        "play": "Durch den Tag abspielen",
+        "pause": "Pause",
+        "range": "{{from}}–{{to}}",
+        "departures": "Für Abfahrten {{ranges}}",
+        "needRoute": "Lege zuerst Start und Ziel fest."
       },
       "appliedShade": "Abfahrt bei Tag: schattige Straßen wurden bevorzugt.",
       "appliedDark": "Abfahrt nach Einbruch der Dunkelheit: beleuchtete Straßen wurden bevorzugt.",

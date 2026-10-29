@@ -7,6 +7,7 @@
  */
 import type { FeatureCollection, LineString } from 'geojson'
 import type {
+  DayRoutes,
   GeofencingCollection,
   GradeCollection,
   LngLat,
@@ -115,6 +116,17 @@ export function fetchRouteComparison(
     `/route/compare?${routeParams(request)}`,
     signal,
   )
+}
+
+/**
+ * GET /route/day: /route/compare for every departure of the day of options.departTime (today without one),
+ * in periods with the same shade slot, or dark.
+ */
+export function fetchRouteDay(
+  request: RouteRequest,
+  signal?: AbortSignal,
+): Promise<DayRoutes> {
+  return getJson<DayRoutes>(`/route/day?${routeParams(request)}`, signal)
 }
 
 /**
