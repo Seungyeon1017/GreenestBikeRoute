@@ -93,11 +93,20 @@ export function drawReports(
 }
 
 export type ReportLabels = {
-  /** "Closed: Baustelle. 2 reports, until Thu 5 Nov." */
+  /** "Closed. 2 reports, until Thu 5 Nov." */
   closure: (_p: ClosureProperties) => string
   stillClosed: string
   openAgain: string
   mappingTitle: (_p: MappingProperties) => string
+  /** "Rider's note", before what the reporter wrote. */
+  noteLabel: string
+}
+
+/** What the reporter wrote, labelled so it doesn't read as the app's own text. */
+function noteLine(note: string, labels: ReportLabels): HTMLElement {
+  const line = el('span', 'text-leaf-muted')
+  line.append(el('span', 'font-semibold', `${labels.noteLabel}: `), note)
+  return line
 }
 
 /**
@@ -124,7 +133,7 @@ export function reportPopup(
       ),
     )
     if (p.note) {
-      box.appendChild(el('span', 'text-leaf-muted', p.note))
+      box.appendChild(noteLine(p.note, labels))
     }
     return box
   }
@@ -134,6 +143,9 @@ export function reportPopup(
   swatch.style.background = CLOSURE_COLORS[p.status]
   title.append(swatch, el('span', '', labels.closure(p)))
   box.appendChild(title)
+  if (p.note) {
+    box.appendChild(noteLine(p.note, labels))
+  }
   const buttons = el('div', 'flex gap-2')
   for (const [text, stillClosed] of [
     [labels.stillClosed, true],

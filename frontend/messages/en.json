@@ -644,6 +644,7 @@
           "rideable": "Footway bikes ride on (waiting for review)",
           "other": "Map mistake (waiting for review)"
         },
+        "noteLabel": "Rider's note",
         "show": "Show riders' reports on the map",
         "legend": {
           "closed": "closed",

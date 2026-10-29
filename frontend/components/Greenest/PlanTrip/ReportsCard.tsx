@@ -41,7 +41,10 @@ function until(iso: string, t: TFunction, lang: string): string {
   })
 }
 
-/** "Closed: Baustelle. 2 reports, through Mon 2 Nov. 1 rider says it is open again." */
+/**
+ * "Closed. 2 reports, through Mon 2 Nov. 1 rider says it is open again." The
+ * reporter's note goes on its own labelled line (see reportLayers noteLine).
+ */
 export function closureText(
   p: ClosureProperties,
   t: TFunction,
@@ -49,9 +52,7 @@ export function closureText(
 ): string {
   const r = (key: string, values?: Record<string, unknown>) =>
     t(`greenest.planTrip.reports.closure.${key}`, values)
-  const parts = [
-    `${t(`greenest.planTrip.reports.status.${p.status}`)}${p.note ? `: ${p.note}` : ''}.`,
-  ]
+  const parts = [`${t(`greenest.planTrip.reports.status.${p.status}`)}.`]
   if (p.status !== 'unconfirmed') {
     parts.push(
       `${r('reports', { count: p.reports })}, ${until(p.expires, t, lang)}.`,
@@ -107,6 +108,12 @@ export default function ReportsCard(props: ReportsCardProps) {
             })}{' '}
             <strong>{r('askStill')}</strong>
           </span>
+          {near.properties.note && (
+            <span className="text-leaf-muted">
+              <span className="font-semibold">{r('noteLabel')}:</span>{' '}
+              {near.properties.note}
+            </span>
+          )}
           <div className="flex flex-wrap gap-2">
             {(
               [

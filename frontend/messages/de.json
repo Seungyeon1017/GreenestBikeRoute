@@ -644,6 +644,7 @@
           "rideable": "Gehweg, auf dem Räder fahren (wird geprüft)",
           "other": "Kartenfehler (wird geprüft)"
         },
+        "noteLabel": "Anmerkung",
         "show": "Meldungen auf der Karte zeigen",
         "legend": {
           "closed": "gesperrt",

@@ -1030,6 +1030,7 @@ export default function PlanTripView() {
         openAgain: t('greenest.planTrip.reports.openAgain'),
         mappingTitle: p =>
           t(`greenest.planTrip.reports.mappingTitle.${p.kind}`),
+        noteLabel: t('greenest.planTrip.reports.noteLabel'),
       },
       answerClosure,
     )
