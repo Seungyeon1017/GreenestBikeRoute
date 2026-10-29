@@ -27,12 +27,16 @@ function Row({ indicator }: { indicator: Indicator }) {
   const measured = indicator.value !== null
   return (
     <div className="flex flex-col gap-1 rounded-xl border border-leaf-sand/70 p-3">
-      <div className="flex items-start justify-between gap-2">
+      {/* Badge under the label: long German names leave no room beside it. */}
+      <div className="flex flex-col items-start gap-1">
         <span className="text-sm font-medium text-leaf-ink">
           {t(`greenest.overview.indicators.${indicator.key}`)}
         </span>
+        {/* Indicators with a source are connected; they just may have no reading here. */}
         <AvailabilityBadge
-          availability={measured ? 'measured' : 'unavailable'}
+          availability={
+            measured ? 'measured' : indicator.source ? 'no-data' : 'unavailable'
+          }
         />
       </div>
       {measured ? (

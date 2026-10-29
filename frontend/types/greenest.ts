@@ -32,6 +32,7 @@ export type DataAvailability =
   | 'estimated' // derived or modelled, must be labelled as such
   | 'demo' // sample data for the UI only, never shown as a measurement
   | 'mapped' // tagged in OpenStreetMap, not measured
+  | 'no-data' // dataset connected, but no measurement at this place
   | 'unavailable' // not connected yet
 
 export type EnvironmentLayer = {

@@ -221,6 +221,7 @@
       "estimated": "Estimated",
       "demo": "Sample",
       "mapped": "Mapped",
+      "no-data": "No data here",
       "unavailable": "Not connected yet"
     },
     "layers": {

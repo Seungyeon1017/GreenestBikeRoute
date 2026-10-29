@@ -221,6 +221,7 @@
       "estimated": "Geschätzt",
       "demo": "Beispiel",
       "mapped": "Kartiert",
+      "no-data": "Keine Daten hier",
       "unavailable": "Noch nicht angebunden"
     },
     "layers": {
