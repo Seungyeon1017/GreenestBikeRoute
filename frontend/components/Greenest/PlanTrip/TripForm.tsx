@@ -245,7 +245,8 @@ export default function TripForm({
               </span>
             </label>
 
-            <div className="flex flex-col gap-1 text-sm text-leaf-ink/80">
+            {/* relative: the summer-shade info panel spans this block. */}
+            <div className="relative flex flex-col gap-1 text-sm text-leaf-ink/80">
               <label htmlFor="depart-time">
                 {t('greenest.planTrip.departTime')}
               </label>
@@ -275,7 +276,17 @@ export default function TripForm({
                   : sunUp
                     ? t('greenest.planTrip.sky.day')
                     : t('greenest.planTrip.sky.night')}
-                {outsideSummer && ` ${t('greenest.planTrip.sky.summerShade')}`}
+                {/* The 21 July caveat stays one tap away, so the line is no longer than the night one. */}
+                {outsideSummer && (
+                  <InfoTip
+                    className="ml-1 align-middle"
+                    label={t('greenest.planTrip.info.about', {
+                      name: t('greenest.planTrip.penalties.shade'),
+                    })}
+                  >
+                    {t('greenest.planTrip.sky.summerShade')}
+                  </InfoTip>
+                )}
               </span>
             </div>
 
