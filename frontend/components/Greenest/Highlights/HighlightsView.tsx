@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next'
 import BaseMap from '@/components/Greenest/Map'
 import AvailabilityBadge from '@/components/Greenest/ui/AvailabilityBadge'
 import Card from '@/components/Greenest/ui/Card'
+import SenseBoxCta from '@/components/Greenest/ui/SenseBoxCta'
 import { EXPERIENCES, SAMPLE_PLACES } from './content'
 import PlaceCard from './PlaceCard'
 
@@ -143,6 +144,9 @@ export default function HighlightsView() {
           })}
         </div>
       </section>
+
+      {/* D. Collect data yourself (citizen science) */}
+      <SenseBoxCta />
     </div>
   )
 }

@@ -756,6 +756,12 @@
       "savedOn": "saved {{date}}",
       "open": "Open",
       "delete": "Delete route"
+    },
+    "senseBox": {
+      "title": "Ride. Measure. Improve.",
+      "text": "The data behind these routes comes from people riding with a senseBox:bike, which measures fine dust, road surface and how closely cars overtake. Many streets in Heilbronn haven't been measured yet: ride with a sensor and help fill the gaps.",
+      "button": "Get a senseBox:bike",
+      "newTab": "(opens in a new tab)"
     }
   }
 }
