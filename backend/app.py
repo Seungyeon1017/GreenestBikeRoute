@@ -294,8 +294,8 @@ GEOCODE_ERRORS = {503: {"description": "The place search (Nominatim) can't be re
 
 def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph=None, footways=None):
     """`graph`, `sharing`, `reports`, `geocoder`, `walk_graph` and `footways` let tests pass small graphs, a fake feed,
-    an in-memory report store, a fake place search and a few footways; by default the Heilbronn bike graph is loaded at
-    startup, the walking graph on the first /route/sharing, bike and scooter sharing is read live from MobiData BW (kept
+    an in-memory report store, a fake place search and a few footways; by default the Heilbronn bike and walking graphs
+    are loaded at startup (with a test graph, the walking graph on the first /route/sharing), bike and scooter sharing is read live from MobiData BW (kept
     fresh in the background), reports are kept in data/reports.sqlite3, places are searched with Nominatim and the
     footways the bike graph left out are read from cache/ (routing.footways)."""
     live_sharing = sharing is None
@@ -308,6 +308,8 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
         attach_elevation(app.state.graph, load_elevation(), load_crests())  # node heights and bridge crests for /route/grade
         app.state.scores = {}
         app.state.footways = footways if footways is not None else Footways()  # written with the graph, so after it
+        if graph is None:  # the live API: no first /route/sharing waits ~2.5 s for the walking graph
+            app.state.walk = WalkNetwork(walk_graph if walk_graph is not None else load_walk_graph())
         yield
         if live_sharing:
             sharing.stop()

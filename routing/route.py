@@ -78,7 +78,7 @@ class _SnapIndex:
     """
 
     def __init__(self, G):
-        self.size = (G.number_of_nodes(), G.number_of_edges())
+        self.size = _size(G)
         self.lat0 = sum(y for _, y in G.nodes(data="y")) / G.number_of_nodes()
         main = max(nx.weakly_connected_components(G), key=len)
         self.edges = [(u, v, k) for u, v, k in G.edges(keys=True) if u in main and v in main]
@@ -92,9 +92,17 @@ class _SnapIndex:
 _SNAP_INDEXES = weakref.WeakKeyDictionary()
 
 
+def _size(G):
+    """(nodes, edges) of G. networkx counts a multigraph's edges through its degree view, ~0.1 s on Heilbronn for
+    every route; counting the adjacency dicts directly is ~20x faster."""
+    if G.is_directed() and G.is_multigraph():
+        return G.number_of_nodes(), sum(len(keys) for nbrs in G._succ.values() for keys in nbrs.values())
+    return G.number_of_nodes(), G.number_of_edges()
+
+
 def _snap_index(G):
     index = _SNAP_INDEXES.get(G)
-    if index is None or index.size != (G.number_of_nodes(), G.number_of_edges()):
+    if index is None or index.size != _size(G):
         index = _SNAP_INDEXES[G] = _SnapIndex(G)
     return index
 

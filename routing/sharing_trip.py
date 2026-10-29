@@ -10,18 +10,21 @@ there from the start in a straight line): a street corner outside the no-parking
 vehicle: the one that gets you there soonest (walk to it, plus riding from it in a straight line), with enough battery.
 The CANDIDATES best vehicles are then routed for real and the quickest trip wins.
 """
+import weakref
+from itertools import islice
 from pathlib import Path
 
 import networkx as nx
 import numpy as np
 import osmnx as ox
+import shapely
 from shapely import Point, STRtree
 from shapely.geometry import shape
 
 from routing.calories import DEFAULT_WEIGHT_KG, walk_kcal
 from routing.costs import MEDIAN_SPEED_KMH
 from routing.graph import CACHE_DIR, PLACE
-from routing.route import WALK_KMH, RouteError, edge_coords, find_route
+from routing.route import _GRAPH_LOCK, WALK_KMH, RouteError, edge_coords, find_route
 
 WALK_GRAPH_PATH = CACHE_DIR / "heilbronn_walk.graphml"
 WALK_MAX_M = 1000  # furthest walk to a vehicle, and from the parking zone to the end
@@ -48,20 +51,32 @@ def _metres(lat1, lon1, lat2, lon2):
     return 6_371_000 * np.hypot(x, np.radians(lat2 - lat1))
 
 
+def _plane(lat0):
+    """(lat, lon) -> (x, y) in metres around latitude lat0, for STRtrees."""
+    k = 6_371_000 * np.pi / 180
+    return lambda lat, lon: (np.asarray(lon) * np.cos(np.radians(lat0)) * k, np.asarray(lat) * k)
+
+
 class WalkNetwork:
-    """The walking graph with its nodes in arrays, to find the nearest node of many points quickly."""
+    """The walking graph with its nodes in arrays and an STRtree, to find the nearest node of many points quickly."""
 
     def __init__(self, G):
         self.G = G
         self.nodes = list(G.nodes)
         self.lat = np.array([G.nodes[n]["y"] for n in self.nodes], dtype=float)
         self.lon = np.array([G.nodes[n]["x"] for n in self.nodes], dtype=float)
+        self.to_xy = _plane(self.lat.mean())
+        self.tree = STRtree(shapely.points(*self.to_xy(self.lat, self.lon)))
 
     def nearest(self, lat, lon):
         """(node, metres) of the walking node nearest to (lat, lon)."""
-        d = _metres(lat, lon, self.lat, self.lon)
+        p = Point(*self.to_xy(lat, lon))
+        d0 = self.tree.query_nearest(p, return_distance=True)[1][0]
+        # The tree's plane and _metres differ by far under 1% across the city: measure the few nodes about as near.
+        near = np.sort(self.tree.query(p, predicate="dwithin", distance=d0 * 1.01 + 1))
+        d = _metres(lat, lon, self.lat[near], self.lon[near])
         i = int(np.argmin(d))
-        return self.nodes[i], float(d[i])
+        return self.nodes[near[i]], float(d[i])
 
     def from_point(self, lat, lon, cutoff=WALK_MAX_M):
         """Walking metres and paths from (lat, lon) to every node within `cutoff`, through its nearest node.
@@ -128,6 +143,20 @@ def _parking_rules(geofencing):
     return _RULES[id(geofencing)][1]
 
 
+# The bike graph's corners as (lat, lon) arrays, per graph. Only snapping adds nodes while the API runs (snap-*, and
+# removes them again), so they stay the same.
+_CORNERS = weakref.WeakKeyDictionary()
+
+
+def _corners(G):
+    if G not in _CORNERS:
+        with _GRAPH_LOCK:  # not while a route is snapping its ends
+            nodes = [n for n in G.nodes if not str(n).startswith("snap-")]
+            _CORNERS[G] = (np.array([G.nodes[n]["y"] for n in nodes], dtype=float),
+                           np.array([G.nodes[n]["x"] for n in nodes], dtype=float))
+    return _CORNERS[G]
+
+
 def _return_points(G, walk, rules, zones, kind, origin, destination, to_end):
     """Where to leave a vehicle of `kind`, best first: [(score, (lat, lon), zone or None)].
 
@@ -146,13 +175,15 @@ def _return_points(G, walk, rules, zones, kind, origin, destination, to_end):
         if m is not None:
             options.append((score(*_latlon(z), m), _latlon(z), z))
     if rules is not None:
-        nodes = [n for n in G.nodes if not str(n).startswith("snap-")]
-        lat = np.array([G.nodes[n]["y"] for n in nodes], dtype=float)
-        lon = np.array([G.nodes[n]["x"] for n in nodes], dtype=float)
-        near = np.flatnonzero(_metres(destination[0], destination[1], lat, lon) <= WALK_MAX_M)
-        # Rank by straight lines first; walking distances only for the most promising corners.
-        straight = sorted(near, key=lambda i: score(lat[i], lon[i], DETOUR * float(_metres(destination[0], destination[1], lat[i], lon[i]))))
-        for i in [i for i in straight if rules.rule(kind, lat[i], lon[i]) == "anywhere"][:RETURN_CANDIDATES]:
+        lat, lon = _corners(G)
+        to_end_m = _metres(destination[0], destination[1], lat, lon)
+        near = np.flatnonzero(to_end_m <= WALK_MAX_M)
+        # Rank by straight lines first; parking rules and walking distances only for the most promising corners.
+        straight = near[np.argsort(DETOUR * to_end_m[near] / WALK_KMH
+                                   + DETOUR * _metres(origin[0], origin[1], lat[near], lon[near]) / MEDIAN_SPEED_KMH,
+                                   kind="stable")]
+        allowed = (i for i in straight if rules.rule(kind, lat[i], lon[i]) == "anywhere")
+        for i in islice(allowed, RETURN_CANDIDATES):
             m = _walk_to(walk, to_end, lat[i], lon[i])
             if m is not None:
                 options.append((score(lat[i], lon[i], m), (float(lat[i]), float(lon[i])), None))
