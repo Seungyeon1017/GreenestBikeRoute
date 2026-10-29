@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.reports import SNAP_M, ReportError, Reports
-from backend.schemas import EXAMPLE_TRIP, AirCollection, BikeFriendlyCollection, ClosureAnswer, ClosureCollection, ClosureFeature, ClosureReport,     DangerCollection, DayRoutes, Error, FlowCollection, GeofencingCollection, GradeCollection, LightingCollection, MappingCollection,     MappingFeature, MappingReport, PlaceCollection, RouteCollection, RouteComparison, RoughnessCollection, ScoreCollection,     ShadeCollection, SharingTrip, SpeedCollection, VehicleCollection, ZoneCollection
+from backend.schemas import EXAMPLE_TRIP, AirCollection, BikeFriendlyCollection, ClosureAnswer, ClosureCollection, ClosureFeature, ClosureReport,     DangerCollection, DayRoutes, Error, FlowCollection, GeofencingCollection, GradeCollection, LightingCollection, MappingCollection,     MappingFeature, MappingReport, PlaceCollection, FootwayFeature, StreetSegmentFeature, RouteCollection, RouteComparison, RoughnessCollection, ScoreCollection,     ShadeCollection, SharingTrip, SpeedCollection, VehicleCollection, ZoneCollection
 from backend.geocoding import Geocoder, GeocodingUnavailable, normalize
 from backend.sharing import ATTRIBUTION, Sharing, SharingUnavailable
 from backend.users.router import router as users_router
@@ -22,7 +22,8 @@ from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_
 from routing.elevation import attach_elevation, load_crests, load_elevation
 from routing.grade import NoElevationError, route_grade
 from routing.graph import load_graph
-from routing.route import RouteError, compare_routes, day_routes, edge_coords, find_route, nearest_street, set_closures,     sky, street_scores
+from routing.footways import Footways
+from routing.route import RouteError, compare_routes, day_routes, edge_coords, find_route, nearest_street, segment_id, set_closures, street_name,     sky, street_scores
 from routing.sharing_trip import WalkNetwork, load_walk_graph, plan_sharing_trip
 
 
@@ -291,17 +292,19 @@ SHARING_ERRORS = {503: {"description": "The sharing feed can't be read right now
 GEOCODE_ERRORS = {503: {"description": "The place search (Nominatim) can't be reached right now", "model": Error}}
 
 
-def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph=None):
-    """`graph`, `sharing`, `reports`, `geocoder` and `walk_graph` let tests pass small graphs, a fake feed, an in-memory
-    report store and a fake place search; by default the Heilbronn bike graph is loaded at startup, the walking graph on
-    the first /route/sharing, bike and scooter sharing is read live from MobiData BW, reports are kept in
-    data/reports.sqlite3 and places are searched with Nominatim."""
+def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph=None, footways=None):
+    """`graph`, `sharing`, `reports`, `geocoder`, `walk_graph` and `footways` let tests pass small graphs, a fake feed,
+    an in-memory report store, a fake place search and a few footways; by default the Heilbronn bike graph is loaded at
+    startup, the walking graph on the first /route/sharing, bike and scooter sharing is read live from MobiData BW,
+    reports are kept in data/reports.sqlite3, places are searched with Nominatim and the footways the bike graph left
+    out are read from cache/ (routing.footways)."""
 
     @asynccontextmanager
     async def lifespan(app):
         app.state.graph = graph if graph is not None else load_graph()
         attach_elevation(app.state.graph, load_elevation(), load_crests())  # node heights and bridge crests for /route/grade
         app.state.scores = {}
+        app.state.footways = footways if footways is not None else Footways()  # written with the graph, so after it
         yield
 
     app = FastAPI(title="Greenest Bike Route", description=API_DESCRIPTION, lifespan=lifespan,
@@ -483,17 +486,66 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
     def client(request):
         return request.client.host if request.client else ""
 
+    def snapped_segment(lat, lon):
+        """(u, v, data) of the street within SNAP_M of a point; 400 if there is none."""
+        u, v, d, dist = nearest_street(app.state.graph, lat, lon)
+        if dist > SNAP_M:
+            raise HTTPException(status_code=400, detail=f"no street within {SNAP_M} m: the nearest is {dist:.0f} m away")
+        return u, v, d
+
+    def graph_segment(segment):
+        """(u, v, data) of segment "u-v" in the graph, either direction; 400 if the graph has no such street."""
+        u, v = map(int, segment.split("-"))
+        G = app.state.graph
+        for a, b in ((u, v), (v, u)):
+            if G.has_edge(a, b):
+                return a, b, next(iter(G[a][b].values()))
+        raise HTTPException(status_code=400, detail=f"no street segment {segment}")
+
+    @app.get("/reports/segment", tags=[REPORTS], summary="The street segment a closure report at a point would go to",
+             response_model=StreetSegmentFeature,
+             responses={400: {"description": "No street within 50 m of the point", "model": Error}},
+             response_description="The segment between two junctions, with what riders already reported on it")
+    def report_segment(lat: float = Query(..., ge=-90, le=90), lon: float = Query(..., ge=-180, le=180)):
+        """For the app to show riders which street they are about to report before they send it, and to let them pick
+        several segments of one building site."""
+        G = app.state.graph
+        u, v, d = snapped_segment(lat, lon)
+        a, b = min(u, v), max(u, v)
+        state = reports.closure_states().get((a, b))
+        return {"type": "Feature",
+                "geometry": {"type": "LineString", "coordinates": [[round(x, 6), round(y, 6)] for x, y in edge_coords(G, u, v, d)]},
+                "properties": {"segment": segment_id(u, v), "osm_way_ids": osm_way_ids(d["osmid"]),
+                               "name": street_name(G, u, v, d), "length_m": round(float(d["length"]), 1),
+                               "status": state["status"] if state else None}}
+
+    @app.get("/reports/footway", tags=[REPORTS], summary="The footway routing leaves out nearest to a point",
+             response_model=FootwayFeature,
+             responses={404: {"description": "No such footway within 50 m of the point", "model": Error}},
+             response_description="The whole OSM way, to name in a `rideable` mapping report")
+    def report_footway(lat: float = Query(..., ge=-90, le=90), lon: float = Query(..., ge=-180, le=180)):
+        """Footways and paths without a bicycle tag in OSM are left out of routing. A rider who sees bikes ride on one
+        picks it here, so the report names its OSM way (`osm_way_id` in POST /reports/mapping)."""
+        feature, dist = app.state.footways.nearest(lat, lon)
+        if feature is None or dist > SNAP_M:
+            raise HTTPException(status_code=404, detail=f"no footway left out of routing within {SNAP_M} m")
+        return feature
+
     @app.post("/reports/closures", tags=[REPORTS], summary="Report that a street is closed right now",
               status_code=201, response_model=ClosureFeature,
               responses={400: {"description": "No street within 50 m of the point, or `until` is in the past", "model": Error}},
               response_description="The street segment the report went to, with how many reports it has now")
     def report_closure(report: ClosureReport, request: Request):
         G = app.state.graph
-        u, v, d, dist = nearest_street(G, report.lat, report.lon)
-        if dist > SNAP_M:
-            raise HTTPException(status_code=400, detail=f"no street within {SNAP_M} m: the nearest is {dist:.0f} m away")
+        if report.segment is not None:
+            u, v, d = graph_segment(report.segment)
+            coords = edge_coords(G, u, v, d)
+            lonlat = tuple(coords[len(coords) // 2])
+        else:
+            u, v, d = snapped_segment(report.lat, report.lon)
+            lonlat = (report.lon, report.lat)
         try:
-            state = reports.report_closure(u, v, osm_way_ids(d["osmid"]), (report.lon, report.lat), report.reporter_id,
+            state = reports.report_closure(u, v, osm_way_ids(d["osmid"]), lonlat, report.reporter_id,
                                            client(request), report.note, report.until)
         except ReportError as e:
             raise HTTPException(status_code=400, detail=str(e))

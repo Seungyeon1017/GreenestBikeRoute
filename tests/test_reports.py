@@ -2,12 +2,15 @@ import json
 import sqlite3
 from datetime import datetime, timedelta
 
+import networkx as nx
 import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
 from backend.reports import CLOSED_AT, DEFAULT_S, GRACE_S, LOCAL_TZ, MAX_S, OPEN_AT, ReportError, Reports
-from backend.schemas import ClosureCollection, ClosureFeature, MappingCollection, MappingFeature
+from backend.schemas import ClosureCollection, ClosureFeature, FootwayFeature, MappingCollection, MappingFeature,     StreetSegmentFeature
+from routing.footways import Footways, footway_collection
+from routing.graph import keep_rideable_footways
 from routing.rideable_ways import load_rideable_ways
 from routing.route import RouteError, find_route, set_closures
 from tests.conftest import COORDS, A, B, C
@@ -179,9 +182,15 @@ def test_closures_are_cleared(toy_graph):
     assert not any("closure" in d for *_, d in toy_graph.edges(data=True))
 
 
+# A footway beside the toy streets that routing leaves out, as routing.footways stores it.
+FOOTWAY = {"type": "Feature", "geometry": {"type": "MultiLineString", "coordinates": [[[9.2110, 49.1400], [9.2110, 49.1409]]]},
+           "properties": {"osm_way_id": 77, "name": None, "length_m": 100.0}}
+
+
 @pytest.fixture
 def client(toy_graph, reports):
-    with TestClient(create_app(graph=toy_graph, reports=reports)) as c:
+    footways = Footways({"type": "FeatureCollection", "features": [FOOTWAY]})
+    with TestClient(create_app(graph=toy_graph, reports=reports, footways=footways)) as c:
         yield c
 
 
@@ -192,6 +201,32 @@ def test_report_a_closure(client):
     assert (body.properties.segment, body.properties.status, body.properties.reports) == (f"{A}-{B}", "reported", 1)
     ClosureCollection.model_validate(client.get("/reports/closures").json())
     assert len(client.get("/reports/closures").json()["features"]) == 1
+
+
+def test_preview_the_segment_a_click_would_report(client, reports):
+    r = client.get("/reports/segment", params={"lat": 49.14045, "lon": 9.2101})
+    assert r.status_code == 200
+    body = StreetSegmentFeature.model_validate(r.json())
+    assert (body.properties.segment, body.properties.osm_way_ids, body.properties.status) == (f"{A}-{B}", [11], None)
+    assert len(body.geometry.coordinates) == 3  # the whole bend, junction to junction
+    report(reports, "r1", "1.1.1.1")
+    assert client.get("/reports/segment", params={"lat": 49.14045, "lon": 9.2101}).json()["properties"]["status"] == "reported"
+    assert client.get("/reports/segment", params={"lat": 49.15, "lon": 9.25}).status_code == 400
+
+
+def test_report_a_closure_on_a_picked_segment(client):
+    for segment in (f"{A}-{C}", f"{C}-{A}"):  # either order of the junctions
+        r = client.post("/reports/closures", json={"segment": segment, "reporter_id": segment})
+        assert r.status_code == 201
+        assert r.json()["properties"]["segment"] == f"{A}-{C}"
+    assert r.json()["properties"]["status"] == "reported"  # one network: the second report doesn't count again
+
+
+def test_a_closure_needs_a_segment_or_a_point(client):
+    assert client.post("/reports/closures", json={"segment": f"{A}-99"}).status_code == 400  # not a street
+    assert client.post("/reports/closures", json={"segment": "Allee"}).status_code == 422
+    assert client.post("/reports/closures", json={"lat": 49.14}).status_code == 422
+    assert client.post("/reports/closures", json={}).status_code == 422
 
 
 def test_a_closure_far_from_every_street_is_refused(client):
@@ -261,3 +296,27 @@ def test_rejecting_leaves_the_list_alone(reports, tmp_path):
     stored = reports.report_mapping("rideable", (9.21, 49.14), "r1", "1.1.1.1", osm_way_id=5, note="x")
     assert reports.reject_mapping(stored["id"])["status"] == "rejected"
     assert not path.exists()
+
+
+def test_pick_the_left_out_footway_near_a_click(client):
+    r = client.get("/reports/footway", params={"lat": 49.1404, "lon": 9.21105})
+    assert r.status_code == 200
+    assert FootwayFeature.model_validate(r.json()).properties.osm_way_id == 77
+    assert client.get("/reports/footway", params={"lat": 49.1404, "lon": 9.2200}).status_code == 404
+
+
+def test_footways_left_out_of_routing_are_kept_per_way():
+    G = nx.MultiDiGraph(crs="epsg:4326")
+    for n, (x, y) in {1: (9.2100, 49.1400), 2: (9.2100, 49.1404), 3: (9.2100, 49.1409), 4: (9.2105, 49.1404)}.items():
+        G.add_node(n, x=x, y=y)
+    G.add_edge(1, 2, osmid=11, highway="residential", length=45.0)
+    # Footway 21 in two pieces, both directions, no bicycle tag: left out, kept as one way.
+    for u, v in ((2, 3), (3, 2)):
+        G.add_edge(u, v, osmid=21, highway="footway", length=55.0)
+    G.add_edge(3, 4, osmid=21, highway="footway", length=60.0)
+    G.add_edge(2, 4, osmid=22, highway="footway", bicycle="no", length=40.0)  # bikes may not: not reportable
+    removed = keep_rideable_footways(G)
+    assert set(G.edges()) == {(1, 2)}
+    assert [(f["properties"]["osm_way_id"], len(f["geometry"]["coordinates"]), f["properties"]["length_m"])
+            for f in removed["features"]] == [(21, 2, 115.0)]
+    assert footway_collection(G, []) == {"type": "FeatureCollection", "features": []}

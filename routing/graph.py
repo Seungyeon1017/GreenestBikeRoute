@@ -11,6 +11,7 @@ from shapely import LineString, STRtree, points, union_all
 
 from download_data import load_features
 from routing.costs import AIR_HOTSPOT_OFFSET, AIR_PRIOR_RIDES, DEFAULT_PM_RISK, SNAP_M, air_scores, clean_overtaking, edge_roughness, osm_way_ids, point_risks, way_roughness, way_speed, way_stop_go
+from routing.footways import DROPPED_FOOTWAYS_PATH, footway_collection, save_footways
 from routing.lighting import load_lighting
 from routing.rideable_ways import RIDEABLE_WAYS
 from routing.shade import load_way_shade
@@ -76,6 +77,8 @@ def keep_rideable_footways(G):
     the island between two crossings or the stretch from a crossing to a bike path; cyclists push their bike
     over those. An untagged footway up to GAP_M long stays if both its ends touch ways tagged bicycle=yes, as that
     is a gap in the tagging of one path. Edges mixing footway with other highway types stay.
+
+    Returns the removed footways as routing.footways.footway_collection, for riders to report the ones bikes ride on.
     """
     lifts = {n for n, d in G.nodes(data=True) if "elevator" in _tags(d.get("highway"))}
     drop = []
@@ -111,30 +114,33 @@ def keep_rideable_footways(G):
         return (u, v, k) in gaps or (float(G.edges[u, v, k]["length"]) <= LINK_M and u in rideable and v in rideable)
 
     back = {e for e in drop if comes_back(*e)}
+    removed = footway_collection(G, dropped - back)
     G.remove_edges_from(dropped - back)
     G.remove_nodes_from([n for n in list(G) if G.degree(n) == 0])
+    return removed
 
 
-def load_graph(path=GRAPH_PATH):
+def load_graph(path=GRAPH_PATH, footways_path=DROPPED_FOOTWAYS_PATH):
     """Load the bike graph from cache/, downloading it from OSM the first time (~2 min).
 
     Delete the .graphml file to pick up newer OSM data. It is built again by itself when RIDEABLE_WAYS changed
-    (e.g. an approved user report), as that decides which footways stay.
+    (e.g. an approved user report), as that decides which footways stay, and when the footways it left out
+    (`footways_path`, see routing.footways) are missing.
     """
-    path = Path(path)
+    path, footways_path = Path(path), Path(footways_path)
     rideable = ",".join(map(str, sorted(RIDEABLE_WAYS)))
     G = ox.load_graphml(path) if path.exists() else None
     if G is not None and "rideable_ways" not in G.graph:
         # Cached before the list was recorded, when it held only the hand-picked ways: record it.
         G.graph["rideable_ways"] = rideable
         ox.save_graphml(G, path)
-    if G is None or G.graph["rideable_ways"] != rideable:
+    if G is None or G.graph["rideable_ways"] != rideable or not footways_path.exists():
         ox.settings.cache_folder = CACHE_DIR
         ox.settings.useful_tags_way = sorted({*ox.settings.useful_tags_way, "bicycle", "footway"})  # keep_rideable_footways needs them
         G = ox.graph_from_place(PLACE, network_type="bike", custom_filter=[BIKE_FILTER, CROSSING_FILTER, NO_BIKE_FOOTWAY_FILTER], simplify=False)
         # Elevator nodes must survive simplification, as the footways only count as rideable near them.
         G = ox.simplify_graph(G, node_attrs_include=["highway"])
-        keep_rideable_footways(G)
+        save_footways(keep_rideable_footways(G), footways_path)
         G.graph["rideable_ways"] = rideable
         ox.save_graphml(G, path)
     attach_lifts(G)

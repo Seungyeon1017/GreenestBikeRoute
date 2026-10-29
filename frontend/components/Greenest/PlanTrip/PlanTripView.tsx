@@ -1,6 +1,6 @@
 'use client'
 
-import type { FeatureCollection } from 'geojson'
+import type { FeatureCollection, LineString } from 'geojson'
 import maplibregl from 'maplibre-gl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -13,6 +13,8 @@ import { GRADE_COLOR } from '@/lib/hillColors'
 import {
   DEFAULT_ROUTE_OPTIONS,
   fetchGeofencing,
+  fetchReportFootway,
+  fetchReportSegment,
   fetchRouteComparison,
   fetchRouteDay,
   fetchRouteGrade,
@@ -22,17 +24,21 @@ import type {
   ClosureCollection,
   ClosureStatus,
   DayRoutes,
+  FootwayFeature,
   GeofencingCollection,
   GradeCollection,
   LngLat,
   MappingCollection,
   ReportKind,
+  ReportPick,
   RouteFlag,
   RouteKind,
   RouteOptions,
   RouteComparison as RouteResult,
+  RouteSegment,
   SharingTrip,
   SharingVehicleChoice,
+  StreetSegmentFeature,
   VehicleCollection,
   ZoneCollection,
 } from '@/types/greenest'
@@ -40,6 +46,7 @@ import DaySlider, { dayStops, stopAt } from './DaySlider'
 import GradeCard from './GradeCard'
 import {
   CLICKABLE_REPORT_LAYERS,
+  drawReportPicks,
   drawReports,
   reportPopup,
 } from './reportLayers'
@@ -266,8 +273,13 @@ export default function PlanTripView() {
   const [showReports, setShowReports] = useState(true)
   // What "Report a problem" reports at the next map click; null: a click plans the route.
   const [reportKind, setReportKind] = useState<ReportKind | null>(null)
-  // Where the rider clicked to report, until the report is sent or cancelled.
+  // Another map mistake: where the rider clicked, until the report is sent or cancelled.
   const [draft, setDraft] = useState<LngLat | null>(null)
+  // A closed street or a footway: the segments or ways picked on the map.
+  const [picks, setPicks] = useState<ReportPick[]>([])
+  // Street or footway lookups under clicks still on their way.
+  const [pending, setPending] = useState(0)
+  const [pickError, setPickError] = useState<string | null>(null)
   const [reportStatus, setReportStatus] = useState<string | null>(null)
   // A closure near the trip's start or end to ask about: riders there know if it is still closed.
   const nearClosure = useMemo(
@@ -308,6 +320,10 @@ export default function PlanTripView() {
     mapping: reports.mapping,
     show: showReports,
   }
+  const picksRef = useRef<ReportPick[]>([])
+  picksRef.current = picks
+  const reportKindRef = useRef<ReportKind | null>(null)
+  reportKindRef.current = reportKind
   const popupRef = useRef<maplibregl.Popup | null>(null)
   // The stretch popup: follows the mouse while hovering a route line, stays put once clicked or tapped.
   const segmentPopupRef = useRef<{
@@ -482,19 +498,21 @@ export default function PlanTripView() {
     }
   }, [reports.closures, reports.mapping, showReports])
 
-  // Another kind of report, or back to planning the route: the marked spot goes.
+  // The streets or footways picked for the report.
   useEffect(() => {
-    setDraft(null)
-  }, [reportKind])
+    if (mapRef.current) {
+      drawReportPicks(mapRef.current, picks, reportKind)
+    }
+  }, [picks, reportKind])
 
-  // A pin where the rider is reporting: red for a closure, purple for the map.
+  // A pin where the rider is reporting another map mistake.
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !draft || !reportKind) {
+    if (!map || !draft || reportKind !== 'other') {
       return
     }
     const marker = new maplibregl.Marker({
-      color: reportKind === 'closure' ? '#b3261e' : '#5e35b1',
+      color: '#5e35b1',
       scale: 0.8,
     })
       .setLngLat(draft)
@@ -725,6 +743,13 @@ export default function PlanTripView() {
           hit.segment,
           current.route.properties,
           segmentLabels(),
+          // Only once clicked (a hovering popup can't be clicked) and from a backend that names the segments.
+          pinned && hit.segment.segments?.length
+            ? {
+                label: t('greenest.planTrip.reports.reportStretch'),
+                onClick: () => reportStretch(hit.segment, hit.line),
+              }
+            : undefined,
         ),
       )
       .addTo(map)
@@ -839,24 +864,141 @@ export default function PlanTripView() {
       .catch(err => setReportStatus(err.message))
   }
 
-  /** Sends the report at the marked spot; rejects with the backend's message. */
+  /** Another kind of report, or back to planning the route: what was picked or marked goes. */
+  function changeReportKind(kind: ReportKind | null) {
+    setReportKind(kind)
+    setDraft(null)
+    setPicks([])
+    setPickError(null)
+  }
+
+  /** Adds a pick, or removes it when it was picked already (a second click on the same street). */
+  function togglePick(pick: ReportPick) {
+    setPicks(current =>
+      current.some(p => p.key === pick.key)
+        ? current.filter(p => p.key !== pick.key)
+        : [...current, pick],
+    )
+  }
+
+  /** What riders already reported on any of `segments`, from the closures on the map. */
+  function knownStatus(segments: string[]): ClosureStatus | null {
+    return (
+      reports.closures?.features.find(f =>
+        segments.includes(f.properties.segment),
+      )?.properties.status ?? null
+    )
+  }
+
+  /** A click while reporting a closed street or a footway: picks (or unpicks) the one under it. */
+  function pickAt(point: LngLat, kind: 'closure' | 'rideable') {
+    setPending(n => n + 1)
+    setPickError(null)
+    const r = (key: string) => t(`greenest.planTrip.reports.pick.${key}`)
+    const lookup: Promise<ReportPick> =
+      kind === 'closure'
+        ? fetchReportSegment(point).then(
+            ({ geometry, properties: p }: StreetSegmentFeature) => ({
+              key: p.segment,
+              name: p.name,
+              length_m: p.length_m,
+              geometry,
+              segments: [p.segment],
+              status: p.status,
+            }),
+          )
+        : fetchReportFootway(point).then(
+            ({ geometry, properties: p }: FootwayFeature) => ({
+              key: `way-${p.osm_way_id}`,
+              name: p.name,
+              length_m: p.length_m,
+              geometry,
+              wayId: p.osm_way_id,
+            }),
+          )
+    lookup
+      .then(pick => {
+        // The rider may have switched to another kind meanwhile.
+        if (reportKindRef.current === kind) {
+          togglePick(pick)
+        }
+      })
+      .catch(err => {
+        if (reportKindRef.current === kind) {
+          setPickError(
+            err.status === 404
+              ? r('noFootway')
+              : err.status === 400
+                ? r('noStreet')
+                : err.message,
+          )
+        }
+      })
+      .finally(() => setPending(n => n - 1))
+  }
+
+  /** "Report closed here" in a route stretch's popup: the whole stretch, all its segments. */
+  function reportStretch(segment: RouteSegment, line: LineString) {
+    closeSegmentPopup()
+    changeReportKind('closure')
+    setPicks([
+      {
+        key: `stretch-${segment.segments.join(',')}`,
+        name: segment.name,
+        length_m: segment.length_m,
+        geometry: line,
+        segments: segment.segments,
+        status: knownStatus(segment.segments),
+      },
+    ])
+  }
+
+  /** The middle of a picked line, where a footway report is placed on the map. */
+  function middle(geometry: ReportPick['geometry']): LngLat {
+    const line =
+      geometry.type === 'LineString'
+        ? geometry.coordinates
+        : geometry.coordinates[0]
+    return line[Math.floor(line.length / 2)] as LngLat
+  }
+
+  /** Sends the report; rejects with the backend's message. */
   async function submitReport(note: string, until: string): Promise<string> {
-    if (!draft || !reportKind) {
-      return ''
-    }
-    let message: string
+    const text = note || undefined
+    let message = ''
     if (reportKind === 'closure') {
-      const f = await reports.sendClosure(
-        draft,
-        note || undefined,
+      // A segment picked by a click and again in a route stretch is reported once.
+      const segments = Array.from(new Set(picks.flatMap(p => p.segments ?? [])))
+      const states = await reports.sendClosures(
+        segments,
+        text,
         until || undefined,
       )
-      message = closureThanks(f.properties.status, f.properties.reports)
-    } else {
-      await reports.sendMapping(draft, reportKind, note || undefined)
-      message = t(`greenest.planTrip.reports.thanks.${reportKind}`)
+      message =
+        states.length === 1
+          ? closureThanks(
+              states[0].properties.status,
+              states[0].properties.reports,
+            )
+          : t('greenest.planTrip.reports.thanks.closures', {
+              count: states.length,
+            })
+    } else if (reportKind === 'rideable') {
+      await reports.sendMapping(
+        picks.map(p => middle(p.geometry)),
+        'rideable',
+        text,
+        picks.map(p => p.wayId as number),
+      )
+      message = t('greenest.planTrip.reports.thanks.rideable', {
+        count: picks.length,
+      })
+    } else if (reportKind === 'other' && draft) {
+      await reports.sendMapping([draft], 'other', text)
+      message = t('greenest.planTrip.reports.thanks.other')
     }
     setDraft(null)
+    setPicks([])
     return message
   }
 
@@ -910,16 +1052,21 @@ export default function PlanTripView() {
 
   function handleMapClick(point: LngLat) {
     const map = mapRef.current
-    // A known closure or report opens its popup, whatever a click is set to do.
+    // Reporting (after "Report a problem"): the click picks the street or footway there, or marks the spot of
+    // another mistake; the form is in that panel.
+    if (reportKind === 'other') {
+      setDraft(point)
+      return
+    }
+    if (reportKind) {
+      pickAt(point, reportKind)
+      return
+    }
+    // A known closure or report opens its popup.
     if (map && openReportPopup(map, point)) {
       return
     }
     if (map && openSharingPopup(map, point)) {
-      return
-    }
-    // Reporting (after "Report a problem"): the click marks the spot, the form is in that panel.
-    if (reportKind) {
-      setDraft(point)
       return
     }
     // A click on a route line explains that stretch instead of moving the destination there.
@@ -993,7 +1140,7 @@ export default function PlanTripView() {
     setGradeError(null)
     setPinnedFlag(null)
     setPreviewFlag(null)
-    setDraft(null)
+    changeReportKind(null)
     setReportStatus(null)
   }
 
@@ -1131,6 +1278,7 @@ export default function PlanTripView() {
                 reportsRef.current.mapping,
                 reportsRef.current.show,
               )
+              drawReportPicks(map, picksRef.current, reportKindRef.current)
               drawSharing(
                 map,
                 sharingRef.current.vehicles,
@@ -1149,8 +1297,14 @@ export default function PlanTripView() {
           <ReportProblem
             draft={draft}
             kind={reportKind}
-            onKindChange={setReportKind}
+            onKindChange={changeReportKind}
+            onRemovePick={key =>
+              setPicks(current => current.filter(p => p.key !== key))
+            }
             onSubmit={submitReport}
+            pickError={pickError}
+            picking={pending > 0}
+            picks={picks}
           />
         </section>
       </div>

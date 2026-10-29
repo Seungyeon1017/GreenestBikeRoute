@@ -2,6 +2,7 @@ import type {
   Feature,
   FeatureCollection,
   LineString,
+  MultiLineString,
   MultiPolygon,
   Point,
   Polygon,
@@ -180,6 +181,8 @@ export type RouteSegment = {
   lit: number | null
   bike_friendly: boolean
   pushed: boolean
+  /** The street segments ("u-v", as in /reports/closures) the stretch rides, to report it closed. */
+  segments: string[]
 }
 
 export type RouteFeature = Feature<LineString, RouteProperties>
@@ -441,3 +444,41 @@ export type MappingCollection = FeatureCollection<Point, MappingProperties>
 
 /** What "Report a problem" reports at the next map click: a closed street, or a mapping mistake. */
 export type ReportKind = 'closure' | MappingKind
+
+/** `/reports/segment`: the street segment (junction to junction) a click would report closed. */
+export type StreetSegmentFeature = Feature<
+  LineString,
+  {
+    segment: string
+    osm_way_ids: number[]
+    /** A sidewalk or bike path without a name takes the road's beside it. */
+    name: string | null
+    length_m: number
+    /** What riders already reported on it; null if nothing. */
+    status: Exclude<ClosureStatus, 'open'> | null
+  }
+>
+
+/** `/reports/footway`: a footway routing leaves out (no bicycle tag in OSM), the whole OSM way. */
+export type FootwayFeature = Feature<
+  MultiLineString,
+  { osm_way_id: number; name: string | null; length_m: number }
+>
+
+/**
+ * A street or footway picked for a report: a segment from a map click, a
+ * stretch of the route (several segments), or a footway's OSM way.
+ */
+export type ReportPick = {
+  /** Picking the same one again removes it. */
+  key: string
+  name: string | null
+  length_m: number
+  geometry: LineString | MultiLineString
+  /** Closures: the segments to report. */
+  segments?: string[]
+  /** Footways: the OSM way to name in the report. */
+  wayId?: number
+  /** Closures: what riders already reported on it. */
+  status?: ClosureStatus | null
+}
