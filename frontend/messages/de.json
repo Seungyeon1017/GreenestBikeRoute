@@ -374,6 +374,8 @@
       "appliedDark": "Abfahrt nach Einbruch der Dunkelheit: beleuchtete Straßen wurden bevorzugt.",
       "emptyState": "Lege Start und Ziel fest, um Routen zu vergleichen. Werte erscheinen nur, wenn sie aus echten Daten stammen.",
       "mapLabel": "Routenkarte",
+      "fullscreen": "Karte im Vollbild zeigen",
+      "exitFullscreen": "Vollbild verlassen",
       "hills": {
         "title": "Steigungen",
         "show": "Steigungen auf der Route zeigen",
