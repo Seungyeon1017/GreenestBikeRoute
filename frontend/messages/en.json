@@ -392,6 +392,14 @@
         "noMatch": "No place found in Heilbronn. Try another spelling, or click the map.",
         "unavailable": "Place search is not available right now. Click the map instead."
       },
+      "locate": {
+        "button": "Use my location as start",
+        "here": "My location",
+        "unsupported": "This browser can’t share your location here. Search for the start or click the map.",
+        "denied": "Location access is blocked. Allow it for this site in your browser, or search for the start.",
+        "failed": "Couldn’t find your location. Try again, or search for the start.",
+        "outside": "You seem to be outside Heilbronn, so your location can’t be the start. Search for a place or click the map."
+      },
       "sharing": {
         "title": "Shared e-bikes & e-scooters",
         "tripToggle": "No bike? Rent one for this trip",

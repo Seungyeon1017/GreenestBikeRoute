@@ -18,6 +18,11 @@ type TripFormProps = {
   /** A place was picked from the search list. */
   onPickStart: (_point: LngLat, _label: string) => void
   onPickEnd: (_point: LngLat, _label: string) => void
+  /** "Use my location" in the Start field: the device's position becomes the start. */
+  onLocate: () => void
+  locating: boolean
+  /** Why the location couldn't be used, shown under the fields. */
+  locateError: string | null
   options: RouteOptions
   onOptionsChange: (_options: RouteOptions) => void
   onReset: () => void
@@ -142,6 +147,9 @@ export default function TripForm({
   onEndLabelChange,
   onPickStart,
   onPickEnd,
+  onLocate,
+  locating,
+  locateError,
   options,
   onOptionsChange,
   onReset,
@@ -219,6 +227,8 @@ export default function TripForm({
         <div className="flex flex-col gap-3">
           <PlaceSearch
             label={t('greenest.planTrip.start')}
+            locating={locating}
+            onLocate={onLocate}
             onPick={onPickStart}
             onValueChange={onStartLabelChange}
             pinClassName="text-[#1a7f37]"
@@ -233,6 +243,11 @@ export default function TripForm({
             placeholder={t('greenest.planTrip.destinationPlaceholder')}
             value={endLabel}
           />
+          {locateError && (
+            <p className="text-xs text-red-800" role="alert">
+              {locateError}
+            </p>
+          )}
         </div>
 
         <details className="group rounded-xl border border-leaf-sand/70 p-3">

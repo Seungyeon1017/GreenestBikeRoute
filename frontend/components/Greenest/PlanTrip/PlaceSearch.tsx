@@ -1,7 +1,7 @@
 'use client'
 
 import { cx } from 'class-variance-authority'
-import { MapPin, Search } from 'lucide-react'
+import { LocateFixed, MapPin, Search } from 'lucide-react'
 import { useEffect, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchPlaces } from '@/services/greenestApi'
@@ -20,6 +20,10 @@ type PlaceSearchProps = {
   onPick: (_point: LngLat, _label: string) => void
   /** Colour of the pin in front of the field (start green, destination red). */
   pinClassName?: string
+  /** When set, a "use my location" button sits at the end of the field. */
+  onLocate?: () => void
+  /** The browser is still looking up the location: the button pulses and is disabled. */
+  locating?: boolean
 }
 
 /**
@@ -33,6 +37,8 @@ export default function PlaceSearch({
   onValueChange,
   onPick,
   pinClassName,
+  onLocate,
+  locating = false,
 }: PlaceSearchProps) {
   const { t } = useTranslation()
   const id = useId()
@@ -136,6 +142,21 @@ export default function PlaceSearch({
           value={value}
         />
         <Search aria-hidden className="h-4 w-4 shrink-0 text-leaf-muted" />
+        {onLocate && (
+          <button
+            aria-label={t('greenest.planTrip.locate.button')}
+            className="-my-1 -mr-1.5 rounded-lg p-1 text-leaf-forest hover:bg-leaf-cream disabled:cursor-wait"
+            disabled={locating}
+            onClick={onLocate}
+            title={t('greenest.planTrip.locate.button')}
+            type="button"
+          >
+            <LocateFixed
+              aria-hidden
+              className={cx('h-4 w-4', locating && 'animate-pulse')}
+            />
+          </button>
+        )}
       </div>
 
       {open && (

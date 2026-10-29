@@ -392,6 +392,14 @@
         "noMatch": "Kein Ort in Heilbronn gefunden. Versuche eine andere Schreibweise oder klicke auf die Karte.",
         "unavailable": "Die Ortssuche ist gerade nicht erreichbar. Klicke stattdessen auf die Karte."
       },
+      "locate": {
+        "button": "Meinen Standort als Start nehmen",
+        "here": "Mein Standort",
+        "unsupported": "Dieser Browser kann deinen Standort hier nicht teilen. Suche den Start oder klicke auf die Karte.",
+        "denied": "Der Standortzugriff ist blockiert. Erlaube ihn für diese Seite im Browser oder suche den Start.",
+        "failed": "Dein Standort wurde nicht gefunden. Versuche es noch einmal oder suche den Start.",
+        "outside": "Du scheinst nicht in Heilbronn zu sein, deshalb kann dein Standort nicht der Start sein. Suche einen Ort oder klicke auf die Karte."
+      },
       "sharing": {
         "title": "E-Bikes & E-Scooter zum Leihen",
         "tripToggle": "Kein Rad dabei? Für diese Fahrt eins leihen",

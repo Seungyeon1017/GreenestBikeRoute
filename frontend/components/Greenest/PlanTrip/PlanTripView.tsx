@@ -142,6 +142,16 @@ function drawGrade(map: maplibregl.Map, grade: GradeCollection | null) {
   map.getSource<maplibregl.GeoJSONSource>('grade')?.setData(grade ?? EMPTY)
 }
 
+/** Where riders can be routed (download_data.py, HEILBRONN_BBOX): west, south, east, north. */
+const HEILBRONN_BBOX = [9.038, 49.083, 9.312, 49.22]
+
+/** A fresh enough GPS fix: a minute old is still where the rider stands. */
+const LOCATE_OPTIONS: PositionOptions = {
+  enableHighAccuracy: true,
+  timeout: 15000,
+  maximumAge: 60000,
+}
+
 /** A clicked point as "lat, lng", the text shown in the search field. */
 function formatPoint([lng, lat]: LngLat): string {
   return `${lat.toFixed(5)}, ${lng.toFixed(5)}`
@@ -202,6 +212,9 @@ export default function PlanTripView() {
   const [result, setResult] = useState<RouteResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  // "Use my location": waiting for the browser, and why it didn't work.
+  const [locating, setLocating] = useState(false)
+  const [locateError, setLocateError] = useState<string | null>(null)
 
   // Through the day: one /route/day request, then each time of day is only a redraw.
   const [dayMode, setDayMode] = useState(false)
@@ -622,6 +635,9 @@ export default function PlanTripView() {
       })
   }, [sharingTrip.trip, t, i18n.language])
 
+  // A start set any other way answers the location message.
+  useEffect(() => setLocateError(null), [start])
+
   // Green pin at the start, red pin at the destination. Drag a pin to move the
   // point; while it is dragged the map stays put. The cleanup removes the pin
   // when its point changes or is reset.
@@ -960,6 +976,42 @@ export default function PlanTripView() {
     }
   }
 
+  /** "Use my location": the device's position becomes the start, if it is in Heilbronn. */
+  function locateStart() {
+    const l = (key: string) => t(`greenest.planTrip.locate.${key}`)
+    // Also missing on plain http (except localhost): browsers only locate on secure pages.
+    if (!('geolocation' in navigator) || !window.isSecureContext) {
+      setLocateError(l('unsupported'))
+      return
+    }
+    setLocating(true)
+    setLocateError(null)
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setLocating(false)
+        const point: LngLat = [coords.longitude, coords.latitude]
+        const [west, south, east, north] = HEILBRONN_BBOX
+        if (
+          point[0] < west ||
+          point[0] > east ||
+          point[1] < south ||
+          point[1] > north
+        ) {
+          setLocateError(l('outside'))
+          return
+        }
+        pickPlace('start', point, l('here'))
+      },
+      err => {
+        setLocating(false)
+        setLocateError(
+          l(err.code === err.PERMISSION_DENIED ? 'denied' : 'failed'),
+        )
+      },
+      LOCATE_OPTIONS,
+    )
+  }
+
   function handleReset() {
     setStart(null)
     setEnd(null)
@@ -975,6 +1027,7 @@ export default function PlanTripView() {
     setPreviewFlag(null)
     setDraft(null)
     setReportStatus(null)
+    setLocateError(null)
   }
 
   // 5. RENDER: what appears on the page.
@@ -1008,8 +1061,11 @@ export default function PlanTripView() {
             }
             endLabel={endLabel}
             loading={loading}
+            locateError={locateError}
+            locating={locating}
             onDayModeChange={setDayMode}
             onEndLabelChange={setEndLabel}
+            onLocate={locateStart}
             onOptionsChange={setOptions}
             onPickEnd={(point, label) => pickPlace('end', point, label)}
             onPickStart={(point, label) => pickPlace('start', point, label)}
