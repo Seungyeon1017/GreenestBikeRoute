@@ -10,6 +10,7 @@ import type {
   ClosureCollection,
   ClosureFeature,
   DayRoutes,
+  FootwayFeature,
   GeofencingCollection,
   GradeCollection,
   LngLat,
@@ -23,6 +24,7 @@ import type {
   RouteRequest,
   SharingTrip,
   SharingVehicleChoice,
+  StreetSegmentFeature,
   VehicleCollection,
   ZoneCollection,
 } from '@/types/greenest'
@@ -259,22 +261,44 @@ export function fetchMappingReports(
 }
 
 /**
- * POST /reports/closures: the street at `at` is closed. `until` (YYYY-MM-DD) is the last closed day, if known;
- * without it the report counts for 24 h. 400 when no street is within 50 m or the date is past.
+ * POST /reports/closures: street segment `segment` ("u-v") is closed. `until` (YYYY-MM-DD) is the last closed day,
+ * if known; without it the report counts for 24 h. 400 when the graph has no such segment or the date is past.
  */
 export function reportClosure(
-  at: LngLat,
+  segment: string,
   reporterId: string | undefined,
   note: string | undefined,
   until: string | undefined,
 ): Promise<ClosureFeature> {
   return postJson<ClosureFeature>('/reports/closures', {
-    lat: at[1],
-    lon: at[0],
+    segment,
     reporter_id: reporterId,
     note,
     until,
   })
+}
+
+function pointParams(at: LngLat): URLSearchParams {
+  return new URLSearchParams({ lat: String(at[1]), lon: String(at[0]) })
+}
+
+/** GET /reports/segment: the street segment a click at `at` would report closed. 400 if no street is within 50 m. */
+export function fetchReportSegment(
+  at: LngLat,
+  signal?: AbortSignal,
+): Promise<StreetSegmentFeature> {
+  return getJson<StreetSegmentFeature>(
+    `/reports/segment?${pointParams(at)}`,
+    signal,
+  )
+}
+
+/** GET /reports/footway: the footway routing leaves out nearest to `at`. 404 if none is within 50 m. */
+export function fetchReportFootway(
+  at: LngLat,
+  signal?: AbortSignal,
+): Promise<FootwayFeature> {
+  return getJson<FootwayFeature>(`/reports/footway?${pointParams(at)}`, signal)
 }
 
 /** POST /reports/closures/{segment}/confirm: one tap on a known closure, still closed or open again. */
@@ -295,11 +319,13 @@ export function reportMapping(
   kind: MappingKind,
   reporterId: string | undefined,
   note: string | undefined,
+  osmWayId?: number,
 ): Promise<MappingFeature> {
   return postJson<MappingFeature>('/reports/mapping', {
     lat: at[1],
     lon: at[0],
     kind,
+    osm_way_id: osmWayId,
     reporter_id: reporterId,
     note,
   })

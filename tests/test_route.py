@@ -381,6 +381,15 @@ def test_segments_cover_the_route_with_its_flags(toy_graph):
     assert [(s["to_index"], s["flags"], s["roughness"]) for s in shortest] == [(2, ["bumpy_m"], 80)]
 
 
+def test_stretches_name_the_street_segments_they_ride(toy_graph):
+    detour = find_route(toy_graph, COORDS[A], COORDS[B], 10)["features"][0]["properties"]["segments"]
+    assert [s["segments"] for s in detour] == [[f"{A}-{C}", f"{B}-{C}"]]
+    # A start or end in the middle of a street is still that street's segment, not the piece up to the point.
+    halfway = (49.14045, 9.2101)  # on the bend of A -> B
+    part = find_route(toy_graph, halfway, COORDS[B], 0)["features"][0]["properties"]["segments"]
+    assert [s["segments"] for s in part] == [[f"{A}-{B}"]]
+
+
 def test_a_sidewalk_without_a_name_is_named_after_the_road_beside_it():
     G = nx.MultiDiGraph(crs="epsg:4326")
     points = {"r1": (49.1400, 9.2100), "r2": (49.1400, 9.2120), "s1": (49.14009, 9.2100), "s2": (49.14009, 9.2120),

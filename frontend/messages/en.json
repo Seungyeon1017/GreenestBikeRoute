@@ -203,7 +203,8 @@
       "label": "Main navigation",
       "overview": "Overview",
       "planTrip": "Plan a Trip",
-      "highlights": "Highlights"
+      "highlights": "Highlights",
+      "profile": "Profile"
     },
     "language": {
       "label": "Language",
@@ -587,13 +588,13 @@
           "other": "Another mistake in the map"
         },
         "clickHint": {
-          "closure": "Click the closed street on the map.",
-          "rideable": "Click the footway on the map.",
+          "closure": "Click the closed street on the map. You can pick several segments of one closure.",
+          "rideable": "Click the footway on the map. You can pick several pieces of it.",
           "other": "Click the spot on the map where the map is wrong."
         },
         "form": {
           "title": {
-            "closure": "Report a closed street here",
+            "closure": "Report a closed street",
             "rideable": "Report a footway bikes ride on",
             "other": "Report a map mistake here"
           },
@@ -641,8 +642,11 @@
           "stillClosed": "Thanks! Routes keep avoiding it.",
           "openAgain": "Thanks! One more rider saying it is open lifts it.",
           "lifted": "Thanks! The street is open again for routing.",
-          "rideable": "Thanks! A maintainer will check it; once approved, routes can use it.",
-          "other": "Thanks! A maintainer will check it and correct the map; until then routes stay as they are."
+          "rideable_one": "Thanks! A maintainer will check it; once approved, routes can use it.",
+          "rideable_other": "Thanks! A maintainer will check them; once approved, routes can use them.",
+          "other": "Thanks! A maintainer will check it and correct the map; until then routes stay as they are.",
+          "closures_one": "Thanks! Routes now avoid this street; three reports close it.",
+          "closures_other": "Thanks! Routes now avoid these {{count}} segments; three reports close a segment."
         },
         "mappingTitle": {
           "rideable": "Footway bikes ride on (waiting for review)",
@@ -658,7 +662,38 @@
         },
         "warning_one": "Your route rides {{count}} street riders reported closed (dashed): check before you go.",
         "warning_other": "Your route rides {{count}} streets riders reported closed (dashed): check before you go.",
-        "reportHint": "To report a closed street or a mistake in the map, use Report a problem at the top right of the map."
+        "reportHint": "To report a closed street or a mistake in the map, use Report a problem at the top right of the map.",
+        "pick": {
+          "looking": "Looking for the street…",
+          "noStreet": "No street is near there. Click closer to the closed street.",
+          "noFootway": "No footway near there that routes leave out. If bikes may ride there already, routes use it; for anything else, report another mistake in the map.",
+          "remove": "Remove",
+          "unnamed": {
+            "closure": "Street without a name",
+            "rideable": "Footway without a name"
+          },
+          "count": {
+            "closure_one": "{{count}} segment picked",
+            "closure_other": "{{count}} segments picked",
+            "rideable_one": "{{count}} footway picked",
+            "rideable_other": "{{count}} footways picked"
+          },
+          "addHint": {
+            "closure": "Click more segments of the same closure to add them; click one again to remove it.",
+            "rideable": "Click more pieces of the footway to add them; click one again to remove it."
+          }
+        },
+        "reportStretch": "Report closed here"
+      },
+      "save": {
+        "idle": "Save route",
+        "saving": "Saving…",
+        "saved": "Saved",
+        "loginToSave": "Log in to save this route",
+        "hint": "Saved routes appear on your profile. The 3 newest are kept.",
+        "savedHint": "Find it on your",
+        "loginToOpen": "Log in to open your saved route.",
+        "notFound": "This saved route no longer exists."
       }
     },
     "highlights": {
@@ -695,6 +730,38 @@
           "text": "Out to the green edges of the city."
         }
       }
+    },
+    "auth": {
+      "loginTitle": "Log in",
+      "signupTitle": "Create an account",
+      "subtitle": "Save your routes and find them again on your profile.",
+      "loginTab": "Log in",
+      "signupTab": "Sign up",
+      "email": "Email",
+      "password": "Password",
+      "displayName": "Name (optional)",
+      "loginSubmit": "Log in",
+      "signupSubmit": "Create account",
+      "busy": "One moment…",
+      "wrongLogin": "Wrong email or password.",
+      "emailTaken": "This email already has an account. Log in instead.",
+      "alreadyIn": "You are logged in as {{name}}.",
+      "toProfile": "Go to your profile"
+    },
+    "profile": {
+      "title": "Your profile",
+      "subtitle": "Your account and your saved routes.",
+      "loggedOutText": "Log in to see your account and the routes you saved.",
+      "loading": "Loading…",
+      "account": "Account",
+      "memberSince": "Member since",
+      "logOut": "Log out",
+      "savedRoutes": "Saved routes",
+      "keepsNewest": "Your 3 newest saved routes are kept.",
+      "noRoutes": "No saved routes yet. Plan a route and press \"Save route\":",
+      "savedOn": "saved {{date}}",
+      "open": "Open",
+      "delete": "Delete route"
     }
   }
 }

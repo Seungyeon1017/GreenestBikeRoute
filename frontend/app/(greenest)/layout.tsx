@@ -1,4 +1,5 @@
 import { Fraunces } from 'next/font/google'
+import AuthProvider from '@/components/Greenest/Auth/AuthProvider'
 import AppFooter from '@/components/Greenest/Layout/AppFooter'
 import AppHeader from '@/components/Greenest/Layout/AppHeader'
 
@@ -20,9 +21,12 @@ export default function GreenestLayout({
     <div
       className={`${fraunces.variable} group flex min-h-screen flex-col bg-leaf-cream font-inter text-leaf-ink antialiased lg:has-[[data-workspace]]:h-dvh`}
     >
-      <AppHeader />
-      <main className="flex min-h-0 flex-1 flex-col">{children}</main>
-      <AppFooter />
+      {/* Knows who is logged in, for the header and every page. */}
+      <AuthProvider>
+        <AppHeader />
+        <main className="flex min-h-0 flex-1 flex-col">{children}</main>
+        <AppFooter />
+      </AuthProvider>
     </div>
   )
 }

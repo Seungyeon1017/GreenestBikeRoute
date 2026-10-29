@@ -38,7 +38,7 @@ export default function AppHeader() {
             aria-label={t('greenest.nav.label')}
             className="order-last col-span-2 md:order-none"
           >
-            <ul className="grid grid-cols-3 gap-1 rounded-2xl border border-leaf-sand bg-white/70 p-1 shadow-soft lg:rounded-full">
+            <ul className="grid grid-cols-4 gap-1 rounded-2xl border border-leaf-sand bg-white/70 p-1 shadow-soft lg:rounded-full">
               {NAV_TABS.map(({ href, key, icon: Icon }) => {
                 const active =
                   pathname === href || pathname.startsWith(`${href}/`)

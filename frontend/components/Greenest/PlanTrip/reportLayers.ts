@@ -6,6 +6,8 @@ import type {
   ClosureStatus,
   MappingCollection,
   MappingProperties,
+  ReportKind,
+  ReportPick,
 } from '@/types/greenest'
 import { el } from './sharingLayers'
 
@@ -148,4 +150,50 @@ export function reportPopup(
   }
   box.appendChild(buttons)
   return box
+}
+
+/** Picked for a report: red for a closed street, the mapping purple for a footway. */
+const PICK_COLORS: Record<ReportKind, string> = {
+  closure: CLOSURE_COLORS.closed,
+  rideable: MAPPING_COLOR,
+  other: MAPPING_COLOR,
+}
+
+/**
+ * The streets or footways picked for the report being written, as a thick line
+ * on a white casing above everything else on the map, or none.
+ */
+export function drawReportPicks(
+  map: maplibregl.Map,
+  picks: ReportPick[],
+  kind: ReportKind | null,
+) {
+  if (!map.getSource('report-picks')) {
+    map.addSource('report-picks', { type: 'geojson', data: EMPTY })
+    map.addLayer({
+      id: 'report-picks-casing',
+      type: 'line',
+      source: 'report-picks',
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': '#ffffff', 'line-width': 12 },
+    })
+    map.addLayer({
+      id: 'report-picks',
+      type: 'line',
+      source: 'report-picks',
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': CLOSURE_COLORS.closed, 'line-width': 7 },
+    })
+  }
+  if (kind) {
+    map.setPaintProperty('report-picks', 'line-color', PICK_COLORS[kind])
+  }
+  source(map, 'report-picks')?.setData({
+    type: 'FeatureCollection',
+    features: picks.map(p => ({
+      type: 'Feature',
+      geometry: p.geometry,
+      properties: { key: p.key },
+    })),
+  })
 }
