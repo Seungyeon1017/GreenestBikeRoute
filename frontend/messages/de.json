@@ -625,7 +625,8 @@
           "stillClosed": "Danke! Routen meiden sie weiterhin.",
           "openAgain": "Danke! Sagt noch eine Person, dass sie offen ist, wird die Sperre aufgehoben.",
           "lifted": "Danke! Die Straße ist wieder für die Routenplanung offen.",
-          "mapping": "Danke! Jemand aus dem Team prüft es; danach können Routen den Weg nutzen."
+          "rideable": "Danke! Jemand aus dem Team prüft es; danach können Routen den Weg nutzen.",
+          "other": "Danke! Jemand aus dem Team prüft es und korrigiert die Karte; bis dahin bleiben die Routen, wie sie sind."
         },
         "mappingTitle": {
           "rideable": "Gehweg, auf dem Räder fahren (wird geprüft)",

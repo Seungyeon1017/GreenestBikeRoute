@@ -625,7 +625,8 @@
           "stillClosed": "Thanks! Routes keep avoiding it.",
           "openAgain": "Thanks! One more rider saying it is open lifts it.",
           "lifted": "Thanks! The street is open again for routing.",
-          "mapping": "Thanks! A maintainer will check it; once approved, routes can use it."
+          "rideable": "Thanks! A maintainer will check it; once approved, routes can use it.",
+          "other": "Thanks! A maintainer will check it and correct the map; until then routes stay as they are."
         },
         "mappingTitle": {
           "rideable": "Footway bikes ride on (waiting for review)",

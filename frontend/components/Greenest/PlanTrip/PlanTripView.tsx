@@ -840,7 +840,7 @@ export default function PlanTripView() {
       message = closureThanks(f.properties.status, f.properties.reports)
     } else {
       await reports.sendMapping(draft, reportKind, note || undefined)
-      message = t('greenest.planTrip.reports.thanks.mapping')
+      message = t(`greenest.planTrip.reports.thanks.${reportKind}`)
     }
     setDraft(null)
     return message
