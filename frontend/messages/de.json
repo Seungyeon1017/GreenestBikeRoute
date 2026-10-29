@@ -738,23 +738,35 @@
       "showOnMap": "Auf der Karte zeigen",
       "showMore": "Top {{count}} zeigen",
       "experiencesTitle": "Vorgeschlagene Radtouren",
-      "experiencesText": "Thementouren für jede Stimmung.",
+      "experiencesText": "Vier Thementouren, Halt für Halt von unserem Routenplaner geplant. Wähle eine, um sie auf der Karte zu sehen.",
+      "toursError": "Die Touren können gerade nicht geladen werden: {{error}}",
+      "toursMapLabel": "Karte der vorgeschlagenen Radtouren",
+      "tourLength": "{{km}} km",
+      "tourDuration": "{{min}} Min.",
+      "tourClimb": "{{m}} m bergauf",
+      "tourLoop": "Rundtour",
+      "tourStops": "Stationen",
+      "tourStart": "Start",
+      "tourEnd": "Ziel",
+      "tourStartEnd": "Start & Ziel",
+      "rideToStart": "Zum Start fahren",
+      "downloadGpx": "GPX herunterladen",
       "experiences": {
         "scenicGreen": {
           "title": "Grüne Panoramatour",
-          "text": "Durch Parks und Alleen."
+          "text": "Unter den Platanen am Neckarufer, durch Stadtgarten und Pfühlpark zum Trappensee: über die Hälfte unter Bäumen."
         },
         "quietEscape": {
           "title": "Ruhige Stadtflucht",
-          "text": "Weg von Hauptstraßen und Verkehrslärm."
+          "text": "Eine Runde vom Rand der Altstadt durch die Nebenstraßen der Südstadt zum Wertwiesenpark und auf dem Neckarradweg zurück, kaum auf Hauptstraßen."
         },
         "riverside": {
           "title": "Am Fluss entlang",
-          "text": "Entlang des Neckars und seiner Ufer."
+          "text": "Der Neckarradweg vom Neckarbogen an der Altstadt vorbei bis zur Schleuse Horkheim, meist direkt am Wasser."
         },
         "nature": {
           "title": "Naturentdecker-Route",
-          "text": "Hinaus an die grünen Ränder der Stadt."
+          "text": "Eine Runde am Ostrand der Stadt: vom Trappensee über die Kirschenallee hinauf zur Waldheide am Stadtwald und über den Böckinger Hangweg zurück."
         }
       }
     },

@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
-from backend.schemas import EXAMPLE_TRIP, GradeCollection, RouteComparison
+from backend.schemas import EXAMPLE_TRIP, GradeCollection, RouteComparison, TourCollection
 from routing.costs import osm_way_ids
 from routing.elevation import OUT as ELEVATION_PATH
 from routing.graph import GRAPH_PATH, load_graph
@@ -232,3 +232,27 @@ def test_humped_bridge_shows_its_climb(client):
     # onto the deck (at least 100 m over 3 %), then straight down from the crest
     assert any(g >= 3 and length >= 100 and after <= -2.5 for (g, length), (after, _) in zip(pieces, pieces[1:]))
     assert grade["summary"]["climb_m"] >= 9
+
+
+def test_suggested_tours_keep_their_theme(client):
+    """Each tour is routed stop to stop and does what its card says: the green one mostly under trees, the quiet loop
+    and the riverside one almost all on bike paths, the nature one out east with a climb."""
+    body = TourCollection.model_validate(client.get("/highlights/tours").json())
+    tours = {f.properties.id: f.properties for f in body.features}
+    assert tours["scenicGreen"].tree_share >= 0.45
+    assert tours["quietEscape"].loop and tours["quietEscape"].bike_friendly_share >= 0.9
+    assert tours["riverside"].bike_friendly_share >= 0.9 and "Neckarhalde" in tours["riverside"].streets
+    assert tours["nature"].loop and "Kirschenallee" in tours["nature"].streets and tours["nature"].climb_m >= 100
+    assert all(4000 < t.length_m < 8000 for t in tours.values())
+
+
+def test_suggested_tours_are_simple_lines_through_their_stops(client):
+    """No street ridden twice (no spurs or stems), and every stop is on the line, so the map shows one plain line."""
+    for f in client.get("/highlights/tours").json()["features"]:
+        line = [tuple(p) for p in f["geometry"]["coordinates"]]
+        pieces = [frozenset(piece) for piece in zip(line, line[1:])]
+        assert len(pieces) == len(set(pieces)), f["properties"]["id"]
+        for stop in f["properties"]["stops"]:
+            metres = min(((x - stop["lon"]) * 65600) ** 2 + ((y - stop["lat"]) * 111200) ** 2 for x, y in line) ** 0.5
+            assert metres < 20, (f["properties"]["id"], stop["name"])
+        assert (line[0] == line[-1]) == f["properties"]["loop"]

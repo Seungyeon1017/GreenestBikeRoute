@@ -26,6 +26,7 @@ import type {
   SharingTrip,
   SharingVehicleChoice,
   StreetSegmentFeature,
+  TourCollection,
   VehicleCollection,
   ZoneCollection,
 } from '@/types/greenest'
@@ -190,6 +191,11 @@ export function fetchGreenestStreets(
   signal?: AbortSignal,
 ): Promise<GreenStreetCollection> {
   return getJson(`/highlights/greenest-streets?limit=${limit}`, signal)
+}
+
+/** GET /highlights/tours: the four themed rides, each routed stop to stop. */
+export function fetchTours(signal?: AbortSignal): Promise<TourCollection> {
+  return getJson('/highlights/tours', signal)
 }
 
 /**

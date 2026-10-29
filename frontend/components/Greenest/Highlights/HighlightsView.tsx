@@ -1,31 +1,15 @@
 'use client'
 
-import {
-  ArrowRight,
-  Bird,
-  type LucideIcon,
-  Map as MapIcon,
-  Moon,
-  Route,
-  Trees,
-  Waves,
-} from 'lucide-react'
+import { Map as MapIcon, Route } from 'lucide-react'
 import Link from 'next/link'
 import { useTranslation } from 'react-i18next'
 import BaseMap from '@/components/Greenest/Map'
 import RidersRoutesSection from '@/components/Greenest/RidersRoutes/RidersRoutesSection'
-import Card from '@/components/Greenest/ui/Card'
 import SenseBoxCta from '@/components/Greenest/ui/SenseBoxCta'
-import { EXPERIENCES, SAMPLE_PLACES } from './content'
+import { SAMPLE_PLACES } from './content'
 import GreenestStreets from './GreenestStreets'
 import PlaceCard from './PlaceCard'
-
-const EXPERIENCE_ICONS: Record<(typeof EXPERIENCES)[number], LucideIcon> = {
-  scenicGreen: Trees,
-  quietEscape: Moon,
-  riverside: Waves,
-  nature: Bird,
-}
+import SuggestedTours from './SuggestedTours'
 
 function SectionHeading({ title, text }: { title: string; text: string }) {
   return (
@@ -114,34 +98,7 @@ export default function HighlightsView() {
           text={t('greenest.highlights.experiencesText')}
           title={t('greenest.highlights.experiencesTitle')}
         />
-        <div className="grid gap-4 xs:grid-cols-2 lg:grid-cols-4">
-          {EXPERIENCES.map(id => {
-            const Icon = EXPERIENCE_ICONS[id]
-            return (
-              <Card
-                className="group flex flex-col gap-3 transition-transform hover:-translate-y-0.5"
-                key={id}
-              >
-                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-leaf-mint text-leaf-moss transition-colors group-hover:bg-leaf-forest group-hover:text-leaf-cream">
-                  <Icon aria-hidden className="h-5 w-5" />
-                </span>
-                <h3 className="font-display text-lg font-medium text-leaf-forest">
-                  {t(`greenest.highlights.experiences.${id}.title`)}
-                </h3>
-                <p className="flex-1 text-sm text-leaf-muted">
-                  {t(`greenest.highlights.experiences.${id}.text`)}
-                </p>
-                <Link
-                  className="flex items-center gap-1 self-start text-sm font-medium text-leaf-moss hover:text-leaf-forest"
-                  href="/plan-trip"
-                >
-                  {t('greenest.highlights.planTrip')}
-                  <ArrowRight aria-hidden className="h-4 w-4" />
-                </Link>
-              </Card>
-            )
-          })}
-        </div>
+        <SuggestedTours />
       </section>
 
       {/* D. Collect data yourself (citizen science) */}
