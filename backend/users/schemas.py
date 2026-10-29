@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_PM_PENALTY,     DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, MAX_POINTS
+
 
 class UserCreate(BaseModel):
     """Body of POST /users (sign-up)."""
@@ -34,18 +36,19 @@ class Token(BaseModel):
 
 
 class RouteOptions(BaseModel):
-    """The settings a route was planned with. Same names and limits as the query parameters
-    of /route/compare (backend/app.py), so the frontend can send them back unchanged."""
+    """The settings a route was planned with. Same names, limits and defaults as the query
+    parameters of /route/compare (penalty_query in backend/app.py), taken from routing/costs.py
+    so they stay in step when the routing team changes them."""
     model_config = ConfigDict(extra="forbid")  # a misspelled option is an error, not silently dropped
 
-    bump_penalty: float = Field(10, ge=0, le=50)
-    danger_penalty: float = Field(25, ge=0, le=100)
-    pm_penalty: float = Field(0.5, ge=0, le=5)
-    stop_penalty: float = Field(0.5, ge=0, le=5)
-    prefer_bike_friendly: float = Field(0, ge=0, le=5)
+    bump_penalty: float = Field(DEFAULT_BUMP_PENALTY, ge=0, le=MAX_POINTS)
+    danger_penalty: float = Field(DEFAULT_DANGER_PENALTY, ge=0, le=100)
+    pm_penalty: float = Field(DEFAULT_PM_PENALTY, ge=0, le=MAX_POINTS)
+    stop_penalty: float = Field(DEFAULT_STOP_PENALTY, ge=0, le=MAX_POINTS)
+    prefer_bike_friendly: float = Field(DEFAULT_PREFER_BIKE_FRIENDLY, ge=0, le=MAX_POINTS)
     prefer_time: bool = False
-    shade_penalty: float = Field(0.5, ge=0, le=5)
-    dark_penalty: float = Field(1, ge=0, le=5)
+    shade_penalty: float = Field(DEFAULT_SHADE_PENALTY, ge=0, le=MAX_POINTS)
+    dark_penalty: float = Field(DEFAULT_DARK_PENALTY, ge=0, le=MAX_POINTS)
     depart_time: str | None = Field(None, max_length=40, description="e.g. 2026-07-21T15:00, or null")
 
 
@@ -64,7 +67,7 @@ class SavedRouteCreate(BaseModel):
     model_config = {"json_schema_extra": {"example": {
         "start_lon": 9.21839, "start_lat": 49.14279, "start_label": "Rathaus Heilbronn",
         "end_lon": 9.2353, "end_lat": 49.1462, "end_label": "Pfühlpark",
-        "options": {"bump_penalty": 10, "danger_penalty": 25, "prefer_time": False},
+        "options": {"bump_penalty": 2, "danger_penalty": 10, "prefer_time": False},
         "length_m": 1850.4, "duration_s": 520}}}
 
 

@@ -203,7 +203,8 @@
       "label": "Main navigation",
       "overview": "Overview",
       "planTrip": "Plan a Trip",
-      "highlights": "Highlights"
+      "highlights": "Highlights",
+      "profile": "Profile"
     },
     "language": {
       "label": "Language",
@@ -643,6 +644,16 @@
         "warning_one": "Your route rides {{count}} street riders reported closed (dashed): check before you go.",
         "warning_other": "Your route rides {{count}} streets riders reported closed (dashed): check before you go.",
         "reportHint": "To report a closed street or a mistake in the map, use Report a problem at the top right of the map."
+      },
+      "save": {
+        "idle": "Save route",
+        "saving": "Saving…",
+        "saved": "Saved",
+        "loginToSave": "Log in to save this route",
+        "hint": "Saved routes appear on your profile. The 3 newest are kept.",
+        "savedHint": "Find it on your",
+        "loginToOpen": "Log in to open your saved route.",
+        "notFound": "This saved route no longer exists."
       }
     },
     "highlights": {
@@ -679,6 +690,38 @@
           "text": "Out to the green edges of the city."
         }
       }
+    },
+    "auth": {
+      "loginTitle": "Log in",
+      "signupTitle": "Create an account",
+      "subtitle": "Save your routes and find them again on your profile.",
+      "loginTab": "Log in",
+      "signupTab": "Sign up",
+      "email": "Email",
+      "password": "Password",
+      "displayName": "Name (optional)",
+      "loginSubmit": "Log in",
+      "signupSubmit": "Create account",
+      "busy": "One moment…",
+      "wrongLogin": "Wrong email or password.",
+      "emailTaken": "This email already has an account. Log in instead.",
+      "alreadyIn": "You are logged in as {{name}}.",
+      "toProfile": "Go to your profile"
+    },
+    "profile": {
+      "title": "Your profile",
+      "subtitle": "Your account and your saved routes.",
+      "loggedOutText": "Log in to see your account and the routes you saved.",
+      "loading": "Loading…",
+      "account": "Account",
+      "memberSince": "Member since",
+      "logOut": "Log out",
+      "savedRoutes": "Saved routes",
+      "keepsNewest": "Your 3 newest saved routes are kept.",
+      "noRoutes": "No saved routes yet. Plan a route and press \"Save route\":",
+      "savedOn": "saved {{date}}",
+      "open": "Open",
+      "delete": "Delete route"
     }
   }
 }

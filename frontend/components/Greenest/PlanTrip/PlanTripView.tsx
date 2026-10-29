@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next'
 import BaseMap from '@/components/Greenest/Map'
 import PageIntro from '@/components/Greenest/ui/PageIntro'
 import { closureNear, useReports } from '@/hooks/useReports'
+import useSavedRouteFromUrl from '@/hooks/useSavedRouteFromUrl'
 import { useSharedVehicles, useSharingTrip } from '@/hooks/useSharing'
 import { GRADE_COLOR } from '@/lib/hillColors'
 import {
@@ -16,6 +17,7 @@ import {
   fetchRouteDay,
   fetchRouteGrade,
 } from '@/services/greenestApi'
+import { fromSavedOptions } from '@/services/usersApi'
 import type {
   ClosureCollection,
   ClosureStatus,
@@ -44,6 +46,7 @@ import {
 import ReportProblem from './ReportProblem'
 import ReportsCard, { closureText } from './ReportsCard'
 import RouteComparisonCard, { ROUTE_COLORS } from './RouteComparison'
+import SaveRouteButton from './SaveRouteButton'
 import {
   drawSegments,
   flagBounds,
@@ -200,6 +203,8 @@ export default function PlanTripView() {
   const [endLabel, setEndLabel] = useState('')
   const [options, setOptions] = useState<RouteOptions>(DEFAULT_ROUTE_OPTIONS)
   const [result, setResult] = useState<RouteResult | null>(null)
+  // True once the map has loaded, so a saved route opened from the Profile gets its pins.
+  const [mapReady, setMapReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -951,6 +956,21 @@ export default function PlanTripView() {
     }
   }
 
+  // Opening a saved route from the Profile tab (/plan-trip?saved=<id>).
+  const savedRouteError = useSavedRouteFromUrl(mapReady, route => {
+    const from: LngLat = [route.start_lon, route.start_lat]
+    const to: LngLat = [route.end_lon, route.end_lat]
+    setOptions(fromSavedOptions(route.options))
+    setStart(from)
+    setStartLabel(route.start_label ?? formatPoint(from))
+    setEnd(to)
+    setEndLabel(route.end_label ?? formatPoint(to))
+    mapRef.current?.fitBounds(
+      new maplibregl.LngLatBounds(from, from).extend(to),
+      { padding: 80, maxZoom: 16 },
+    )
+  })
+
   function handleReset() {
     setStart(null)
     setEnd(null)
@@ -1027,6 +1047,15 @@ export default function PlanTripView() {
             }}
             paused={Boolean(sharingTrip.trip)}
             result={shown}
+          />
+          <SaveRouteButton
+            end={end}
+            endLabel={endLabel}
+            openError={savedRouteError}
+            options={options}
+            result={result}
+            start={start}
+            startLabel={startLabel}
           />
           <ReportsCard
             error={reports.error}
@@ -1105,6 +1134,7 @@ export default function PlanTripView() {
                 plainTripRef.current,
               )
               fadeRoutes(map, Boolean(tripRef.current))
+              setMapReady(true)
             }}
           />
           <ReportProblem

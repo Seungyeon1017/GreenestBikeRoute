@@ -203,7 +203,8 @@
       "label": "Hauptnavigation",
       "overview": "Überblick",
       "planTrip": "Route planen",
-      "highlights": "Highlights"
+      "highlights": "Highlights",
+      "profile": "Profil"
     },
     "language": {
       "label": "Sprache",
@@ -643,6 +644,16 @@
         "warning_one": "Deine Route führt über {{count}} Straße, die als gesperrt gemeldet ist (gestrichelt): Prüfe sie vor der Fahrt.",
         "warning_other": "Deine Route führt über {{count}} Straßen, die als gesperrt gemeldet sind (gestrichelt): Prüfe sie vor der Fahrt.",
         "reportHint": "Gesperrte Straßen und Fehler in der Karte meldest du mit „Problem melden“ oben rechts auf der Karte."
+      },
+      "save": {
+        "idle": "Route speichern",
+        "saving": "Wird gespeichert…",
+        "saved": "Gespeichert",
+        "loginToSave": "Anmelden, um die Route zu speichern",
+        "hint": "Gespeicherte Routen findest du in deinem Profil. Die 3 neuesten bleiben erhalten.",
+        "savedHint": "Du findest sie in deinem",
+        "loginToOpen": "Melde dich an, um deine gespeicherte Route zu öffnen.",
+        "notFound": "Diese gespeicherte Route gibt es nicht mehr."
       }
     },
     "highlights": {
@@ -679,6 +690,38 @@
           "text": "Hinaus an die grünen Ränder der Stadt."
         }
       }
+    },
+    "auth": {
+      "loginTitle": "Anmelden",
+      "signupTitle": "Konto erstellen",
+      "subtitle": "Speichere deine Routen und finde sie in deinem Profil wieder.",
+      "loginTab": "Anmelden",
+      "signupTab": "Registrieren",
+      "email": "E-Mail",
+      "password": "Passwort",
+      "displayName": "Name (optional)",
+      "loginSubmit": "Anmelden",
+      "signupSubmit": "Konto erstellen",
+      "busy": "Einen Moment…",
+      "wrongLogin": "E-Mail oder Passwort ist falsch.",
+      "emailTaken": "Für diese E-Mail gibt es schon ein Konto. Melde dich stattdessen an.",
+      "alreadyIn": "Du bist angemeldet als {{name}}.",
+      "toProfile": "Zu deinem Profil"
+    },
+    "profile": {
+      "title": "Dein Profil",
+      "subtitle": "Dein Konto und deine gespeicherten Routen.",
+      "loggedOutText": "Melde dich an, um dein Konto und deine gespeicherten Routen zu sehen.",
+      "loading": "Wird geladen…",
+      "account": "Konto",
+      "memberSince": "Dabei seit",
+      "logOut": "Abmelden",
+      "savedRoutes": "Gespeicherte Routen",
+      "keepsNewest": "Deine 3 neuesten gespeicherten Routen bleiben erhalten.",
+      "noRoutes": "Noch keine gespeicherten Routen. Plane eine Route und tippe auf „Route speichern“:",
+      "savedOn": "gespeichert am {{date}}",
+      "open": "Öffnen",
+      "delete": "Route löschen"
     }
   }
 }
