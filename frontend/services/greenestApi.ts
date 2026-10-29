@@ -7,10 +7,15 @@
  */
 import type { FeatureCollection, LineString } from 'geojson'
 import type {
+  ClosureCollection,
+  ClosureFeature,
   DayRoutes,
   GeofencingCollection,
   GradeCollection,
   LngLat,
+  MappingCollection,
+  MappingFeature,
+  MappingKind,
   OverlayName,
   PlaceCollection,
   RouteComparison,
@@ -61,10 +66,14 @@ function errorMessage(detail: unknown, status: number): string {
   return `Request failed with status ${status}`
 }
 
-async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+async function getJson<T>(
+  path: string,
+  signal?: AbortSignal,
+  init?: RequestInit,
+): Promise<T> {
   let response: Response
   try {
-    response = await fetch(`${GREENEST_API_URL}${path}`, { signal })
+    response = await fetch(`${GREENEST_API_URL}${path}`, { ...init, signal })
   } catch (error) {
     if ((error as Error).name === 'AbortError') {
       throw error
@@ -82,6 +91,14 @@ async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
     )
   }
   return response.json() as Promise<T>
+}
+
+function postJson<T>(path: string, body: unknown): Promise<T> {
+  return getJson<T>(path, undefined, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
 }
 
 /** The query string shared by /route, /route/compare and /route/grade. */
@@ -225,4 +242,65 @@ export function fetchSharingTrip(
   const params = routeParams(request)
   params.set('vehicle', vehicle)
   return getJson<SharingTrip>(`/route/sharing?${params}`, signal)
+}
+
+/** GET /reports/closures: streets riders reported closed (closed, reported or unconfirmed). */
+export function fetchClosures(
+  signal?: AbortSignal,
+): Promise<ClosureCollection> {
+  return getJson<ClosureCollection>('/reports/closures', signal)
+}
+
+/** GET /reports/mapping: riders' mapping reports still waiting for a maintainer. */
+export function fetchMappingReports(
+  signal?: AbortSignal,
+): Promise<MappingCollection> {
+  return getJson<MappingCollection>('/reports/mapping', signal)
+}
+
+/**
+ * POST /reports/closures: the street at `at` is closed. `until` (YYYY-MM-DD) is the last closed day, if known;
+ * without it the report counts for 24 h. 400 when no street is within 50 m or the date is past.
+ */
+export function reportClosure(
+  at: LngLat,
+  reporterId: string | undefined,
+  note: string | undefined,
+  until: string | undefined,
+): Promise<ClosureFeature> {
+  return postJson<ClosureFeature>('/reports/closures', {
+    lat: at[1],
+    lon: at[0],
+    reporter_id: reporterId,
+    note,
+    until,
+  })
+}
+
+/** POST /reports/closures/{segment}/confirm: one tap on a known closure, still closed or open again. */
+export function confirmClosure(
+  segment: string,
+  stillClosed: boolean,
+  reporterId: string | undefined,
+): Promise<ClosureFeature> {
+  return postJson<ClosureFeature>(
+    `/reports/closures/${encodeURIComponent(segment)}/confirm`,
+    { still_closed: stillClosed, reporter_id: reporterId },
+  )
+}
+
+/** POST /reports/mapping: the map is wrong at `at`, e.g. a footway bikes ride on. Pending until checked. */
+export function reportMapping(
+  at: LngLat,
+  kind: MappingKind,
+  reporterId: string | undefined,
+  note: string | undefined,
+): Promise<MappingFeature> {
+  return postJson<MappingFeature>('/reports/mapping', {
+    lat: at[1],
+    lon: at[0],
+    kind,
+    reporter_id: reporterId,
+    note,
+  })
 }

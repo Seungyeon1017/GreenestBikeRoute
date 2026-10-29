@@ -558,6 +558,90 @@
           "lit": "Lit at night",
           "bikePath": "Bike path or lane"
         }
+      },
+      "reports": {
+        "title": "Riders' reports",
+        "infoLabel": "About: Riders' reports",
+        "info": "One report makes routes avoid a street where there is a sensible way round; three riders close it for routing. A report counts through the date you give, else for a day. Two riders saying it is open again lift it. Footways and map mistakes wait for a maintainer to check them.",
+        "button": "Report a problem",
+        "chooseLabel": "What do you want to report?",
+        "mode": {
+          "closure": "A closed street (e.g. construction)",
+          "rideable": "A footway bikes ride on",
+          "other": "Another mistake in the map"
+        },
+        "clickHint": {
+          "closure": "Click the closed street on the map.",
+          "rideable": "Click the footway on the map.",
+          "other": "Click the spot on the map where the map is wrong."
+        },
+        "form": {
+          "title": {
+            "closure": "Report a closed street here",
+            "rideable": "Report a footway bikes ride on",
+            "other": "Report a map mistake here"
+          },
+          "note": {
+            "closure": "What is closed? (optional)",
+            "rideable": "Why may bikes ride here? (optional)",
+            "other": "What is wrong here?"
+          },
+          "placeholder": {
+            "closure": "e.g. construction, no way through",
+            "rideable": "e.g. signed for bikes (Zeichen 240)",
+            "other": "e.g. this path no longer exists"
+          },
+          "until": "Closed until (the date on the sign)",
+          "untilHint": "Leave it empty if you don't know: the report then counts for a day.",
+          "send": "Send report",
+          "sending": "Sending…",
+          "cancel": "Cancel",
+          "close": "Close",
+          "moveHint": "Click the map again to move the spot."
+        },
+        "status": {
+          "closed": "Closed",
+          "reported": "Reported closed",
+          "unconfirmed": "Maybe still closed (no report lately)",
+          "open": "Open again"
+        },
+        "closure": {
+          "reports_one": "{{count}} report",
+          "reports_other": "{{count}} reports",
+          "until": "until {{when}}",
+          "through": "through {{day}}",
+          "openReports_one": "{{count}} rider says it is open again.",
+          "openReports_other": "{{count}} riders say it is open again."
+        },
+        "stillClosed": "Still closed",
+        "openAgain": "Open again",
+        "dontKnow": "Don't know",
+        "near": "Near your trip: {{closure}}",
+        "askStill": "Is it still closed?",
+        "thanks": {
+          "closed_one": "Thanks! {{count}} report on this street: closed for routing.",
+          "closed_other": "Thanks! {{count}} reports on this street: closed for routing.",
+          "reported": "Thanks! Routes now avoid this street; three reports close it.",
+          "stillClosed": "Thanks! Routes keep avoiding it.",
+          "openAgain": "Thanks! One more rider saying it is open lifts it.",
+          "lifted": "Thanks! The street is open again for routing.",
+          "mapping": "Thanks! A maintainer will check it; once approved, routes can use it."
+        },
+        "mappingTitle": {
+          "rideable": "Footway bikes ride on (waiting for review)",
+          "other": "Map mistake (waiting for review)"
+        },
+        "show": "Show riders' reports on the map",
+        "legend": {
+          "closed": "closed",
+          "reported": "reported, routes avoid it",
+          "unconfirmed": "not confirmed lately",
+          "mapping": "waiting for review",
+          "hint": "Click a closure on the map to say whether it is still closed."
+        },
+        "warning_one": "Your route rides {{count}} street riders reported closed (dashed): check before you go.",
+        "warning_other": "Your route rides {{count}} streets riders reported closed (dashed): check before you go.",
+        "reportHint": "To report a closed street or a mistake in the map, use Report a problem at the top right of the map."
       }
     },
     "highlights": {

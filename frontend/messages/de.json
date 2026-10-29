@@ -558,6 +558,90 @@
           "lit": "Nachts beleuchtet",
           "bikePath": "Radweg oder Radspur"
         }
+      },
+      "reports": {
+        "title": "Meldungen von Radfahrenden",
+        "infoLabel": "Info: Meldungen von Radfahrenden",
+        "info": "Eine Meldung reicht, damit Routen die Straße meiden, wo es einen sinnvollen Umweg gibt; drei Radfahrende sperren sie für die Routenplanung. Eine Meldung gilt bis zu dem Datum, das du angibst, sonst einen Tag. Sagen zwei Radfahrende, dass sie wieder offen ist, wird die Sperre aufgehoben. Gehwege und Kartenfehler prüft erst jemand aus dem Team.",
+        "button": "Problem melden",
+        "chooseLabel": "Was möchtest du melden?",
+        "mode": {
+          "closure": "Gesperrte Straße (z. B. Baustelle)",
+          "rideable": "Gehweg, auf dem Räder fahren",
+          "other": "Anderer Fehler in der Karte"
+        },
+        "clickHint": {
+          "closure": "Klicke auf der Karte auf die gesperrte Straße.",
+          "rideable": "Klicke auf der Karte auf den Gehweg.",
+          "other": "Klicke auf der Karte auf die Stelle, an der die Karte falsch ist."
+        },
+        "form": {
+          "title": {
+            "closure": "Gesperrte Straße hier melden",
+            "rideable": "Gehweg melden, auf dem Räder fahren",
+            "other": "Kartenfehler hier melden"
+          },
+          "note": {
+            "closure": "Was ist gesperrt? (optional)",
+            "rideable": "Warum dürfen Räder hier fahren? (optional)",
+            "other": "Was ist hier falsch?"
+          },
+          "placeholder": {
+            "closure": "z. B. Baustelle, Durchfahrt gesperrt",
+            "rideable": "z. B. Radfahrer frei (Zeichen 240)",
+            "other": "z. B. diesen Weg gibt es nicht mehr"
+          },
+          "until": "Gesperrt bis (das Datum auf dem Schild)",
+          "untilHint": "Leer lassen, wenn du es nicht weißt: Die Meldung gilt dann einen Tag.",
+          "send": "Meldung senden",
+          "sending": "Wird gesendet…",
+          "cancel": "Abbrechen",
+          "close": "Schließen",
+          "moveHint": "Klicke nochmal auf die Karte, um die Stelle zu verschieben."
+        },
+        "status": {
+          "closed": "Gesperrt",
+          "reported": "Als gesperrt gemeldet",
+          "unconfirmed": "Vielleicht noch gesperrt (keine aktuelle Meldung)",
+          "open": "Wieder offen"
+        },
+        "closure": {
+          "reports_one": "{{count}} Meldung",
+          "reports_other": "{{count}} Meldungen",
+          "until": "bis {{when}}",
+          "through": "bis einschließlich {{day}}",
+          "openReports_one": "{{count}} Person sagt, sie ist wieder offen.",
+          "openReports_other": "{{count}} Personen sagen, sie ist wieder offen."
+        },
+        "stillClosed": "Noch gesperrt",
+        "openAgain": "Wieder offen",
+        "dontKnow": "Weiß nicht",
+        "near": "In der Nähe deiner Fahrt: {{closure}}",
+        "askStill": "Ist sie noch gesperrt?",
+        "thanks": {
+          "closed_one": "Danke! {{count}} Meldung zu dieser Straße: für die Routenplanung gesperrt.",
+          "closed_other": "Danke! {{count}} Meldungen zu dieser Straße: für die Routenplanung gesperrt.",
+          "reported": "Danke! Routen meiden diese Straße jetzt; drei Meldungen sperren sie.",
+          "stillClosed": "Danke! Routen meiden sie weiterhin.",
+          "openAgain": "Danke! Sagt noch eine Person, dass sie offen ist, wird die Sperre aufgehoben.",
+          "lifted": "Danke! Die Straße ist wieder für die Routenplanung offen.",
+          "mapping": "Danke! Jemand aus dem Team prüft es; danach können Routen den Weg nutzen."
+        },
+        "mappingTitle": {
+          "rideable": "Gehweg, auf dem Räder fahren (wird geprüft)",
+          "other": "Kartenfehler (wird geprüft)"
+        },
+        "show": "Meldungen auf der Karte zeigen",
+        "legend": {
+          "closed": "gesperrt",
+          "reported": "gemeldet, Routen meiden sie",
+          "unconfirmed": "zuletzt nicht bestätigt",
+          "mapping": "wird geprüft",
+          "hint": "Klicke auf der Karte auf eine Sperrung, um zu sagen, ob sie noch besteht."
+        },
+        "warning_one": "Deine Route führt über {{count}} Straße, die als gesperrt gemeldet ist (gestrichelt): Prüfe sie vor der Fahrt.",
+        "warning_other": "Deine Route führt über {{count}} Straßen, die als gesperrt gemeldet sind (gestrichelt): Prüfe sie vor der Fahrt.",
+        "reportHint": "Gesperrte Straßen und Fehler in der Karte meldest du mit „Problem melden“ oben rechts auf der Karte."
       }
     },
     "highlights": {

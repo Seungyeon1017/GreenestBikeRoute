@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import BaseMap from '@/components/Greenest/Map'
 import PageIntro from '@/components/Greenest/ui/PageIntro'
+import { closureNear, useReports } from '@/hooks/useReports'
 import { useSharedVehicles, useSharingTrip } from '@/hooks/useSharing'
 import { GRADE_COLOR } from '@/lib/hillColors'
 import {
@@ -16,10 +17,14 @@ import {
   fetchRouteGrade,
 } from '@/services/greenestApi'
 import type {
+  ClosureCollection,
+  ClosureStatus,
   DayRoutes,
   GeofencingCollection,
   GradeCollection,
   LngLat,
+  MappingCollection,
+  ReportKind,
   RouteFlag,
   RouteKind,
   RouteOptions,
@@ -31,6 +36,13 @@ import type {
 } from '@/types/greenest'
 import DaySlider, { dayStops, stopAt } from './DaySlider'
 import GradeCard from './GradeCard'
+import {
+  CLICKABLE_REPORT_LAYERS,
+  drawReports,
+  reportPopup,
+} from './reportLayers'
+import ReportProblem from './ReportProblem'
+import ReportsCard, { closureText } from './ReportsCard'
 import RouteComparisonCard, { ROUTE_COLORS } from './RouteComparison'
 import {
   drawSegments,
@@ -244,6 +256,25 @@ export default function PlanTripView() {
     tripOptions,
   )
 
+  // Riders' reports: closures and mapping mistakes.
+  const reports = useReports()
+  const [showReports, setShowReports] = useState(true)
+  // What "Report a problem" reports at the next map click; null: a click plans the route.
+  const [reportKind, setReportKind] = useState<ReportKind | null>(null)
+  // Where the rider clicked to report, until the report is sent or cancelled.
+  const [draft, setDraft] = useState<LngLat | null>(null)
+  const [reportStatus, setReportStatus] = useState<string | null>(null)
+  // A closure near the trip's start or end to ask about: riders there know if it is still closed.
+  const nearClosure = useMemo(
+    () =>
+      start && end && showReports
+        ? closureNear(reports.closures, [start, end])
+        : null,
+    // `skipped`: a "don't know" puts the question aside (kept in localStorage).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [reports.closures, reports.skipped, start, end, showReports],
+  )
+
   // 2. REFS: values kept between redraws that don't trigger a redraw themselves.
   const mapRef = useRef<maplibregl.Map | null>(null)
   const resultRef = useRef<RouteResult | null>(null)
@@ -262,6 +293,16 @@ export default function PlanTripView() {
   plainTripRef.current = sharingTrip.plainTrip
   const fencesRef = useRef<GeofencingCollection | null>(null)
   fencesRef.current = fences
+  const reportsRef = useRef<{
+    closures: ClosureCollection | null
+    mapping: MappingCollection | null
+    show: boolean
+  }>({ closures: null, mapping: null, show: true })
+  reportsRef.current = {
+    closures: reports.closures,
+    mapping: reports.mapping,
+    show: showReports,
+  }
   const popupRef = useRef<maplibregl.Popup | null>(null)
   // The stretch popup: follows the mouse while hovering a route line, stays put once clicked or tapped.
   const segmentPopupRef = useRef<{
@@ -313,7 +354,8 @@ export default function PlanTripView() {
       clearTimeout(timer)
       controller.abort()
     }
-  }, [start, end, options, dayMode])
+    // routeVersion: a closure was reported or answered, so the route may change.
+  }, [start, end, options, dayMode, reports.routeVersion])
 
   // Ask for the route's hills when "Show hills" is on and the points or options change.
   useEffect(() => {
@@ -422,6 +464,40 @@ export default function PlanTripView() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [pinnedFlag])
+
+  // Riders' reports on the map.
+  useEffect(() => {
+    if (mapRef.current) {
+      drawReports(
+        mapRef.current,
+        reports.closures,
+        reports.mapping,
+        showReports,
+      )
+    }
+  }, [reports.closures, reports.mapping, showReports])
+
+  // Another kind of report, or back to planning the route: the marked spot goes.
+  useEffect(() => {
+    setDraft(null)
+  }, [reportKind])
+
+  // A pin where the rider is reporting: red for a closure, purple for the map.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !draft || !reportKind) {
+      return
+    }
+    const marker = new maplibregl.Marker({
+      color: reportKind === 'closure' ? '#b3261e' : '#5e35b1',
+      scale: 0.8,
+    })
+      .setLngLat(draft)
+      .addTo(map)
+    return () => {
+      marker.remove()
+    }
+  }, [draft, reportKind])
 
   // Shared vehicles and parking zones.
   useEffect(() => {
@@ -719,9 +795,117 @@ export default function PlanTripView() {
     return true
   }
 
+  /** The thank-you line after a closure report or answer, from the street's new status. */
+  function closureThanks(
+    status: ClosureStatus,
+    count: number,
+    stillClosed?: boolean,
+  ): string {
+    const k = (key: string, values?: Record<string, unknown>) =>
+      t(`greenest.planTrip.reports.thanks.${key}`, values)
+    if (status === 'open') {
+      return k('lifted')
+    }
+    if (stillClosed !== undefined) {
+      return k(stillClosed ? 'stillClosed' : 'openAgain')
+    }
+    return status === 'closed' ? k('closed', { count }) : k('reported')
+  }
+
+  /** One tap on a known closure: still closed (a new report) or open again (two riders lift it). */
+  function answerClosure(segment: string, stillClosed: boolean) {
+    popupRef.current?.remove()
+    reports
+      .answer(segment, stillClosed)
+      .then(f =>
+        setReportStatus(
+          closureThanks(f.properties.status, f.properties.reports, stillClosed),
+        ),
+      )
+      .catch(err => setReportStatus(err.message))
+  }
+
+  /** Sends the report at the marked spot; rejects with the backend's message. */
+  async function submitReport(note: string, until: string): Promise<string> {
+    if (!draft || !reportKind) {
+      return ''
+    }
+    let message: string
+    if (reportKind === 'closure') {
+      const f = await reports.sendClosure(
+        draft,
+        note || undefined,
+        until || undefined,
+      )
+      message = closureThanks(f.properties.status, f.properties.reports)
+    } else {
+      await reports.sendMapping(draft, reportKind, note || undefined)
+      message = t('greenest.planTrip.reports.thanks.mapping')
+    }
+    setDraft(null)
+    return message
+  }
+
+  /** Opens a popup if the click hit a closure or a mapping report; returns whether it did. */
+  function openReportPopup(map: maplibregl.Map, point: LngLat): boolean {
+    const layers = CLICKABLE_REPORT_LAYERS.filter(id => map.getLayer(id))
+    if (!showReports || !layers.length) {
+      return false
+    }
+    const { x, y } = map.project(point)
+    const r = CLICK_TOLERANCE_PX
+    const [hit] = map.queryRenderedFeatures(
+      [
+        [x - r, y - r],
+        [x + r, y + r],
+      ],
+      { layers },
+    )
+    if (!hit) {
+      return false
+    }
+    const content = reportPopup(
+      hit.layer.id,
+      hit.properties,
+      {
+        closure: p => closureText(p, t, i18n.language),
+        stillClosed: t('greenest.planTrip.reports.stillClosed'),
+        openAgain: t('greenest.planTrip.reports.openAgain'),
+        mappingTitle: p =>
+          t(`greenest.planTrip.reports.mappingTitle.${p.kind}`),
+      },
+      answerClosure,
+    )
+    popupRef.current?.remove()
+    popupRef.current = new maplibregl.Popup({
+      className: 'greenest-popup',
+      focusAfterOpen: false,
+      offset: 10,
+      maxWidth: '280px',
+    })
+      // A mapping report opens at its dot, a closure where it was clicked.
+      .setLngLat(
+        hit.geometry.type === 'Point'
+          ? (hit.geometry.coordinates as LngLat)
+          : point,
+      )
+      .setDOMContent(content)
+      .addTo(map)
+    return true
+  }
+
   function handleMapClick(point: LngLat) {
     const map = mapRef.current
+    // A known closure or report opens its popup, whatever a click is set to do.
+    if (map && openReportPopup(map, point)) {
+      return
+    }
     if (map && openSharingPopup(map, point)) {
+      return
+    }
+    // Reporting (after "Report a problem"): the click marks the spot, the form is in that panel.
+    if (reportKind) {
+      setDraft(point)
       return
     }
     // A click on a route line explains that stretch instead of moving the destination there.
@@ -780,6 +964,8 @@ export default function PlanTripView() {
     setGradeError(null)
     setPinnedFlag(null)
     setPreviewFlag(null)
+    setDraft(null)
+    setReportStatus(null)
   }
 
   // 5. RENDER: what appears on the page.
@@ -842,6 +1028,15 @@ export default function PlanTripView() {
             paused={Boolean(sharingTrip.trip)}
             result={shown}
           />
+          <ReportsCard
+            error={reports.error}
+            near={nearClosure}
+            onAnswer={answerClosure}
+            onShowChange={setShowReports}
+            onSkip={reports.skip}
+            show={showReports}
+            status={reportStatus}
+          />
           <SharingCard
             error={sharing.error}
             hasRoute={Boolean(start && end)}
@@ -869,18 +1064,25 @@ export default function PlanTripView() {
             show={showHills}
           />
         </div>
-        <section className="h-[60vh] min-h-[420px] overflow-hidden rounded-3xl border border-leaf-sand shadow-soft lg:h-auto lg:min-h-0">
+        <section className="relative h-[60vh] min-h-[420px] overflow-hidden rounded-3xl border border-leaf-sand shadow-soft lg:h-auto lg:min-h-0">
           <BaseMap
             ariaLabel={t('greenest.planTrip.mapLabel')}
             onClick={handleMapClick}
             onLoad={map => {
               mapRef.current = map
-              // Bottom to top: routes, hills, highlighted stretches, shared vehicles, the rented-vehicle trip.
+              // Bottom to top: routes, hills, highlighted stretches, riders' reports, shared vehicles,
+              // the rented-vehicle trip.
               drawRoutes(map, resultRef.current)
               drawGrade(map, gradeRef.current)
               drawSegments(map, resultRef.current)
               highlightFlag(map, shownFlagRef.current)
               bindSegmentHover(map)
+              drawReports(
+                map,
+                reportsRef.current.closures,
+                reportsRef.current.mapping,
+                reportsRef.current.show,
+              )
               drawSharing(
                 map,
                 sharingRef.current.vehicles,
@@ -894,6 +1096,12 @@ export default function PlanTripView() {
               )
               fadeRoutes(map, Boolean(tripRef.current))
             }}
+          />
+          <ReportProblem
+            draft={draft}
+            kind={reportKind}
+            onKindChange={setReportKind}
+            onSubmit={submitReport}
           />
         </section>
       </div>

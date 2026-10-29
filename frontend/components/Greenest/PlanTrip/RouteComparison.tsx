@@ -175,6 +175,17 @@ export default function RouteComparison({
           {t('greenest.planTrip.comparisonPaused')}
         </p>
       )}
+      {/* Streets riders reported closed that the route still rides: there was no sensible way round. */}
+      {!paused && result && result.route.properties.reported_closures > 0 && (
+        <p
+          className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900"
+          role="alert"
+        >
+          {t('greenest.planTrip.reports.warning', {
+            count: result.route.properties.reported_closures,
+          })}
+        </p>
+      )}
       <div
         aria-disabled={paused || undefined}
         className={cx(

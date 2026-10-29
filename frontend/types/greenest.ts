@@ -115,6 +115,8 @@ export type RouteProperties = {
   /** Chance the streets are lit 0–1. */
   mean_lit: number | null
   lifts: number
+  /** Streets riders reported closed (status reported or unconfirmed) that the route still rides: worth a warning. */
+  reported_closures: number
   /** Rough energy use for riding the route; an estimate, show it rounded. */
   kcal: number
 
@@ -384,3 +386,50 @@ export type SharingTrip = {
   updated: string
   attribution: string
 }
+
+/**
+ * closed: 3+ independent live reports, routes don't use it. reported: fewer, routes avoid it where they can.
+ * unconfirmed: the reports lapsed less than 3 days ago; routes still avoid it, riders nearby get asked.
+ * open: only in the answer to a report or `/confirm`, when riders' answers just lifted it.
+ */
+export type ClosureStatus = 'closed' | 'reported' | 'unconfirmed' | 'open'
+
+/** A street segment riders reported closed, from `/reports/closures`. */
+export type ClosureProperties = {
+  /** "u-v", the OSM node ids at its two junctions; the id for `/confirm`. */
+  segment: string
+  osm_way_ids: number[]
+  status: ClosureStatus
+  /** Live independent reports; "still closed" answers count as reports. */
+  reports: number
+  /** Riders who said it is open again since the last report; 2 lift it. */
+  open_reports: number
+  note: string | null
+  /** ISO 8601, UTC. */
+  last_report: string
+  /** When the last report lapses (ISO 8601, UTC). */
+  expires: string
+}
+
+export type ClosureFeature = Feature<LineString, ClosureProperties>
+export type ClosureCollection = FeatureCollection<LineString, ClosureProperties>
+
+/** rideable: a footway bikes may and do ride on that routing leaves out; other: any other map mistake. */
+export type MappingKind = 'rideable' | 'other'
+
+/** A rider's mapping report, from `/reports/mapping` (pending until a maintainer checks it). */
+export type MappingProperties = {
+  id: number
+  kind: MappingKind
+  osm_way_id: number | null
+  note: string | null
+  status: 'pending' | 'approved' | 'rejected'
+  created: string
+  resolved: string | null
+}
+
+export type MappingFeature = Feature<Point, MappingProperties>
+export type MappingCollection = FeatureCollection<Point, MappingProperties>
+
+/** What "Report a problem" reports at the next map click: a closed street, or a mapping mistake. */
+export type ReportKind = 'closure' | MappingKind
