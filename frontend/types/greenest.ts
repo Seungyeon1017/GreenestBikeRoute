@@ -238,7 +238,6 @@ export type RouteKind = 'shortest' | 'greenest'
 export type HighlightPlace = {
   id: string
   name: string
-  description: string
   category: 'park' | 'riverside' | 'green-space' | 'destination'
   imageUrl?: string
   /** Photo credit, shown on the photo; required for CC licenses. */
@@ -251,8 +250,6 @@ export type HighlightPlace = {
   }
   /** Approximate point; omitted until verified. */
   location?: LngLat
-  /** True while the card text is placeholder content. */
-  demo: boolean
 }
 
 /** One piece of the route from `/route/grade`, all with the same steepness class. */

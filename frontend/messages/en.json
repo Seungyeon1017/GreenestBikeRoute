@@ -673,6 +673,12 @@
       "noLocation": "Location not verified yet",
       "photoBy": "Photo: {{author}}, {{license}}",
       "mapLabel": "Map of highlighted places",
+      "places": {
+        "pfuehlpark": "Large city park with old trees and quiet paths.",
+        "wertwiesenpark": "Open park space close to the Neckar.",
+        "neckarbogen": "Riverside quarter with green spaces along the water.",
+        "stadtgarten": "Green space in the city centre."
+      },
       "placesTitle": "Explore green places",
       "placesText": "Parks, riverside paths and green spaces worth a ride.",
       "roadsTitle": "Greenest roads",
