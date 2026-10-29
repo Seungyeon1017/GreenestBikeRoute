@@ -57,7 +57,7 @@ def test_me_with_invalid_token_is_401(client):
 
 
 def test_me_with_token_signed_by_another_key_is_401(client, user):
-    forged = jwt.encode({"sub": str(user["id"])}, "someone-elses-key", algorithm="HS256")
+    forged = jwt.encode({"sub": str(user["id"])}, "someone-elses-key-that-is-long-enough-for-hs256", algorithm="HS256")
 
     response = client.get("/users/me", headers={"Authorization": f"Bearer {forged}"})
 

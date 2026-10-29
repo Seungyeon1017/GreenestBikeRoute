@@ -78,6 +78,12 @@ def client(db: Session) -> TestClient:
     app.dependency_overrides[get_db] = lambda: db
     return TestClient(app)
 
+def sign_up_and_log_in(client: TestClient, email: str) -> dict:
+    """Creates a user and returns the headers for its requests: {"Authorization": "Bearer ..."}."""
+    assert client.post("/users", json={"email": email, "password": PASSWORD}).status_code == 201
+    response = client.post("/auth/login", data={"username": email, "password": PASSWORD})
+    assert response.status_code == 200
+    return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 @pytest.fixture
 def user(client: TestClient) -> dict:
@@ -97,3 +103,8 @@ def token(client: TestClient, user: dict) -> str:
 @pytest.fixture
 def auth_headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
+
+@pytest.fixture
+def other_auth_headers(client: TestClient) -> dict:
+    """Headers of a second user, to check that users can't see or change each other's data."""
+    return sign_up_and_log_in(client, "ben@example.com")

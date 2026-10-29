@@ -11,8 +11,11 @@ from backend.users.database import get_db
 from backend.users.models import User
 from backend.users.schemas import Token, UserCreate, UserOut
 from backend.users.security import CurrentUser, create_access_token, hash_password, verify_password
+from backend.users import saved_routes
 
 router = APIRouter(tags=["Users"])
+# /users/me/routes: saved routes (saved_routes.py). Included here so backend/app.py stays unchanged.
+router.include_router(saved_routes.router)
 
 DB = Annotated[Session, Depends(get_db)]
 
