@@ -2,7 +2,8 @@
 
 import { useTranslation } from 'react-i18next'
 import Card, { CardTitle } from '@/components/Greenest/ui/Card'
-import type { GradeCollection, GradeProperties } from '@/types/greenest'
+import type { GradeCollection } from '@/types/greenest'
+import { GRADE_BANDS } from '@/lib/hillColors'
 
 type GradeCardProps = {
   show: boolean
@@ -13,14 +14,6 @@ type GradeCardProps = {
   hasRoute: boolean
 }
 
-const SEVERITIES: Array<GradeProperties['severity']> = [
-  'flat',
-  'gentle',
-  'noticeable',
-  'steep',
-  'very_steep',
-]
-
 /** "Show hills" toggle plus climb, descent and steepest part of the route from /route/grade. */
 export default function GradeCard({
   show,
@@ -30,12 +23,6 @@ export default function GradeCard({
   hasRoute,
 }: GradeCardProps) {
   const { t } = useTranslation()
-
-  // The colour the backend uses for each severity that occurs on this route.
-  const colors = new Map<string, string>()
-  grade?.features.forEach(f =>
-    colors.set(f.properties.severity, f.properties.color),
-  )
 
   return (
     <Card className="flex flex-col gap-3">
@@ -89,21 +76,35 @@ export default function GradeCard({
               </dd>
             </div>
           </dl>
-          <ul className="flex flex-wrap gap-x-3 gap-y-1">
-            {SEVERITIES.filter(s => colors.has(s)).map(severity => (
-              <li
-                className="flex items-center gap-1.5 text-[11px] text-leaf-muted"
-                key={severity}
-              >
+          <div className="flex flex-col gap-1 text-[11px] text-leaf-muted">
+            <div className="flex justify-between">
+              <span>{t('greenest.planTrip.hills.legend.down')}</span>
+              <span>{t('greenest.planTrip.hills.legend.up')}</span>
+            </div>
+            {/* One equal swatch per band, exactly the colours on the map. */}
+            <div aria-hidden className="flex h-2 overflow-hidden rounded-full">
+              {GRADE_BANDS.map(({ from, color }) => (
                 <span
-                  aria-hidden
-                  className="h-1.5 w-4 rounded-full"
-                  style={{ backgroundColor: colors.get(severity) }}
+                  className="flex-1"
+                  key={from}
+                  style={{ backgroundColor: color }}
                 />
-                {t(`greenest.planTrip.hills.severity.${severity}`)}
-              </li>
-            ))}
-          </ul>
+              ))}
+            </div>
+            {/* The grade where one band ends and the next starts, under that border. */}
+            <div aria-hidden className="relative h-3.5 text-[10px] tabular-nums">
+              {GRADE_BANDS.slice(1).map(({ from }, i) => (
+                <span
+                  className="absolute -translate-x-1/2"
+                  key={from}
+                  style={{ left: `${(100 * (i + 1)) / GRADE_BANDS.length}%` }}
+                >
+                  {from}
+                </span>
+              ))}
+            </div>
+            <p>{t('greenest.planTrip.hills.legend.hint')}</p>
+          </div>
           <p className="text-[11px] text-leaf-muted/70">
             {t('greenest.planTrip.hills.credit')}
           </p>

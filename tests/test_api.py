@@ -3,9 +3,9 @@ from fastapi.testclient import TestClient
 
 from backend.app import create_app
 from backend.schemas import DangerCollection, FlowCollection, GradeCollection, LightingCollection, RouteCollection, \
-    RouteComparison, RoughnessCollection, ScoreCollection, ShadeCollection, SpeedCollection
+    RouteComparison, RoughnessCollection, ScoreCollection, ShadeCollection, SpeedCollection, DayRoutes
 from download_data import HEILBRONN_BBOX, overtaking_risk
-from routing.costs import MIN_OVERTAKING_CM
+from routing.costs import DEFAULT_BUMP_PENALTY, MIN_OVERTAKING_CM
 from routing.graph import attach_lighting, attach_shade
 from tests.conftest import COORDS, A, B, joined
 
@@ -14,6 +14,9 @@ from tests.conftest import COORDS, A, B, joined
 def client(toy_graph):
     with TestClient(create_app(graph=toy_graph)) as c:
         yield c
+
+
+RIDER = ("weight_kg", "e_bike")  # the routes take them for their kcal; /score has no single ride
 
 
 def params(bump_penalty=None, start=COORDS[A]):
@@ -28,6 +31,13 @@ def test_route_returns_geojson(client):
     assert r.status_code == 200
     assert r.headers["content-type"] == "application/geo+json"
     assert r.json()["features"][0]["properties"]["length_m"] == 100
+
+
+def test_route_has_kcal_for_the_rider(client):
+    base = client.get("/route", params=params()).json()["features"][0]["properties"]["kcal"]
+    heavy = client.get("/route", params={**params(), "weight_kg": 90}).json()["features"][0]["properties"]["kcal"]
+    e_bike = client.get("/route", params={**params(), "e_bike": True}).json()["features"][0]["properties"]["kcal"]
+    assert heavy > base > e_bike
 
 
 def test_route_matches_the_documented_schema(client):
@@ -60,11 +70,12 @@ def test_penalty_changes_the_route(client):
 
 
 def test_default_penalty_is_used(client):
-    assert client.get("/route", params=params()).json()["features"][0]["properties"]["bump_penalty"] == 10
+    assert client.get("/route", params=params()).json()["features"][0]["properties"]["bump_penalty"] == DEFAULT_BUMP_PENALTY
 
 
 def test_negative_penalty_is_invalid(client):
     assert client.get("/route", params=params(bump_penalty=-1)).status_code == 422
+    assert client.get("/route", params=params(bump_penalty=11)).status_code == 422  # points go up to 10
 
 
 def test_unroutable_point_is_400(client):
@@ -76,7 +87,7 @@ def test_unroutable_point_is_400(client):
 def test_penalty_is_documented(client):
     spec = client.get("/openapi.json").json()
     bump_penalty = next(p for p in spec["paths"]["/route"]["get"]["parameters"] if p["name"] == "bump_penalty")
-    assert bump_penalty["description"].startswith("How much do you hate bumps. 0 = ignore")
+    assert bump_penalty["description"].startswith("How much do you hate bumps, in points 0-10")
 
 
 def test_danger_penalties_are_passed_through(client):
@@ -150,7 +161,7 @@ def lit_client(toy_graph):
 
 def test_depart_time_is_passed_through_and_off_by_default(lit_client):
     p = lit_client.get("/route", params=params()).json()["features"][0]["properties"]
-    assert (p["depart_time"], p["daylight"], p["shade_penalty"], p["dark_penalty"]) == (None, None, 0.5, 1.0)
+    assert (p["depart_time"], p["daylight"], p["shade_penalty"], p["dark_penalty"]) == (None, None, 2, 4)
     p = lit_client.get("/route", params={**params(), "depart_time": "2026-07-21T14:00", "shade_penalty": 2}).json()["features"][0]["properties"]
     assert (p["depart_time"], p["daylight"], p["shade_slot"], p["shade_penalty"]) == ("2026-07-21T14:00+02:00", True, SLOTS[1], 2)
     p = lit_client.get("/route", params={**params(), "depart_time": "2026-10-28T19:30"}).json()["features"][0]["properties"]
@@ -186,9 +197,9 @@ def test_score_overlay_ranks_streets_by_cost_per_metre(client):
     assert r.status_code == 200
     assert r.headers["content-type"] == "application/geo+json"
     body = ScoreCollection.model_validate(r.json())
-    # C -> B (smooth, 70 m) beats A -> C (default roughness, 70 m) beats A -> B (bumpy, 100 m): midpoint
-    # percentile of the 240 m by cost per metre, e.g. C -> B (170 + 70 / 2) / 240.
-    assert [f.properties["score"] for f in body.features] == [85.4, 56.2, 20.8]
+    # C -> B (smooth, 70 m) and A -> C (default roughness, 70 m) are no rougher than typical, so they tie and beat
+    # A -> B (bumpy, 100 m): midpoint percentile of the 240 m by cost per metre, e.g. A -> B (100 / 2) / 240.
+    assert [f.properties["score"] for f in body.features] == [70.8, 70.8, 20.8]
 
 
 def test_score_overlay_follows_the_penalties(client):
@@ -196,20 +207,20 @@ def test_score_overlay_follows_the_penalties(client):
     # Without the bump penalty, the bumpy A -> B costs what the others do: all three tie in the middle.
     assert scores(bump_penalty=0) == [50.0, 50.0, 50.0]
     assert scores(bump_penalty=0, danger_penalty=0, pm_penalty=0, stop_penalty=0) == [50.0, 50.0, 50.0]
-    assert scores(bump_penalty=50) == scores()  # same order: A -> B is the bumpiest either way
+    assert scores(bump_penalty=10) == scores()  # same order: A -> B is the bumpiest either way
     assert client.get("/score", params={"bump_penalty": -1}).status_code == 422
     spec = client.get("/openapi.json").json()["paths"]
     names = lambda path: [p["name"] for p in spec[path]["get"]["parameters"]]
-    assert names("/score") == names("/route")[4:]  # everything but the start and end
+    assert names("/score") == [n for n in names("/route") if n not in RIDER][4:]  # everything but the start and end
 
 
 def test_score_overlay_counts_unlit_streets_after_dark(toy_graph):
     attach_lighting(toy_graph, {12: 1.0, 13: 0.0, 14: 0.0})  # the smooth C -> B is unlit
     with TestClient(create_app(graph=toy_graph)) as c:
         scores = lambda **p: [f["properties"]["score"] for f in c.get("/score", params=p).json()["features"]]
-        assert scores() == [85.4, 56.2, 20.8]
-        # After dark C -> B costs as much per metre as A -> C: both get the middle of their 140 m.
-        assert sorted(scores(depart_time="2026-10-28T19:30")) == [20.8, 70.8, 70.8]
+        assert scores() == [70.8, 70.8, 20.8]
+        # After dark the unlit C -> B costs more per metre than the lit A -> C, which now ranks alone on top.
+        assert scores(depart_time="2026-10-28T19:30") == [85.4, 56.2, 20.8]
         assert c.get("/score", params={"depart_time": "tomorrow"}).status_code == 422
 
 
@@ -243,3 +254,17 @@ def test_grade_without_elevation_data_is_503(client):
     r = client.get("/route/grade", params=params())
     assert r.status_code == 503
     assert "routing.elevation" in r.json()["detail"]
+
+
+def test_day_returns_periods_of_comparisons(client):
+    r = client.get("/route/day", params={**params(), "depart_time": "2026-07-21T15:00"})
+    assert r.status_code == 200
+    body = DayRoutes.model_validate(r.json())
+    assert body.date == "2026-07-21"
+    assert (r.json()["periods"][0]["from"], body.periods[-1].to) == ("00:00", "23:59")
+
+
+def test_day_takes_the_same_parameters_and_errors_as_route(client):
+    names = lambda path: {p["name"] for p in client.get("/openapi.json").json()["paths"][path]["get"]["parameters"]}
+    assert names("/route/day") == names("/route")
+    assert client.get("/route/day", params=params(start=(48.7758, 9.1829))).status_code == 400

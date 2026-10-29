@@ -1,11 +1,13 @@
 from datetime import datetime, timezone
 
+import networkx as nx
 import pytest
 
 from routing import graph
+from routing.calories import DEFAULT_WEIGHT_KG, ride_kcal, walk_kcal
 from routing.costs import AIR_HOTSPOT_OFFSET, AIR_PRIOR_RIDES
 from routing.graph import attach_bike_friendly, attach_danger, attach_lighting, attach_roughness, attach_shade, attach_speed, attach_stop_go
-from routing.route import RouteError, compare_routes, find_route, sky
+from routing.route import WALK_KMH, RouteError, compare_routes, day_routes, find_route, sky
 from tests.conftest import COORDS, A, B, C
 
 
@@ -112,6 +114,25 @@ def test_prefer_time_takes_the_faster_detour(toy_graph):
     # 100 m at 5 km/h takes longer than 140 m at 20 km/h
     p = find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 0, 0, prefer_time=True)["features"][0]["properties"]
     assert (p["length_m"], p["prefer_time"], p["duration_s"], p["speed_measured_share"]) == (140, True, 25, 1.0)
+
+
+def test_climb_m_is_null_without_elevation(toy_graph):
+    assert route(toy_graph, 0)["properties"]["climb_m"] is None
+
+
+def test_climb_m_and_kcal_count_the_ascent(hilly):
+    p = route(hilly, 10)["properties"]  # the detour A -> C -> B climbs 5 m
+    assert p["climb_m"] == 5
+    assert p["kcal"] == pytest.approx(ride_kcal(p["duration_s"], 5, DEFAULT_WEIGHT_KG), abs=0.2)
+
+
+def test_kcal_follows_the_rider_and_the_bike(toy_graph):
+    p = route(toy_graph, 0)["properties"]
+    # the toy graph has no elevation, so the climb counts as 0
+    assert p["kcal"] == pytest.approx(ride_kcal(p["duration_s"], 0, DEFAULT_WEIGHT_KG), abs=0.1)
+    heavy = find_route(toy_graph, COORDS[A], COORDS[B], 0, weight_kg=90)["features"][0]["properties"]
+    e_bike = find_route(toy_graph, COORDS[A], COORDS[B], 0, e_bike=True)["features"][0]["properties"]
+    assert heavy["kcal"] > p["kcal"] and e_bike["kcal"] < p["kcal"]
 
 
 def test_compare_routes_reports_extra_time(toy_graph):
@@ -263,26 +284,26 @@ def route_props(G, **kw):
 
 def test_shade_penalty_detours_into_the_shade_by_day_only(sunny_unlit_shortcut):
     G = sunny_unlit_shortcut
-    p = route_props(G, shade_penalty=1, dark_penalty=0, depart_time=SUMMER_AFTERNOON)  # 100 x 2 > 140
+    p = route_props(G, shade_penalty=4, dark_penalty=0, depart_time=SUMMER_AFTERNOON)  # 100 x 2 > 140
     assert (p["length_m"], p["daylight"], p["shade_slot"], p["mean_shade"]) == (140, True, SLOTS[2], 1.0)
-    p = route_props(G, shade_penalty=1, dark_penalty=0, depart_time=SUMMER_NIGHT)
+    p = route_props(G, shade_penalty=4, dark_penalty=0, depart_time=SUMMER_NIGHT)
     assert (p["length_m"], p["daylight"], p["shade_slot"], p["mean_shade"]) == (100, False, None, None)
 
 
 def test_dark_penalty_detours_onto_lit_streets_after_dark_only(sunny_unlit_shortcut):
     G = sunny_unlit_shortcut
-    p = route_props(G, shade_penalty=0, dark_penalty=1, depart_time=SUMMER_NIGHT)
+    p = route_props(G, shade_penalty=0, dark_penalty=4, depart_time=SUMMER_NIGHT)
     assert (p["length_m"], p["mean_lit"], p["lit_known_share"]) == (140, 1.0, 1.0)
-    assert route_props(G, shade_penalty=0, dark_penalty=1, depart_time=SUMMER_AFTERNOON)["length_m"] == 100
+    assert route_props(G, shade_penalty=0, dark_penalty=4, depart_time=SUMMER_AFTERNOON)["length_m"] == 100
 
 
 def test_without_depart_time_shade_and_lighting_change_nothing(sunny_unlit_shortcut):
-    p = route_props(sunny_unlit_shortcut, shade_penalty=5, dark_penalty=5)
+    p = route_props(sunny_unlit_shortcut, shade_penalty=10, dark_penalty=10)
     assert (p["length_m"], p["depart_time"], p["daylight"], p["mean_shade"], p["mean_lit"]) == (100, None, None, None, 0.0)
 
 
 def test_compare_routes_plans_the_shortest_route_for_the_same_time(sunny_unlit_shortcut):
-    r = compare_routes(sunny_unlit_shortcut, COORDS[A], COORDS[B], 0, 0, 0, 0, shade_penalty=1, depart_time=SUMMER_AFTERNOON)
+    r = compare_routes(sunny_unlit_shortcut, COORDS[A], COORDS[B], 0, 0, 0, 0, shade_penalty=4, depart_time=SUMMER_AFTERNOON)
     assert r["shortest"]["properties"]["depart_time"] == "2026-07-21T15:00+02:00"
     assert (r["shortest"]["properties"]["mean_shade"], r["route"]["properties"]["mean_shade"]) == (0.0, 1.0)
 
@@ -291,6 +312,91 @@ def test_prefer_bike_friendly_detours_onto_bike_friendly_streets(toy_graph):
     attach_bike_friendly(toy_graph, {12, 13})  # A->C and C->B (osmid [13, 14]) are bike lanes, A->B is not
     zero = {"bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0}
     assert find_route(toy_graph, COORDS[A], COORDS[B], **zero)["features"][0]["properties"]["length_m"] == 100
-    f = find_route(toy_graph, COORDS[A], COORDS[B], **zero, prefer_bike_friendly=1)["features"][0]
+    f = find_route(toy_graph, COORDS[A], COORDS[B], **zero, prefer_bike_friendly=4)["features"][0]
     assert f["properties"]["length_m"] == 140
-    assert f["properties"]["prefer_bike_friendly"] == 1
+    assert f["properties"]["prefer_bike_friendly"] == 4
+
+
+def test_route_reports_metres_on_bad_streets(toy_graph):
+    attach_bike_friendly(toy_graph, {12})
+    p = route_props(toy_graph)  # A -> B, roughness 80
+    assert (p["bumpy_m"], p["bike_friendly_m"], p["sunny_m"], p["unlit_m"], p["pushed_m"]) == (100, 0, None, None, 0)
+    p = find_route(toy_graph, COORDS[A], COORDS[B], 50, 0, 0, 0)["features"][0]["properties"]  # via C
+    assert (p["bumpy_m"], p["bike_friendly_m"]) == (0, 70)
+
+
+def test_route_reports_sunny_metres_by_day_and_unlit_metres_after_dark(sunny_unlit_shortcut):
+    G = sunny_unlit_shortcut
+    p = route_props(G, shade_penalty=0, depart_time=SUMMER_AFTERNOON)
+    assert (p["sunny_m"], p["unlit_m"]) == (100, None)
+    p = route_props(G, dark_penalty=0, depart_time=SUMMER_NIGHT)
+    assert (p["sunny_m"], p["unlit_m"]) == (None, 100)
+
+
+def test_scooter_kcal_counts_only_pushing(toy_graph):
+    for d in toy_graph.edges.values():
+        d.update(roughness=0.0, highway="footway", bicycle="yes")  # every street a footway: push all the way
+    p = find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 0, 0, scooter=True)["features"][0]["properties"]
+    assert p["pushed_m"] == p["length_m"]
+    assert p["kcal"] == pytest.approx(walk_kcal(p["length_m"] / (WALK_KMH / 3.6)), abs=0.1)
+
+
+def test_scooter_is_pushed_on_footways_not_signed_for_bikes(toy_graph):
+    for d in toy_graph.edges.values():
+        d["roughness"] = 0.0
+    toy_graph.edges[A, B, 0].update(highway="footway", bicycle="yes")  # Gehweg, Radfahrer frei
+    bike = route_props(toy_graph)
+    assert (bike["length_m"], bike["pushed_m"]) == (100, 0)
+    scooter = find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 0, 0, scooter=True)["features"][0]["properties"]
+    assert (scooter["length_m"], scooter["pushed_m"]) == (140, 0)  # riding round beats pushing 100 m
+    toy_graph.edges[A, B, 0]["bicycle"] = "designated"  # Zeichen 240: a shared path scooters must use
+    assert find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 0, 0, scooter=True)["features"][0]["properties"]["length_m"] == 100
+
+
+def test_day_routes_split_the_day_by_sky(sunny_unlit_shortcut):
+    day = day_routes(sunny_unlit_shortcut, COORDS[A], COORDS[B], 0, 0, 0, 0, shade_penalty=4, dark_penalty=0,
+                     depart_time=SUMMER_AFTERNOON)
+    periods = day["periods"]
+    assert day["date"] == "2026-07-21"
+    assert (periods[0]["from"], periods[-1]["to"]) == ("00:00", "23:59")
+    assert all(a["to"] == b["from"] for a, b in zip(periods[:-1], periods[1:]))
+    slots = [p["route"]["properties"]["shade_slot"] for p in periods]
+    assert slots == [None, *SLOTS, None]  # night, the four shade slots, night
+    # By day the sunny shortcut is avoided, after dark (dark_penalty 0) it is taken.
+    assert [p["route"]["properties"]["length_m"] for p in periods] == [100, 140, 140, 140, 140, 100]
+    assert [p["same_path"] for p in periods] == [True, False, False, False, False, True]
+
+
+def test_segments_cover_the_route_with_its_flags(toy_graph):
+    toy_graph.edges[C, B, 0]["name"] = "Oststraße"
+    f = find_route(toy_graph, COORDS[A], COORDS[B], 10)["features"][0]  # the detour A -> C -> B
+    segments = f["properties"]["segments"]
+    assert [(s["from_index"], s["to_index"], s["start_m"], s["name"]) for s in segments] == [(0, 1, 0, None), (1, 2, 70, "Oststraße")]
+    assert segments[0]["roughness"] is None and segments[1]["roughness"] == 0
+    # Unnamed streets with the same flags make one stretch, length-weighted over the measured part.
+    del toy_graph.edges[C, B, 0]["name"]
+    merged = find_route(toy_graph, COORDS[A], COORDS[B], 10)["features"][0]["properties"]["segments"]
+    assert [(s["to_index"], s["length_m"], s["roughness"]) for s in merged] == [(2, 140, 0)]
+    shortest = find_route(toy_graph, COORDS[A], COORDS[B], 0)["features"][0]["properties"]["segments"]
+    assert [(s["to_index"], s["flags"], s["roughness"]) for s in shortest] == [(2, ["bumpy_m"], 80)]
+
+
+def test_a_sidewalk_without_a_name_is_named_after_the_road_beside_it():
+    G = nx.MultiDiGraph(crs="epsg:4326")
+    points = {"r1": (49.1400, 9.2100), "r2": (49.1400, 9.2120), "s1": (49.14009, 9.2100), "s2": (49.14009, 9.2120),
+              "p1": (49.1420, 9.2100), "p2": (49.1420, 9.2120)}
+    for n, (lat, lon) in points.items():
+        G.add_node(n, y=lat, x=lon)
+    for a, b, osmid, tags in (("r1", "r2", 1, {"name": "Allee", "highway": "residential"}),
+                              ("s1", "s2", 2, {"highway": "footway", "footway": "sidewalk"}),
+                              ("p1", "p2", 3, {"highway": "path"}),  # 220 m away: no road beside it
+                              ("s2", "p2", 4, {"highway": "path"})):  # leaves the road at a right angle
+        for u, v in ((a, b), (b, a)):
+            G.add_edge(u, v, osmid=osmid, length=146.0, roughness=None, **tags)
+
+    def segments(start, end):
+        f = find_route(G, points[start], points[end], 0)["features"][0]
+        return [(s["name"], s["way"], s["along"]) for s in f["properties"]["segments"]]
+
+    assert segments("s1", "s2") == [("Allee", "sidewalk", True)]
+    assert segments("s1", "p1") == [("Allee", "sidewalk", True), (None, "path", False)]

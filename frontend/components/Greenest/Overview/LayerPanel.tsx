@@ -24,9 +24,15 @@ export default function LayerPanel({
   const { t } = useTranslation()
 
   return (
-    <Card className="flex flex-col gap-3">
-      <CardTitle>{t('greenest.overview.layersTitle')}</CardTitle>
-      <ul className="flex flex-col gap-2">
+    // On wide screens the title stays put and only the list scrolls, inside the card.
+    <Card className="flex flex-col gap-3 lg:max-h-full lg:min-h-0">
+      <div className="space-y-1">
+        <CardTitle>{t('greenest.overview.layersTitle')}</CardTitle>
+        <p className="text-xs text-leaf-muted">
+          {t('greenest.overview.streetLayersHint')}
+        </p>
+      </div>
+      <ul className="flex flex-col gap-2 lg:-mr-3 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:pr-3">
         {layers.map(layer => {
           const inputId = `layer-${layer.id}`
           const available = layer.availability !== 'unavailable'
@@ -52,7 +58,8 @@ export default function LayerPanel({
                   type="checkbox"
                 />
                 <div className="min-w-0 flex-1 space-y-1.5">
-                  <div className="flex items-start justify-between gap-2">
+                  {/* Badge under the title: long German names leave no room beside it. */}
+                  <div className="flex flex-col items-start gap-1">
                     <label
                       className={cx(
                         'block text-sm font-medium',

@@ -13,14 +13,19 @@ import LayerPanel from './LayerPanel'
 import { ENVIRONMENT_LAYERS } from './layers'
 import OverviewMap from './OverviewMap'
 
+const STREET_LAYERS = new Set(
+  ENVIRONMENT_LAYERS.filter(layer => layer.colorsStreets).map(
+    layer => layer.id,
+  ),
+)
+
 export default function OverviewView() {
   const { t } = useTranslation()
   const overview = useOverviewData()
   const data = overview.status === 'ready' ? overview.data : null
 
   const [enabled, setEnabled] = useState<Set<EnvironmentLayerId>>(
-    () =>
-      new Set<EnvironmentLayerId>(['air-quality', 'cycling-infrastructure']),
+    () => new Set<EnvironmentLayerId>(['air-quality', 'surface-roughness']),
   )
   // Backend layers, each downloaded the first time it's switched on.
   const overlays = useOverlays(ENVIRONMENT_LAYERS, enabled)
@@ -44,21 +49,32 @@ export default function OverviewView() {
       const next = new Set(prev)
       if (next.has(id)) {
         next.delete(id)
-      } else {
-        next.add(id)
+        return next
       }
+      // Street layers would paint over each other, so switching one on
+      // switches the others off. Areas and points stack on top.
+      if (STREET_LAYERS.has(id)) {
+        STREET_LAYERS.forEach(other => next.delete(other))
+      }
+      next.add(id)
       return next
     })
 
   return (
-    <div className="mx-auto flex w-full max-w-[1920px] flex-1 flex-col gap-4 px-4 py-4 md:px-8">
+    // data-workspace: on wide screens the page fills the window and doesn't
+    // scroll; the map's row takes the remaining height and the side panels
+    // scroll inside it, so a panel growing never moves or resizes the map.
+    <div
+      className="mx-auto flex min-h-0 w-full max-w-[1920px] flex-1 flex-col gap-4 px-4 py-4 md:px-8"
+      data-workspace
+    >
       <PageIntro
-        eyebrow={t('greenest.overview.eyebrow')}
         subtitle={t('greenest.overview.subtitle')}
         title={t('greenest.overview.title')}
       />
-      <div className="grid flex-1 grid-cols-1 gap-4 lg:grid-cols-[18rem_minmax(0,1fr)_20rem]">
-        <aside className="order-2 lg:order-1">
+      <div className="grid flex-1 grid-cols-1 gap-4 lg:min-h-0 lg:grid-cols-[18rem_minmax(0,1fr)_20rem] lg:grid-rows-[minmax(0,1fr)]">
+        {/* On phones the area details come right under the map, the layer list after them. */}
+        <aside className="order-3 lg:order-1 lg:flex lg:min-h-0 lg:flex-col">
           <LayerPanel
             enabled={enabled}
             layers={ENVIRONMENT_LAYERS}
@@ -66,7 +82,7 @@ export default function OverviewView() {
             overlays={overlays}
           />
         </aside>
-        <section className="relative order-1 h-[60vh] min-h-[420px] overflow-hidden rounded-3xl border border-leaf-sand shadow-soft lg:order-2 lg:h-auto">
+        <section className="relative order-1 h-[60vh] min-h-[420px] overflow-hidden rounded-3xl border border-leaf-sand shadow-soft lg:order-2 lg:h-auto lg:min-h-0">
           <OverviewMap
             ariaLabel={t('greenest.overview.mapLabel')}
             data={data}
@@ -91,7 +107,7 @@ export default function OverviewView() {
             </div>
           )}
         </section>
-        <aside className="order-3">
+        <aside className="order-2 lg:order-3 lg:flex lg:min-h-0 lg:flex-col">
           <AreaDetailsPanel
             area={selectedArea}
             onClear={() => setSelectedCell(null)}

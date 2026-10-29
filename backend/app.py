@@ -10,21 +10,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.reports import SNAP_M, ReportError, Reports
-from backend.schemas import EXAMPLE_TRIP, AirCollection, BikeFriendlyCollection, ClosureAnswer, ClosureCollection, ClosureFeature, ClosureReport, \
-    DangerCollection, Error, FlowCollection, GradeCollection, LightingCollection, MappingCollection, MappingFeature, \
-    MappingReport, PlaceCollection, RouteCollection, RouteComparison, RoughnessCollection, ScoreCollection, ShadeCollection, \
-    SpeedCollection, VehicleCollection, ZoneCollection
+from backend.schemas import EXAMPLE_TRIP, AirCollection, BikeFriendlyCollection, ClosureAnswer, ClosureCollection, ClosureFeature, ClosureReport,     DangerCollection, DayRoutes, Error, FlowCollection, GeofencingCollection, GradeCollection, LightingCollection, MappingCollection,     MappingFeature, MappingReport, PlaceCollection, RouteCollection, RouteComparison, RoughnessCollection, ScoreCollection,     ShadeCollection, SharingTrip, SpeedCollection, VehicleCollection, ZoneCollection
 from backend.geocoding import Geocoder, GeocodingUnavailable, normalize
-from backend.sharing import Sharing, SharingUnavailable
+from backend.sharing import ATTRIBUTION, Sharing, SharingUnavailable
 from backend.users.router import router as users_router
 from download_data import DATA_DIR, load_features
+from routing.calories import DEFAULT_WEIGHT_KG
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_PM_PENALTY, \
-    DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, air_scores, clean_overtaking, osm_way_ids
+    DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, MAX_POINTS, air_scores, clean_overtaking, \
+    osm_way_ids
 from routing.elevation import attach_elevation, load_crests, load_elevation
 from routing.grade import NoElevationError, route_grade
 from routing.graph import load_graph
-from routing.route import RouteError, compare_routes, edge_coords, find_route, nearest_street, set_closures, sky, \
-    street_scores
+from routing.route import RouteError, compare_routes, day_routes, edge_coords, find_route, nearest_street, set_closures,     sky, street_scores
+from routing.sharing_trip import WalkNetwork, load_walk_graph, plan_sharing_trip
 
 
 class GeoJSONResponse(JSONResponse):
@@ -192,27 +191,31 @@ def trip_example(name):
 
 
 def penalty_query(
-    bump_penalty: float = Query(DEFAULT_BUMP_PENALTY, ge=0, le=50, description=(
-        "How much do you hate bumps. 0 = ignore; 10 accepts a few % detour for smoother streets; 50 = strongly avoid")),
+    bump_penalty: float = Query(DEFAULT_BUMP_PENALTY, ge=0, le=MAX_POINTS, description=(
+        "How much do you hate bumps, in points 0-10: each point makes a street among the bumpiest tenth cost 25% more "
+        "than a typical one (2 = 1.5x, 10 = 3.5x), smoother than typical costs nothing extra. 0 = ignore")),
     danger_penalty: float = Query(DEFAULT_DANGER_PENALTY, ge=0, le=100, description=(
         "How much do you hate close overtaking: metres of detour you'd ride to pass one fewer close-overtaking spot")),
-    pm_penalty: float = Query(DEFAULT_PM_PENALTY, ge=0, le=5, description=(
-        "How much do you hate bad air (fine dust). 0 = ignore, 5 = strongly avoid")),
-    stop_penalty: float = Query(DEFAULT_STOP_PENALTY, ge=0, le=5, description=(
-        "How much do you hate stop-and-go (traffic lights, congestion, waiting for a lift). 0 = ignore, "
-        "5 = strongly avoid; detours stay small, as streets differ little. Each lift costs this x 100 m")),
+    pm_penalty: float = Query(DEFAULT_PM_PENALTY, ge=0, le=MAX_POINTS, description=(
+        "How much do you hate bad air (fine dust), in points 0-10 as bump_penalty: each point makes a street among the "
+        "worst tenth cost 25% more than a typical one. 0 = ignore")),
+    stop_penalty: float = Query(DEFAULT_STOP_PENALTY, ge=0, le=MAX_POINTS, description=(
+        "How much do you hate stop-and-go (traffic lights, congestion, waiting for a lift), in points 0-10 as "
+        "bump_penalty. 0 = ignore. Each lift costs this x 25 m")),
     prefer_time: bool = Query(False, description=(
         "Time matters, not distance: weigh each street by its riding time at the measured cyclist speed "
         "(unmeasured streets at the median, 15.7 km/h) instead of its length. The penalties still apply")),
-    shade_penalty: float = Query(DEFAULT_SHADE_PENALTY, ge=0, le=5, description=(
-        "By day: how much do you hate riding in the sun. 0 = ignore, 5 = strongly prefer shaded streets. "
+    shade_penalty: float = Query(DEFAULT_SHADE_PENALTY, ge=0, le=MAX_POINTS, description=(
+        "By day: how much do you hate riding in the sun, in points 0-10: each point makes a fully sunny street cost 25% "
+        "more. 0 = ignore. "
         "Only applies with a depart_time when the sun is up")),
-    dark_penalty: float = Query(DEFAULT_DARK_PENALTY, ge=0, le=5, description=(
-        "After dark: how much do you hate unlit streets. 0 = ignore, 5 = strongly prefer lit streets. "
+    dark_penalty: float = Query(DEFAULT_DARK_PENALTY, ge=0, le=MAX_POINTS, description=(
+        "After dark: how much do you hate unlit streets, in points 0-10: each point makes a surely unlit street cost "
+        "25% more. 0 = ignore. "
         "Only applies with a depart_time between sunset and sunrise")),
-    prefer_bike_friendly: float = Query(DEFAULT_PREFER_BIKE_FRIENDLY, ge=0, le=5, description=(
+    prefer_bike_friendly: float = Query(DEFAULT_PREFER_BIKE_FRIENDLY, ge=0, le=MAX_POINTS, description=(
         "How much do you prefer bike-friendly streets (bike paths, bike lanes, bike routes; see /bike-friendly-streets). "
-        "0 = ignore; 1 makes other streets feel twice as long")),
+        "In points 0-10: each point makes other streets cost 25% more (4 = they feel twice as long). 0 = ignore. Multiplies with the other dislikes, so it doesn't drown them")),
     depart_time: Optional[datetime] = Query(None, description=(
         "When the trip starts, e.g. 2026-07-21T15:00 (Heilbronn local time) or with a time zone. Sun up: "
         "shade_penalty applies; sun down: dark_penalty applies. Leave out to ignore both"),
@@ -234,6 +237,20 @@ def route_query(
 ):
     """The query parameters shared by /route, /route/compare and /route/grade."""
     return (from_lat, from_lon), (to_lat, to_lon), penalties
+
+
+def weight_query(weight_kg: float = Query(DEFAULT_WEIGHT_KG, gt=0, le=250, description=(
+        "Rider weight in kg (with the bike's for climbs), for kcal. Does not change the route"))):
+    return weight_kg
+
+
+def rider_query(
+    weight_kg=Depends(weight_query),
+    e_bike: bool = Query(False, description=(
+        "Pedelec: kcal is a rough estimate, see routing/calories.py. Does not change the route")),
+):
+    """The rider's weight and bike, for the kcal estimate of /route."""
+    return {"weight_kg": weight_kg, "e_bike": e_bike}
 
 
 # /score collections kept for the most recent penalty settings; each is ~4 MB.
@@ -274,10 +291,11 @@ SHARING_ERRORS = {503: {"description": "The sharing feed can't be read right now
 GEOCODE_ERRORS = {503: {"description": "The place search (Nominatim) can't be reached right now", "model": Error}}
 
 
-def create_app(graph=None, sharing=None, reports=None, geocoder=None):
-    """`graph`, `sharing`, `reports` and `geocoder` let tests pass a small graph, a fake feed, an in-memory report store
-    and a fake place search; by default the Heilbronn graph is loaded at startup, bike and scooter sharing is read live
-    from MobiData BW, reports are kept in data/reports.sqlite3 and places are searched with Nominatim."""
+def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph=None):
+    """`graph`, `sharing`, `reports`, `geocoder` and `walk_graph` let tests pass small graphs, a fake feed, an in-memory
+    report store and a fake place search; by default the Heilbronn bike graph is loaded at startup, the walking graph on
+    the first /route/sharing, bike and scooter sharing is read live from MobiData BW, reports are kept in
+    data/reports.sqlite3 and places are searched with Nominatim."""
 
     @asynccontextmanager
     async def lifespan(app):
@@ -301,36 +319,71 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None):
         except SharingUnavailable as e:
             raise HTTPException(status_code=503, detail=str(e))
 
-    def routed(route_fn, query):
+    def routed(route_fn, query, **rider):
         origin, destination, penalties = query
         set_closures(app.state.graph, reports.closures())
         try:
-            return route_fn(app.state.graph, origin, destination, *penalties)
+            return route_fn(app.state.graph, origin, destination, *penalties, **rider)
         except RouteError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
     @app.get("/route", tags=[ROUTING], summary="Bike route from A to B as GeoJSON", response_class=GeoJSONResponse,
-             response_model=RouteCollection, response_description="One LineString feature: the route",
+             response_model=RouteCollection, response_description="One LineString feature: the route, with its kcal estimate",
              responses=ROUTE_ERRORS)
-    def route(query=Depends(route_query)):
-        return GeoJSONResponse(routed(find_route, query))
+    def route(query=Depends(route_query), rider=Depends(rider_query)):
+        return GeoJSONResponse(routed(find_route, query, **rider))
 
     @app.get("/route/compare", tags=[ROUTING], summary="Bike route from A to B next to the shortest route",
              response_model=RouteComparison, responses=ROUTE_ERRORS,
              response_description="The route, the shortest route, and how much they differ")
-    def route_compare(query=Depends(route_query)):
-        return JSONResponse(routed(compare_routes, query))
+    def route_compare(query=Depends(route_query), rider=Depends(rider_query)):
+        return JSONResponse(routed(compare_routes, query, **rider))
+
+    @app.get("/route/day", tags=[ROUTING], summary="The route from A to B for every departure time of one day",
+             response_model=DayRoutes, responses=ROUTE_ERRORS,
+             response_description="Periods of the day with the same route, each as from /route/compare")
+    def route_day(query=Depends(route_query), rider=Depends(rider_query)):
+        """Like /route/compare, for the whole day of depart_time (today without one), e.g. for a departure time slider:
+        by day the route follows the shade of the nearest shade slot, after dark the lit streets."""
+        return JSONResponse(routed(day_routes, query, **rider))
 
     @app.get("/route/grade", tags=[ROUTING], summary="The route from /route split into pieces coloured by grade (display only)",
              response_class=GeoJSONResponse, response_model=GradeCollection,
              responses={**ROUTE_ERRORS, 503: {"description": "No elevation data: run python -m routing.elevation",
                                               "model": Error}},
              response_description="LineStrings with `grade_pct`, `severity` and `color`, plus route totals in `summary`")
-    def route_grade_pieces(query=Depends(route_query)):
+    def route_grade_pieces(query=Depends(route_query), rider=Depends(rider_query)):
         try:
-            return GeoJSONResponse(routed(route_grade, query))
+            return GeoJSONResponse(routed(route_grade, query, **rider))
         except NoElevationError as e:
             raise HTTPException(status_code=503, detail=str(e))
+
+    @app.get("/route/sharing", tags=[ROUTING, SHARING], summary="Walk to a shared e-bike or e-scooter, ride it, walk to the end",
+             response_model=SharingTrip, responses={**ROUTE_ERRORS, **SHARING_ERRORS},
+             response_description="The vehicle to rent, the parking zone to leave it at, and the three legs")
+    def route_sharing(query=Depends(route_query), vehicle: Literal["all", "bike", "scooter"] = Query(
+            "all", description="Rent only an e-bike (bike), only an e-scooter (scooter), or whichever is quicker (all)"),
+            park_in_zone: bool = Query(False, description=(
+                "Always end the ride at a parking zone. Off: at the end itself, unless parking is not allowed there "
+                "(see /sharing/geofencing); then wherever allowed that gets you to the end soonest")),
+            weight_kg=Depends(weight_query)):
+        """The quickest trip with a vehicle free to rent now within 1 km walk of the start, with enough battery.
+        Dott is free-floating: the ride ends at the destination, or where its no-parking zones send you.
+        400 when there is no vehicle or nowhere to leave it, 503 when the sharing feed can't be read."""
+        origin, destination, penalties = query
+        try:
+            snap = sharing.snapshot()
+        except SharingUnavailable as e:
+            raise HTTPException(status_code=503, detail=str(e))
+        set_closures(app.state.graph, reports.closures())
+        if not hasattr(app.state, "walk"):
+            app.state.walk = WalkNetwork(walk_graph if walk_graph is not None else load_walk_graph())
+        try:
+            trip = plan_sharing_trip(app.state.graph, app.state.walk, snap["vehicles"], snap["zones"], origin, destination,
+                                     penalties, vehicle, park_in_zone, snap["geofencing"], weight_kg)
+        except RouteError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return JSONResponse({**trip, "updated": snap["updated"], "attribution": ATTRIBUTION})
 
     @app.get("/roughness", tags=[OVERLAYS], summary="Measured street roughness as GeoJSON, e.g. for a map overlay",
              response_class=GeoJSONResponse, response_model=RoughnessCollection,
@@ -485,6 +538,14 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None):
             "pending", description="Only reports with this status")):
         return GeoJSONResponse({"type": "FeatureCollection",
                                 "features": [mapping_feature(r) for r in reports.mapping_reports(status)]})
+
+    @app.get("/sharing/geofencing", tags=[SHARING], summary="Where shared vehicles may be left: the provider's geofencing zones",
+             response_class=GeoJSONResponse, response_model=GeofencingCollection, responses=SHARING_ERRORS,
+             response_description="Polygons in feed order (an earlier zone wins where zones overlap) with the end rule per vehicle kind")
+    def sharing_geofencing():
+        """Dott's no-parking zones (pedestrian zones, parks, ...), zones where vehicles may only be left at a parking
+        zone, exceptions inside them, and last its whole Heilbronn area, where a ride may end anywhere."""
+        return GeoJSONResponse(shared("geofencing", (None, None)))
 
     app.include_router(users_router)
     return app

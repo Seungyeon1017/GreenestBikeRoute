@@ -4,7 +4,13 @@ import { cx } from 'class-variance-authority'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { LngLat } from '@/types/greenest'
+
+// Below this width the page scrolls past the map (no full-window layout), so
+// one finger or the plain wheel scrolls the page and the map needs two
+// fingers or Ctrl + scroll. Same breakpoint as Tailwind's `lg`.
+const SCROLLING_PAGE_QUERY = '(max-width: 1023px)'
 
 export const HEILBRONN_CENTER: LngLat = [9.2185, 49.1427]
 // Same basemap as the existing dashboard maps (see components/Tiles/Climate/PM/PMMap.tsx).
@@ -48,6 +54,7 @@ export default function BaseMap({
   onLoad,
   onClick,
 }: BaseMapProps) {
+  const { t } = useTranslation()
   const containerRef = useRef<HTMLDivElement>(null)
 
   // Store the latest callbacks in refs. The map is created once, so its event
@@ -67,6 +74,16 @@ export default function BaseMap({
       center,
       zoom,
       attributionControl: { compact: true },
+      cooperativeGestures: window.matchMedia(SCROLLING_PAGE_QUERY).matches,
+      locale: {
+        'CooperativeGesturesHandler.WindowsHelpText': t(
+          'greenest.map.ctrlScroll',
+        ),
+        'CooperativeGesturesHandler.MacHelpText': t('greenest.map.cmdScroll'),
+        'CooperativeGesturesHandler.MobileHelpText': t(
+          'greenest.map.twoFingers',
+        ),
+      },
     })
     map.addControl(new maplibregl.NavigationControl(), 'top-right')
 
@@ -98,7 +115,6 @@ export default function BaseMap({
     />
   )
 }
-
 
 /* 'use client'
 

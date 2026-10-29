@@ -31,8 +31,6 @@ export const ROUGHNESS_STEPS = [
   { color: '#d63b3b', max: Infinity, label: '30+' },
 ]
 
-export const CYCLE_LANE_COLOR = '#0d9488'
-
 // Colours for the backend overlays, from bad (red) to good (green).
 const RED = '#d63b3b'
 const ORANGE = '#f2994a'
@@ -141,6 +139,7 @@ const legendOf = (steps: Array<{ color: string; label: string }>) =>
 export const ENVIRONMENT_LAYERS: EnvironmentLayer[] = [
   {
     id: 'environmental-score',
+    colorsStreets: true,
     overlay: 'score',
     unit: 'score 0–100 (higher = better)',
     source: 'GreenestBikeRoute routing: ATRAI senseBox:bike, OpenStreetMap',
@@ -160,21 +159,25 @@ export const ENVIRONMENT_LAYERS: EnvironmentLayer[] = [
     legend: legendOf(PM_RISK_STEPS),
   },
   {
-    id: 'cycling-infrastructure',
+    id: 'surface-roughness',
+    colorsStreets: true,
     unit: 'roughness 0–100',
-    source: 'ATRAI senseBox:bike (bumpy_roads), OpenStreetMap',
+    source: 'ATRAI senseBox:bike (bumpy_roads)',
     availability: 'measured',
-    legend: [
-      ...legendOf(ROUGHNESS_STEPS),
-      { color: CYCLE_LANE_COLOR, label: 'cycle lane (OSM)' },
-    ],
+    legend: legendOf(ROUGHNESS_STEPS),
   },
   {
     id: 'bike-friendly',
+    colorsStreets: true,
     overlay: 'bike-friendly-streets',
     source: 'OpenStreetMap contributors (ODbL)',
-    availability: 'measured',
-    legend: [{ color: '#0f766e', label: 'bike path, bike lane or bike route' }],
+    availability: 'mapped',
+    legend: [
+      {
+        color: '#0f766e',
+        label: 'bike path or lane, way open to bikes, or bike route',
+      },
+    ],
   },
   {
     id: 'overtaking',
@@ -186,6 +189,7 @@ export const ENVIRONMENT_LAYERS: EnvironmentLayer[] = [
   },
   {
     id: 'stop-and-go',
+    colorsStreets: true,
     overlay: 'flow',
     unit: 'stop-and-go 0–1',
     source: 'ATRAI senseBox:bike (traffic_flow)',
@@ -198,6 +202,7 @@ export const ENVIRONMENT_LAYERS: EnvironmentLayer[] = [
   },
   {
     id: 'speed',
+    colorsStreets: true,
     overlay: 'speed',
     unit: 'km/h',
     source: 'ATRAI senseBox:bike (speed_map)',
@@ -210,6 +215,7 @@ export const ENVIRONMENT_LAYERS: EnvironmentLayer[] = [
   },
   {
     id: 'shade',
+    colorsStreets: true,
     overlay: 'shade',
     unit: `share in shade, ${SHADE_HOUR}:00 on 21 July`,
     source: 'LGL BW LoD2, Stadt Heilbronn Baumkataster (dl-de/by-2-0)',
@@ -222,6 +228,7 @@ export const ENVIRONMENT_LAYERS: EnvironmentLayer[] = [
   },
   {
     id: 'lighting',
+    colorsStreets: true,
     overlay: 'lighting',
     unit: 'chance the street is lit 0–1',
     source:

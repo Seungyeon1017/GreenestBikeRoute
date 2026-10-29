@@ -194,6 +194,11 @@
   },
   "greenest": {
     "vision": "The fastest route gets you there sooner. The greenest route makes the journey better.",
+    "map": {
+      "ctrlScroll": "Use Ctrl + scroll to zoom the map",
+      "cmdScroll": "Use ⌘ + scroll to zoom the map",
+      "twoFingers": "Use two fingers to move the map"
+    },
     "nav": {
       "label": "Main navigation",
       "overview": "Overview",
@@ -206,13 +211,17 @@
       "en": "English"
     },
     "footer": {
-      "basedOn": "Based on",
-      "mapData": "Map data"
+      "basedOn": "Based on the",
+      "sourceCode": "Source code",
+      "data": "Data",
+      "osm": "© OpenStreetMap contributors"
     },
     "availability": {
       "measured": "Measured",
       "estimated": "Estimated",
       "demo": "Sample",
+      "mapped": "Mapped",
+      "no-data": "No data here",
       "unavailable": "Not connected yet"
     },
     "layers": {
@@ -220,9 +229,9 @@
         "label": "Air quality",
         "description": "Traffic and fine-dust risk index measured on bike rides, averaged per 500 m area."
       },
-      "cycling-infrastructure": {
-        "label": "Cycling infrastructure",
-        "description": "Measured road surface roughness and cycle lanes tagged in OpenStreetMap."
+      "surface-roughness": {
+        "label": "Surface roughness",
+        "description": "How bumpy the road surface is, measured by sensor bikes."
       },
       "noise": {
         "label": "Noise pollution",
@@ -234,11 +243,11 @@
       },
       "environmental-score": {
         "label": "Overall score",
-        "description": "Every street rated 0–100 by all measured factors together: roughness, close overtakes, air, stop-and-go. Higher is better."
+        "description": "How good each street is for cycling (0–100): smooth surface, safe overtaking, clean air, few stops, etc. Higher is better."
       },
       "bike-friendly": {
         "label": "Bike paths & lanes",
-        "description": "Bike paths, bike lanes and signposted bike routes from OpenStreetMap."
+        "description": "Bike paths and lanes, footways and tracks open to bikes, and signposted bike routes from OpenStreetMap."
       },
       "overtaking": {
         "label": "Close overtaking",
@@ -263,8 +272,9 @@
     },
     "overview": {
       "title": "Explore your city's environment",
-      "subtitle": "See air quality, noise, greenery and cycling infrastructure across Heilbronn. Turn layers on and off and click an area for details.",
+      "subtitle": "See what matters for cycling: air, road surface, traffic, shade and lighting. Turn layers on and off and click an area for details.",
       "layersTitle": "Environmental layers",
+      "streetLayersHint": "Layers that colour the streets are shown one at a time.",
       "detailsTitle": "Area details",
       "detailsEmpty": "Click an area on the map to see its measured indicators, data source and unit.",
       "mapLabel": "Environmental map of Heilbronn",
@@ -289,7 +299,6 @@
         "length": "{{km}} km of measured streets",
         "manoeuvres": "based on {{count}} measured overtaking manoeuvres"
       },
-      "eyebrow": "Heilbronn · Environment",
       "loadingLayer": "Loading layer…",
       "layerError": "Could not load this layer."
     },
@@ -297,10 +306,7 @@
       "title": "Find your greenest route",
       "subtitle": "Compare the shortest route with a route planned around what you care about: smooth streets, safe overtaking, clean air and fewer stops.",
       "formTitle": "Your trip",
-      "clickHint": "Click the map to set the start, then the destination.",
-      "startPoint": "Start",
-      "endPoint": "Destination",
-      "notSet": "Not set",
+      "clickHint": "Search for a place, or click the map: first the start, then the destination.",
       "penalties": {
         "bump": "Dislike bumps",
         "danger": "Dislike close overtaking",
@@ -310,7 +316,7 @@
         "shade": "Prefer shade (by day)",
         "dark": "Prefer lit streets (after dark)"
       },
-      "moreOptions": "More options",
+      "options": "Options",
       "preferTime": "Fastest instead of shortest",
       "preferTimeHint": "Plans by riding time, using the speeds cyclists were measured at.",
       "departTime": "Departure time",
@@ -324,27 +330,49 @@
       "destination": "Destination",
       "destinationPlaceholder": "e.g. Pfühlpark",
       "comparisonTitle": "Route comparison",
+      "comparisonPaused": "Showing the trip with a rented vehicle on the map. This comparison is for riding your own bike, so it is greyed out until you switch the rental trip off.",
       "routes": {
         "shortest": "Shortest route",
         "shortestHint": "The most direct path, ignoring comfort.",
         "greenest": "Your route",
-        "greenestHint": "Planned with your settings."
+        "greenestHint": "Planned with your settings.",
+        "shortestShort": "Shortest",
+        "greenestShort": "Yours"
       },
       "metrics": {
-        "duration": "Riding time",
         "distance": "Distance",
-        "roughness": "Roughness (0–100)",
+        "duration": "Riding time",
+        "roughness": "Roughness",
         "overtaking": "Close overtakes",
-        "airQuality": "Air (0.5 = typical)",
-        "stopGo": "Stop-and-go (0–1)"
+        "airQuality": "Fine dust",
+        "stopGo": "Stop-and-go",
+        "shade": "Shade",
+        "lit": "Lit",
+        "kcal": "kcal",
+        "scales": "Roughness 0–100 · fine dust 0.5 = usual, higher = more dust · stop-and-go, shade and lit 0–1 (share of the way) · kcal a rough estimate.",
+        "tips": {
+          "roughnessRoute": "{{measured}} measured, {{estimated}} estimated, {{unknown}} unknown",
+          "roughness": "Estimated from nearby measured streets where sensor bikes didn’t ride.",
+          "kcalRoute": "includes {{m}} m of climbing",
+          "kcalNoHeight": "no height data, climbs not counted",
+          "kcal": "For a 70 kg rider on a normal bike."
+        }
       },
-      "sameAsShortest": "Your route is the same as the shortest route.",
-      "difference": "Compared with the shortest route: distance {{distance}}, riding time {{time}}.",
+      "day": {
+        "toggle": "Through the day",
+        "info": "Shade is worked out for 09:00, 12:00, 15:00 and 18:00, and lit streets count after dark. So your route can only change at these times of day: pick one to see it.",
+        "label": "Time of day",
+        "night": "Night",
+        "play": "Play through the day",
+        "pause": "Pause",
+        "range": "{{from}}–{{to}}",
+        "departures": "For departures {{ranges}}",
+        "needRoute": "Set a start and destination first."
+      },
       "appliedShade": "Departure by day: shaded streets were preferred.",
       "appliedDark": "Departure after dark: lit streets were preferred.",
       "emptyState": "Set a start and destination to compare routes. Values only appear when they come from real data.",
       "mapLabel": "Route map",
-      "eyebrow": "Heilbronn · Route planner",
       "hills": {
         "title": "Hills",
         "show": "Show hills on the route",
@@ -352,15 +380,269 @@
         "climb": "Climb",
         "descent": "Descent",
         "steepest": "Steepest",
-        "severity": {
-          "flat": "flat (< 2 %)",
-          "gentle": "gentle (2–4 %)",
-          "noticeable": "noticeable (4–6 %)",
-          "steep": "steep (6–10 %)",
-          "very_steep": "very steep (10 %+)"
-        },
         "unavailable": "Hills are not available: this server has no elevation data.",
-        "credit": "Heights: LGL, www.lgl-bw.de, dl-de/by-2-0 (DGM1)"
+        "credit": "Heights: LGL, www.lgl-bw.de, dl-de/by-2-0 (DGM1)",
+        "legend": {
+          "down": "↓ downhill",
+          "up": "uphill ↑ (%)",
+          "hint": "One colour per band. Uphill turns yellow to orange already at 2–4 %, which you feel; red from 6 %, dark red at 10 % and more. Downhill is blue to violet: the darker, the more braking. Flat (under 1 %) is green."
+        }
+      },
+      "search": {
+        "noMatch": "No place found in Heilbronn. Try another spelling, or click the map.",
+        "unavailable": "Place search is not available right now. Click the map instead."
+      },
+      "sharing": {
+        "title": "Shared e-bikes & e-scooters",
+        "tripToggle": "No bike? Rent one for this trip",
+        "tripVehicleLabel": "Vehicle to rent",
+        "vehicleLabel": "Vehicles to show",
+        "choice": {
+          "quickest": "Quickest e-bike or e-scooter",
+          "both": "E-bikes and e-scooters"
+        },
+        "vehicle": {
+          "bike": "e-bike",
+          "scooter": "e-scooter"
+        },
+        "needRoute": "Set a start and destination first.",
+        "tripLoading": "Looking for a vehicle near your start… The first search after the server starts can take a minute.",
+        "total": "{{min}} min door to door",
+        "about": "about €{{price}}",
+        "kcal": "about {{kcal}} kcal",
+        "stepWalkTo": "Walk {{m}} m ({{min}} min) to pin 1, the {{vehicle}} (battery {{pct}} %).",
+        "stepRide": "Ride {{km}} km ({{min}} min) and leave it at pin P, {{where}}.",
+        "pushed": "Push it {{m}} m on footways where e-scooters may not ride.",
+        "stepWalkEnd": "Walk {{m}} m ({{min}} min) to your destination.",
+        "leaveAtZone": "at the parking zone \"{{zone}}\"",
+        "leaveAtEnd": "right at your destination",
+        "leaveOutside": "just outside the no-parking zone",
+        "noParking": "No parking for {{vehicle}}s",
+        "zonesOnly": "Parking zones only",
+        "rentThis": "Rent it in the {{provider}} app",
+        "showToggle": "Show vehicles free to rent on the map (live)",
+        "zone": "Parking zone",
+        "lowBattery": "faded = battery under {{pct}} %",
+        "summary": {
+          "all": "{{bikes}} e-bikes and {{scooters}} e-scooters free right now.",
+          "bike": "{{bikes}} e-bikes free right now.",
+          "scooter": "{{scooters}} e-scooters free right now."
+        },
+        "setStartHint": "Set a start to see the nearest vehicles. Click a dot on the map for its details.",
+        "away": "{{m}} m from your start",
+        "battery": "Battery {{pct}} %",
+        "range": "about {{km}} km left",
+        "rent": "Rent in the {{provider}} app",
+        "zoneCounts": "{{bikes}} e-bikes, {{scooters}} e-scooters here",
+        "updated": "Updated {{time}}",
+        "unavailable": "Shared vehicles are not available right now.",
+        "price": "{{unlock}} to unlock + {{perMin}}/min",
+        "pin": {
+          "pickUp": "Pick up: {{vehicle}}",
+          "walkThere": "Walk {{m}} m ({{min}} min) from your start to here.",
+          "rideCost": "This ride: {{min}} min, about {{price}}",
+          "leave": "Leave it here",
+          "atZone": "At the parking zone \"{{zone}}\".",
+          "atEnd": "Right at your destination.",
+          "outside": "Just outside the zone where {{vehicle}}s may not be parked.",
+          "rideHere": "Ride {{km}} km ({{min}} min) from pin 1 to here.",
+          "walkOn": "Then walk {{m}} m ({{min}} min) to your destination."
+        },
+        "compare": {
+          "title": "With and without your settings",
+          "plain": "Without settings",
+          "yours": "With your settings",
+          "doorToDoor": "Door to door",
+          "walk": "Walking",
+          "ride": "Riding",
+          "price": "Price",
+          "kcal": "kcal",
+          "hint": "Grey dashed on the map: the same trip with every slider at 0. The values for bumps, overtaking, air and stops are for the ride only. Each trip picks the quickest vehicle near your start, so the two can differ; an e-scooter only counts kcal where you push it.",
+          "same": "With your settings the trip is the same as without them.",
+          "vehicle": "Vehicle"
+        }
+      },
+      "info": {
+        "about": "About: {{name}}",
+        "ignore": "doesn’t matter",
+        "pointsRow": "{{x}}× as long",
+        "dangerRow": "up to {{m}} m detour per spot",
+        "yours": "(your setting)",
+        "bump": {
+          "question": "How much longer does a very bumpy street feel to you?",
+          "note": "Very bumpy = the bumpiest 10 % of streets measured in Heilbronn (roughness 20 or more). Bumpier ones count even more; typical or smoother ones nothing extra.",
+          "example": "With {{p}}, you’d ride up to {{m}} m extra to skip 100 m of very bumpy street."
+        },
+        "danger": {
+          "question": "How far would you ride out of your way to pass one fewer close-overtaking spot?",
+          "note": "Spots where sensor bikes measured cars overtaking too closely. Riskier spots count more."
+        },
+        "pm": {
+          "question": "How much longer does a street with bad air feel to you?",
+          "note": "Bad air = the worst 10 % of streets measured by the sensor bikes. Typical or cleaner air counts nothing extra.",
+          "example": "With {{p}}, you’d ride up to {{m}} m extra to skip 100 m of street with bad air."
+        },
+        "stop": {
+          "question": "How much longer does a street with lots of stop-and-go feel to you?",
+          "note": "Lots of stop-and-go = the worst 10 % of streets (traffic lights, congestion). Each lift on the way also counts as {{lift}} m.",
+          "example": "With {{p}}, you’d ride up to {{m}} m extra to skip 100 m of heavy stop-and-go."
+        },
+        "bikeFriendly": {
+          "question": "How much longer does a street without a bike path or lane feel to you?",
+          "note": "Bike paths, bike lanes and signposted bike routes from OpenStreetMap.",
+          "example": "With {{p}}, you’d ride up to {{m}} m extra to swap 100 m of ordinary street for a bike path or lane."
+        },
+        "shade": {
+          "question": "By day: how much longer does a street in full sun feel to you?",
+          "note": "Half-shaded streets count half. Only used when the sun is up at your departure time. Shade is calculated for 21 July (09, 12, 15 and 18 h; the closest hour is used).",
+          "example": "With {{p}}, you’d ride up to {{m}} m extra to skip 100 m in full sun."
+        },
+        "dark": {
+          "question": "After dark: how much longer does an unlit street feel to you?",
+          "note": "Streets that are probably lit count less. Only used with a departure time after sunset.",
+          "example": "With {{p}}, you’d ride up to {{m}} m extra to skip 100 m of unlit street."
+        }
+      },
+      "sky": {
+        "day": "The sun is up then: shade counts, the lighting slider is off.",
+        "night": "It is dark then: lit streets count, the shade slider is off.",
+        "summerShade": "Shade is calculated for a summer day (21 July), so outside summer it shows which streets buildings and trees shade, not that day’s exact shadows."
+      },
+      "why": {
+        "title": "Why this route?",
+        "same": "It is also the shortest route: for your settings no detour is worth it ({{km}} km, {{min}} min). On the way:",
+        "trade": "It is {{m}} m ({{pct}}) longer and {{time}} than the shortest route. In return:",
+        "slower": "{{min}} min slower",
+        "quicker": "{{min}} min quicker",
+        "asQuick": "just as quick",
+        "less": "{{amount}} less",
+        "fewer": "{{amount}} fewer",
+        "more": "{{amount}} more",
+        "aboutSame": "about the same",
+        "bars": "Grey: shortest route, {{shortest}}. Green: your route, {{yours}}.",
+        "mapHint": "Point at a row to see where those streets are on the map; click it to keep them shown. Point at either route line to see what a street is like.",
+        "rows": {
+          "bumpy_m": "On bumpy streets",
+          "danger_points": "Close-overtaking spots",
+          "bad_air_m": "On streets with bad air",
+          "stop_go_m": "On stop-and-go streets",
+          "sunny_m": "In the sun",
+          "unlit_m": "On unlit streets",
+          "bike_friendly_m": "On bike paths and lanes"
+        }
+      },
+      "segment": {
+        "unnamed": "Unnamed street",
+        "beside": "{{way}} beside the road",
+        "ways": {
+          "crossing": "Crossing",
+          "sidewalk": "Sidewalk",
+          "cycleway": "Bike path",
+          "footway": "Footpath",
+          "path": "Path",
+          "track": "Farm track",
+          "service": "Access road",
+          "pedestrian": "Pedestrian street"
+        },
+        "length": "{{m}} m",
+        "notMeasured": "not measured",
+        "yes": "yes",
+        "no": "no",
+        "rows": {
+          "roughness": "Roughness (0–100)",
+          "overtaking": "Close-overtaking spots",
+          "fineDust": "Fine dust (0.5 = usual)",
+          "stopGo": "Stop-and-go (0–1)",
+          "speed": "Usual bike speed",
+          "shade": "In shade",
+          "lit": "Lit at night",
+          "bikePath": "Bike path or lane"
+        }
+      },
+      "reports": {
+        "title": "Riders' reports",
+        "infoLabel": "About: Riders' reports",
+        "info": "One report makes routes avoid a street where there is a sensible way round; three riders close it for routing. A report counts through the date you give, else for a day. Two riders saying it is open again lift it. Footways and map mistakes wait for a maintainer to check them.",
+        "button": "Report a problem",
+        "chooseLabel": "What do you want to report?",
+        "mode": {
+          "closure": "A closed street (e.g. construction)",
+          "rideable": "A footway bikes ride on",
+          "other": "Another mistake in the map"
+        },
+        "clickHint": {
+          "closure": "Click the closed street on the map.",
+          "rideable": "Click the footway on the map.",
+          "other": "Click the spot on the map where the map is wrong."
+        },
+        "form": {
+          "title": {
+            "closure": "Report a closed street here",
+            "rideable": "Report a footway bikes ride on",
+            "other": "Report a map mistake here"
+          },
+          "note": {
+            "closure": "What is closed? (optional)",
+            "rideable": "Why may bikes ride here? (optional)",
+            "other": "What is wrong here?"
+          },
+          "placeholder": {
+            "closure": "e.g. construction, no way through",
+            "rideable": "e.g. signed for bikes (Zeichen 240)",
+            "other": "e.g. this path no longer exists"
+          },
+          "until": "Closed until (the date on the sign)",
+          "untilHint": "Leave it empty if you don't know: the report then counts for a day.",
+          "send": "Send report",
+          "sending": "Sending…",
+          "cancel": "Cancel",
+          "close": "Close",
+          "moveHint": "Click the map again to move the spot."
+        },
+        "status": {
+          "closed": "Closed",
+          "reported": "Reported closed",
+          "unconfirmed": "Maybe still closed (no report lately)",
+          "open": "Open again"
+        },
+        "closure": {
+          "reports_one": "{{count}} report",
+          "reports_other": "{{count}} reports",
+          "until": "until {{when}}",
+          "through": "through {{day}}",
+          "openReports_one": "{{count}} rider says it is open again.",
+          "openReports_other": "{{count}} riders say it is open again."
+        },
+        "stillClosed": "Still closed",
+        "openAgain": "Open again",
+        "dontKnow": "Don't know",
+        "near": "Near your trip: {{closure}}",
+        "askStill": "Is it still closed?",
+        "thanks": {
+          "closed_one": "Thanks! {{count}} report on this street: closed for routing.",
+          "closed_other": "Thanks! {{count}} reports on this street: closed for routing.",
+          "reported": "Thanks! Routes now avoid this street; three reports close it.",
+          "stillClosed": "Thanks! Routes keep avoiding it.",
+          "openAgain": "Thanks! One more rider saying it is open lifts it.",
+          "lifted": "Thanks! The street is open again for routing.",
+          "rideable": "Thanks! A maintainer will check it; once approved, routes can use it.",
+          "other": "Thanks! A maintainer will check it and correct the map; until then routes stay as they are."
+        },
+        "mappingTitle": {
+          "rideable": "Footway bikes ride on (waiting for review)",
+          "other": "Map mistake (waiting for review)"
+        },
+        "show": "Show riders' reports on the map",
+        "legend": {
+          "closed": "closed",
+          "reported": "reported, routes avoid it",
+          "unconfirmed": "not confirmed lately",
+          "mapping": "waiting for review",
+          "hint": "Click a closure on the map to say whether it is still closed."
+        },
+        "warning_one": "Your route rides {{count}} street riders reported closed (dashed): check before you go.",
+        "warning_other": "Your route rides {{count}} streets riders reported closed (dashed): check before you go.",
+        "reportHint": "To report a closed street or a mistake in the map, use Report a problem at the top right of the map."
       }
     },
     "highlights": {
@@ -370,6 +652,7 @@
       "planTrip": "Plan a Trip",
       "viewOnMap": "View on Map",
       "noLocation": "Location not verified yet",
+      "photoBy": "Photo: {{author}}, {{license}}",
       "mapLabel": "Map of highlighted places",
       "placesTitle": "Explore green places",
       "placesText": "Parks, riverside paths and green spaces worth a ride.",
@@ -395,8 +678,7 @@
           "title": "Nature Discovery Route",
           "text": "Out to the green edges of the city."
         }
-      },
-      "eyebrow": "Heilbronn · Green places"
+      }
     }
   }
 }

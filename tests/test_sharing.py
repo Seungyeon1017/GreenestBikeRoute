@@ -1,10 +1,12 @@
+import networkx as nx
 import pytest
 import requests
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
-from backend.schemas import VehicleCollection, ZoneCollection
-from backend.sharing import CACHE_S, STALE_S, Sharing, SharingUnavailable, distance_m
+from backend.schemas import GeofencingCollection, SharingTrip, VehicleCollection, ZoneCollection
+from backend.sharing import CACHE_S, STALE_S, Sharing, SharingUnavailable, distance_m, main
+from tests.conftest import COORDS, A, B
 
 MARKT = (49.1427, 9.2109)  # Heilbronn Marktplatz (lat, lon)
 
@@ -35,6 +37,14 @@ FEEDS = {
     "station_information": {"data": {"stations": [
         {"station_id": "z1", "name": [{"text": "Parking Zone HBF", "language": "en"}], "lat": 49.1420, "lon": 9.2070,
          "vehicle_types_capacity": [{"vehicle_type_ids": ["bike"], "count": 5}, {"vehicle_type_ids": ["scooter"], "count": 5}]}]}},
+    "geofencing_zones": {"data": {"geofencing_zones": {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {"rules": [  # no e-scooters parked here, e-bikes only at a parking zone
+            {"vehicle_type_ids": ["scooter"], "ride_end_allowed": False, "station_parking": False},
+            {"vehicle_type_ids": ["bike"], "ride_end_allowed": False, "station_parking": True}]},
+         "geometry": {"type": "Polygon", "coordinates": [[[9.21, 49.142], [9.212, 49.142], [9.212, 49.144], [9.21, 49.142]]]}},
+        {"type": "Feature", "properties": {"name": [{"text": "Heilbronn", "language": "en"}], "rules": [
+            {"vehicle_type_ids": ["bike", "scooter"], "ride_end_allowed": True, "station_parking": False}]},
+         "geometry": {"type": "Polygon", "coordinates": [[[9.1, 49.1], [9.3, 49.1], [9.3, 49.2], [9.1, 49.1]]]}}]}}},
     "station_status": {"data": {"stations": [
         {"station_id": "z1", "vehicle_types_available": [{"vehicle_type_id": "bike", "count": 3},
                                                          {"vehicle_type_id": "scooter", "count": 7}]}]}},
@@ -119,6 +129,24 @@ def test_feed_down_serves_the_last_snapshot_for_a_while():
         bs.collection("vehicles")
 
 
+@pytest.fixture
+def saved(tmp_path):
+    """The geofencing file from `python -m backend.sharing`, made from FEEDS."""
+    path = tmp_path / "geofencing.json"
+    main(["--out", str(path)], fetch=FakeFeed())
+    return path
+
+
+def test_saved_file_has_the_geofencing_zones_in_feed_order(saved):
+    zones = Sharing(fetch=FakeFeed(), saved=saved).collection("geofencing")["features"]
+    assert [(f["properties"]["order"], f["properties"]["bike"], f["properties"]["scooter"], f["properties"]["name"])
+            for f in zones] == [(0, "parking_zone", "no", None), (1, "anywhere", "anywhere", "Heilbronn")]
+
+
+def test_without_a_saved_file_there_are_no_geofencing_zones():
+    assert Sharing(fetch=FakeFeed(), saved=None).snapshot()["geofencing"] is None
+
+
 # ------------------------------------------------------------- API --------
 
 @pytest.fixture
@@ -127,9 +155,19 @@ def feed():
 
 
 @pytest.fixture
-def client(toy_graph, feed):
-    with TestClient(create_app(graph=toy_graph, sharing=Sharing(fetch=feed))) as c:
+def client(toy_graph, feed, saved):
+    with TestClient(create_app(graph=toy_graph, sharing=Sharing(fetch=feed, saved=saved), walk_graph=walk_graph())) as c:
         yield c
+
+
+def walk_graph():
+    """A walking street from the toy graph's A to B, both ways."""
+    G = nx.MultiDiGraph(crs="epsg:4326")
+    for n, (lat, lon) in {"wa": COORDS[A], "wb": COORDS[B]}.items():
+        G.add_node(n, y=lat, x=lon)
+    G.add_edge("wa", "wb", length=100.0)
+    G.add_edge("wb", "wa", length=100.0)
+    return G
 
 
 def test_sharing_endpoint(client):
@@ -165,3 +203,39 @@ def test_sharing_is_documented_under_its_own_tag(client):
     spec = client.get("/openapi.json").json()
     assert spec["paths"]["/sharing"]["get"]["tags"] == ["Sharing"]
     assert spec["paths"]["/sharing/zones"]["get"]["tags"] == ["Sharing"]
+
+
+def trip_params(start=COORDS[A], **extra):
+    return {"from_lat": start[0], "from_lon": start[1], "to_lat": COORDS[B][0], "to_lon": COORDS[B][1], **extra}
+
+
+def test_sharing_trip(client, feed, monkeypatch):
+    # The toy graph is ~600 m from the fake feed's vehicles: put a bike and a scooter at the start.
+    monkeypatch.setitem(FEEDS, "vehicle_status", {"data": {"vehicles": [
+        vehicle("bike-at-a", *COORDS[A]), vehicle("scooter-at-a", *COORDS[A], type_id="scooter")]}})
+    r = client.get("/route/sharing", params=trip_params(vehicle="bike"))
+    assert r.status_code == 200, r.text
+    trip = SharingTrip.model_validate(r.json())
+    assert trip.vehicle.properties.vehicle_id == "bike-at-a"
+    assert [leg.properties.mode for leg in trip.legs] == ["walk", "bike", "walk"]
+    assert r.json()["attribution"].startswith("MobiData BW")
+    assert client.get("/route/sharing", params=trip_params(vehicle="scooter")).json()["legs"][1]["properties"]["mode"] == "scooter"
+
+
+def test_sharing_trip_without_a_vehicle_nearby_is_400(client, monkeypatch):
+    monkeypatch.setitem(FEEDS, "vehicle_status", {"data": {"vehicles": [vehicle("far", 49.1600, 9.2100)]}})  # ~2 km north
+    r = client.get("/route/sharing", params=trip_params())
+    assert r.status_code == 400
+    assert "no free e-bike or e-scooter" in r.json()["detail"]
+
+
+def test_sharing_trip_with_the_feed_down_is_503(client, feed):
+    feed.down = True
+    assert client.get("/route/sharing", params=trip_params()).status_code == 503
+
+
+def test_geofencing_endpoint(client):
+    r = client.get("/sharing/geofencing")
+    assert r.status_code == 200
+    body = GeofencingCollection.model_validate(r.json())
+    assert [f.properties.order for f in body.features] == [0, 1]

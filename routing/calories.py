@@ -18,12 +18,19 @@ E-bike (pedelec, e_bike=True), a rough estimate:
 - the riding time is the same as for a normal bike (speed_map mixes both kinds of bikes), although
   e-bike riders are usually faster.
 
+Walking (the walks of a trip with a shared vehicle, and pushing an e-scooter where it must not ride):
+    kcal = MET_WALKING * weight_kg * walking hours
+- MET 3.5: walking at an ordinary pace on the flat (Compendium of Physical Activities, walking category,
+  https://pacompendium.com/walking/). The walking network has no heights, so walking climbs are not counted.
+- Riding an e-scooter itself counts as 0: the motor does the work.
+
 An estimate, not a measurement: it ignores wind, stops, tyre pressure and fitness, and the MET
 value is an average across people. Show it rounded ("about 80 kcal"), and mark e-bike values as rough.
 """
 G_MS2 = 9.81
 J_PER_KCAL = 4184.0
 MET_CYCLING = 6.8
+MET_WALKING = 3.5
 EFFICIENCY = 0.25
 BIKE_KG = 15.0
 EBIKE_KG = 25.0
@@ -43,9 +50,24 @@ def ride_kcal(duration_s, climb_m, weight_kg=DEFAULT_WEIGHT_KG, e_bike=False):
     return riding + climbing
 
 
+def walk_kcal(duration_s, weight_kg=DEFAULT_WEIGHT_KG):
+    """kcal for walking (or pushing an e-scooter) for `duration_s` seconds on the flat."""
+    return MET_WALKING * weight_kg * duration_s / 3600
+
+
 def total_climb(rises_m):
     """Total ascent in m from the height change of each edge (negative = downhill, ignored)."""
     return sum(r for r in rises_m if r > 0)
+
+
+def route_climb(G, edges):
+    """Total ascent in m of a route given as (u, v, data) edges (routing.route.route_edges), the humps of bridges
+    included: the climb_m of /route/grade. None when the graph has no elevation data."""
+    from routing.grade import NoElevationError, edge_parts  # needs the graph stack (osmnx)
+    try:
+        return total_climb(rise for u, v, d in edges for _, rise, _ in edge_parts(G, u, v, d))
+    except NoElevationError:
+        return None
 
 
 def route_kcal(G, edges, duration_s, weight_kg=DEFAULT_WEIGHT_KG, e_bike=False):
@@ -53,9 +75,4 @@ def route_kcal(G, edges, duration_s, weight_kg=DEFAULT_WEIGHT_KG, e_bike=False):
 
     Without elevation data in the graph the climb counts as 0, so the value is a lower bound.
     """
-    from routing.grade import NoElevationError, edge_rise  # needs the graph stack (osmnx)
-    try:
-        climb = total_climb(edge_rise(G, u, v) for u, v, _ in edges)
-    except NoElevationError:
-        climb = 0.0
-    return ride_kcal(duration_s, climb, weight_kg, e_bike)
+    return ride_kcal(duration_s, route_climb(G, edges) or 0.0, weight_kg, e_bike)

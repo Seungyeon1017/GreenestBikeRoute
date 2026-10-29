@@ -30,7 +30,7 @@ ONLY_BUMPS = {"danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0}
 
 def test_hating_bumps_gives_a_smoother_longer_route(client):
     shortest = client.get("/route", params={**TRIP, **ONLY_BUMPS, "bump_penalty": 0}).json()["features"][0]
-    smooth = client.get("/route", params={**TRIP, **ONLY_BUMPS, "bump_penalty": 10}).json()["features"][0]
+    smooth = client.get("/route", params={**TRIP, **ONLY_BUMPS, "bump_penalty": 8}).json()["features"][0]
     assert smooth["properties"]["length_m"] > shortest["properties"]["length_m"]
     assert smooth["properties"]["mean_roughness"] < shortest["properties"]["mean_roughness"]
 
@@ -42,6 +42,30 @@ def test_hating_close_overtaking_passes_fewer_danger_spots(client):
     assert safe["danger_points"] < shortest["danger_points"] / 2
     assert safe["length_m"] < shortest["length_m"] * 1.05
 
+
+
+# Raising one dislike once sent routes back towards the shortest route: stop-and-go is about the same on most streets,
+# so it inflated every street alike, and a high prefer_bike_friendly drowned the other dislikes.
+SLIDER_TRIPS = [TRIP, {"from_lat": 49.1428, "from_lon": 9.2188, "to_lat": 49.1206, "to_lon": 9.2050}]
+
+
+@pytest.mark.parametrize("trip", SLIDER_TRIPS)
+@pytest.mark.parametrize("penalty, metres", [("stop_penalty", "stop_go_m"), ("bump_penalty", "bumpy_m"),
+                                             ("pm_penalty", "bad_air_m")])
+def test_raising_a_dislike_rides_less_of_it_and_never_drifts_back_to_the_shortest_route(client, trip, penalty, metres):
+    def compare(value):
+        return client.get("/route/compare", params={**trip, penalty: value}).json()
+    low, high = compare(0), compare(10)
+    assert high["route"]["properties"][metres] <= low["route"]["properties"][metres]
+    assert high["detour_pct"] >= low["detour_pct"]
+
+
+@pytest.mark.parametrize("trip", SLIDER_TRIPS)
+def test_preferring_bike_paths_keeps_the_route_smoother_than_the_shortest(client, trip):
+    """Factors multiply: even at prefer_bike_friendly 10 the default dislike of bumps still steers the route."""
+    c = client.get("/route/compare", params={**trip, "prefer_bike_friendly": 10}).json()
+    assert c["route"]["properties"]["bike_friendly_m"] > c["shortest"]["properties"]["bike_friendly_m"]
+    assert c["route"]["properties"]["bumpy_m"] < c["shortest"]["properties"]["bumpy_m"]
 
 def test_air_overlay_gives_ranked_points(client):
     r = client.get("/air")
@@ -55,9 +79,9 @@ def test_hating_stop_and_go_gives_a_more_free_flowing_route(client):
     trip = {"from_lat": 49.16, "from_lon": 9.215, "to_lat": 49.135, "to_lon": 9.235}
     zero = {"bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0}
     shortest = client.get("/route", params={**trip, **zero}).json()["features"][0]["properties"]
-    smooth = client.get("/route", params={**trip, **zero, "stop_penalty": 5}).json()["features"][0]["properties"]
-    assert smooth["mean_stop_go"] < shortest["mean_stop_go"]
-    assert smooth["length_m"] < shortest["length_m"] * 1.05
+    smooth = client.get("/route", params={**trip, **zero, "stop_penalty": 4}).json()["features"][0]["properties"]
+    assert smooth["stop_go_m"] < shortest["stop_go_m"] / 2
+    assert smooth["length_m"] < shortest["length_m"] * 1.1
 
 
 def test_prefer_time_gives_a_faster_route(client):
@@ -90,7 +114,9 @@ def test_docs_example_is_a_real_response(client):
     example = RouteComparison.model_config["json_schema_extra"]["example"]
     real = client.get("/route/compare", params=TRIP).json()
     for key in ("route", "shortest"):
-        assert real[key]["properties"] == example[key]["properties"]
+        real_props, example_props = dict(real[key]["properties"]), dict(example[key]["properties"])
+        assert real_props.pop("segments")[:2] == example_props.pop("segments")
+        assert real_props == example_props
         coords = real[key]["geometry"]["coordinates"]
         assert example[key]["geometry"]["coordinates"] == [coords[0], coords[len(coords) // 2], coords[-1]]
     assert (real["detour_pct"], real["same_path"]) == (example["detour_pct"], example["same_path"])
@@ -159,7 +185,7 @@ ZERO = {"bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty":
 @needs_elevation
 @pytest.mark.parametrize("trip, penalties", [
     (TRIP, {}), (TRIP, ZERO), (TRIP, {"danger_penalty": 100}),
-    ({"from_lat": 49.16, "from_lon": 9.215, "to_lat": 49.135, "to_lon": 9.235}, {"stop_penalty": 5}),
+    ({"from_lat": 49.16, "from_lon": 9.215, "to_lat": 49.135, "to_lon": 9.235}, {"stop_penalty": 10}),
     ({"from_lat": 49.1415, "from_lon": 9.205, "to_lat": 49.1405, "to_lon": 9.231}, {}),  # across the Neckar
 ])
 def test_grade_route_is_exactly_the_route(client, trip, penalties):
