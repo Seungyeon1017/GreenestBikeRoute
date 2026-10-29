@@ -442,6 +442,51 @@ class GreenStreetCollection(BaseModel):
                         "bike_friendly_share": 0.9, "ridden_m": 1240, "air_rides": 37}}]}}}
 
 
+class TourStop(BaseModel):
+    name: str = Field(description="Place or street the stop is on")
+    lon: float
+    lat: float
+
+
+class TourProperties(BaseModel):
+    id: Literal["scenicGreen", "quietEscape", "riverside", "nature"] = Field(description=(
+        "scenicGreen: parks and tree-lined streets, routed to stay in the shade on a summer afternoon. "
+        "quietEscape: side streets, stop-and-go, close overtakes and bad air cost a lot more. "
+        "riverside: the Neckar cycle path to the Horkheim lock. nature: out to the Waldheide and the orchards"))
+    stops: list[TourStop] = Field(description="The stops in riding order; the tour is routed from stop to stop")
+    loop: bool = Field(description="Whether it ends where it started")
+    length_m: float
+    duration_s: float = Field(description="Expected riding time from the measured speeds, as in /route")
+    climb_m: float = Field(description="Total ascent, bridge humps included (0 without elevation data)")
+    kcal: float = Field(description="Rough energy use for a 75 kg rider, as in /route")
+    bike_friendly_m: float = Field(description="Metres on bike paths, bike lanes and bike routes")
+    bike_friendly_share: float = Field(description="bike_friendly_m over length_m, 0-1")
+    tree_share: float = Field(description="Share of the length under street-tree crowns, 0-1 (Baumkataster)")
+    streets: list[str] = Field(description="The named streets it follows, in order, each once")
+
+
+class TourFeature(BaseModel):
+    type: Literal["Feature"]
+    geometry: LineString = Field(description="The whole tour, all legs joined")
+    properties: TourProperties
+
+
+class TourCollection(BaseModel):
+    """Vorgeschlagene Radtouren: four themed rides through Heilbronn, each routed stop to stop by the same router as
+    /route, with its own penalties. Sources: OpenStreetMap contributors (ODbL), ATRAI bike sensors, Stadt Heilbronn
+    Baumkataster (dl-de/by-2-0)."""
+    type: Literal["FeatureCollection"]
+    features: list[TourFeature]
+
+    model_config = {"json_schema_extra": {"example": {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {
+            "id": "riverside", "stops": [{"name": "Neckarbogen", "lon": 9.2115, "lat": 49.1473},
+                                         {"name": "Schleuse Horkheim", "lon": 9.1663, "lat": 49.1177}],
+            "loop": False, "length_m": 6464.0, "duration_s": 1500.0, "climb_m": 24.0, "kcal": 160.0,
+            "bike_friendly_m": 6400.0, "bike_friendly_share": 0.99, "tree_share": 0.49,
+            "streets": ["Am Neckaruferpark", "Untere Neckarstraße", "Neckarhalde", "Schleusenbrücke Horkheim"]}}]}}}
+
+
 class ScoreFeature(BaseModel):
     type: Literal["Feature"]
     geometry: LineString

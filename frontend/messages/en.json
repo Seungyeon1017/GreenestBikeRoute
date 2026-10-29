@@ -736,23 +736,35 @@
       "showOnMap": "Show on map",
       "showMore": "Show top {{count}}",
       "experiencesTitle": "Suggested cycling experiences",
-      "experiencesText": "Themed rides for different moods.",
+      "experiencesText": "Four themed rides, planned stop by stop by our router. Pick one to see it on the map.",
+      "toursError": "The tours can't be loaded right now: {{error}}",
+      "toursMapLabel": "Map of the suggested tours",
+      "tourLength": "{{km}} km",
+      "tourDuration": "{{min}} min",
+      "tourClimb": "{{m}} m climb",
+      "tourLoop": "Round trip",
+      "tourStops": "Stops",
+      "tourStart": "Start",
+      "tourEnd": "Finish",
+      "tourStartEnd": "Start & finish",
+      "rideToStart": "Ride to the start",
+      "downloadGpx": "Download GPX",
       "experiences": {
         "scenicGreen": {
           "title": "Scenic Green Ride",
-          "text": "Through parks and tree-lined streets."
+          "text": "Along the plane trees of the Neckar bank, through the Stadtgarten and the Pfühlpark to the Trappensee: over half of it under trees."
         },
         "quietEscape": {
           "title": "Quiet City Escape",
-          "text": "Away from busy roads and traffic noise."
+          "text": "A loop from the edge of the old town through the side streets of the Südstadt to the Wertwiesenpark and back on the Neckar bike path, almost never on a main road."
         },
         "riverside": {
           "title": "Riverside Cycling",
-          "text": "Along the Neckar and its banks."
+          "text": "The Neckar cycle path from the Neckarbogen past the old town to the Horkheim lock, mostly right by the water."
         },
         "nature": {
           "title": "Nature Discovery Route",
-          "text": "Out to the green edges of the city."
+          "text": "A loop at the eastern edge of town: from the Trappensee up the Kirschenallee to the Waldheide by the forest and back down the Böckinger Hangweg."
         }
       }
     },

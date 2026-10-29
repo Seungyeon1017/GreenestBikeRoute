@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.reports import SNAP_M, ReportError, Reports
-from backend.schemas import EXAMPLE_TRIP, AirCollection, BikeFriendlyCollection, ClosureAnswer, ClosureCollection, ClosureFeature, ClosureReport,     DangerCollection, DayRoutes, Error, FlowCollection, GeofencingCollection, GradeCollection, GreenStreetCollection, LightingCollection, MappingCollection,     MappingFeature, MappingReport, PlaceCollection, FootwayFeature, StreetSegmentFeature, RouteCollection, RouteComparison, RoughnessCollection, ScoreCollection,     ShadeCollection, SharingTrip, SpeedCollection, VehicleCollection, ZoneCollection
+from backend.schemas import EXAMPLE_TRIP, AirCollection, BikeFriendlyCollection, ClosureAnswer, ClosureCollection, ClosureFeature, ClosureReport,     DangerCollection, DayRoutes, Error, FlowCollection, GeofencingCollection, GradeCollection, GreenStreetCollection, LightingCollection, MappingCollection,     MappingFeature, MappingReport, PlaceCollection, FootwayFeature, StreetSegmentFeature, RouteCollection, RouteComparison, RoughnessCollection, ScoreCollection,     ShadeCollection, SharingTrip, SpeedCollection, TourCollection, VehicleCollection, ZoneCollection
 from backend.geocoding import Geocoder, GeocodingUnavailable, normalize
 from backend.sharing import ATTRIBUTION, Sharing, SharingUnavailable
 from backend.users.router import router as users_router
@@ -23,6 +23,7 @@ from routing.elevation import attach_elevation, load_crests, load_elevation
 from routing.grade import NoElevationError, route_grade
 from routing.graph import load_graph
 from routing.highlights import greenest_streets
+from routing.tours import plan_tours
 from routing.footways import Footways
 from routing.route import RouteError, compare_routes, day_routes, edge_coords, find_route, nearest_street, segment_id, set_closures, street_name,     sky, street_scores
 from routing.sharing_trip import WalkNetwork, load_walk_graph, plan_sharing_trip
@@ -273,7 +274,7 @@ TAGS_METADATA = [
     {"name": PLACES, "description": "Find a landmark, address or street in Heilbronn, to route to its coordinates "
                                      "(OpenStreetMap via Nominatim)."},
     {"name": OVERLAYS, "description": "Static GeoJSON layers of the measured data, to draw on a map."},
-    {"name": HIGHLIGHTS, "description": "Rankings for the app's Highlights tab, e.g. the greenest streets bikes have ridden."},
+    {"name": HIGHLIGHTS, "description": "Rankings for the app's Highlights tab, e.g. the greenest streets bikes have ridden and suggested tours."},
     {"name": SHARING, "description": "Shared e-bikes and e-scooters free to rent right now and their parking zones, "
                                        "live from MobiData BW (Heilbronn: Dott). Each vehicle links to the provider's app."},
     {"name": REPORTS, "description": "Riders report closed streets (routing uses them right away) and mapping mistakes "
@@ -477,6 +478,17 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
             app.state.greenest = greenest_streets(app.state.graph)
         ranked = app.state.greenest
         return GeoJSONResponse({**ranked, "features": ranked["features"][:limit]})
+
+    @app.get("/highlights/tours", tags=[HIGHLIGHTS],
+             summary="Vorgeschlagene Radtouren: four themed rides through Heilbronn, as GeoJSON",
+             response_class=GeoJSONResponse, response_model=TourCollection,
+             response_description="One LineString per tour with its stops, length, riding time, climb and tree share")
+    def tours():
+        """Green, quiet, riverside and nature tours, each routed stop to stop with its own penalties. Planned once per
+        start of the API (without today's closure reports)."""
+        if not hasattr(app.state, "tours"):
+            app.state.tours = plan_tours(app.state.graph)
+        return GeoJSONResponse(app.state.tours)
 
     @app.get("/sharing", tags=[SHARING], summary="Shared e-bikes and e-scooters free to rent right now, as GeoJSON points",
              response_class=GeoJSONResponse, response_model=VehicleCollection, responses=SHARING_ERRORS,

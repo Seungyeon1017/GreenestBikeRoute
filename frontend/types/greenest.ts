@@ -281,6 +281,30 @@ export type GreenStreetCollection = FeatureCollection<
   total: number
 }
 
+export type TourId = 'scenicGreen' | 'quietEscape' | 'riverside' | 'nature'
+
+/** One themed ride of `/highlights/tours` (Vorgeschlagene Radtouren); see the backend's /docs. */
+export type TourProperties = {
+  id: TourId
+  /** In riding order; the tour is routed from stop to stop. */
+  stops: { name: string; lon: number; lat: number }[]
+  /** Ends where it started. */
+  loop: boolean
+  length_m: number
+  duration_s: number
+  climb_m: number
+  kcal: number
+  bike_friendly_m: number
+  /** Share on bike paths, bike lanes or bike routes, 0–1. */
+  bike_friendly_share: number
+  /** Share under street-tree crowns, 0–1. */
+  tree_share: number
+  /** Named streets it follows, in order. */
+  streets: string[]
+}
+
+export type TourCollection = FeatureCollection<LineString, TourProperties>
+
 /** One piece of the route from `/route/grade`, all with the same steepness class. */
 export type GradeProperties = {
   /** Rise / length in %, positive uphill in the travel direction. */

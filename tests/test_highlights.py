@@ -3,7 +3,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
-from backend.schemas import GreenStreetCollection
+from backend.schemas import GreenStreetCollection, TourCollection
+from routing import tours
 from routing.graph import attach_shade
 from routing.highlights import MIN_RIDDEN_M, greenest_streets, ridden
 
@@ -13,8 +14,9 @@ NODES = {1: (49.1400, 9.2100), 2: (49.1410, 9.2100), 3: (49.1420, 9.2100), 4: (4
 
 def street(G, u, v, osmid, name, **data):
     """A two-way street: one edge per direction, as OSMnx has them."""
-    d = {"osmid": osmid, "name": name, "length": 200.0, "roughness_source": "unknown", "speed_kmh": None,
-         "stop_go": None, "pm_rides": 0, "pm_prior": 0.5, "pm_risk": None, "trees": None, "bike_friendly": False, **data}
+    d = {"osmid": osmid, "name": name, "highway": "residential", "length": 200.0, "roughness": None,
+         "roughness_source": "unknown", "speed_kmh": None, "stop_go": None, "pm_rides": 0, "pm_prior": 0.5,
+         "pm_risk": None, "trees": None, "bike_friendly": False, **data}
     G.add_edge(u, v, **d)
     G.add_edge(v, u, **d)
 
@@ -71,3 +73,47 @@ def test_greenest_streets_endpoint(streets):
     assert r.status_code == 200
     body = GreenStreetCollection.model_validate(r.json())
     assert body.total == 2 and [f.properties.name for f in body.features] == ["Allee"]
+
+
+def test_tour_joins_its_legs_and_sums_them(streets, monkeypatch):
+    stops = [("Start", *NODES[1]), ("Middle", *NODES[2]), ("End", *NODES[3])]
+    monkeypatch.setitem(tours.TOURS, "riverside", (stops, {"prefer_bike_friendly": 4}))
+    tour = tours.plan_tour(streets, "riverside")
+    p = tour["properties"]
+    assert not p["loop"] and [s["name"] for s in p["stops"]] == ["Start", "Middle", "End"]
+    assert p["length_m"] == 400.0 and p["streets"] == ["Allee", "Kaiserstraße"]
+    assert p["tree_share"] == 0.35 and p["bike_friendly_share"] == 0.5
+    assert len(tour["geometry"]["coordinates"]) == 3  # the middle stop is not doubled
+
+
+def test_tour_cuts_a_spur_to_a_stop_off_its_way(streets, monkeypatch):
+    stops = [("Start", *NODES[1]), ("Off the way", *NODES[3]), ("End", *NODES[2])]
+    monkeypatch.setitem(tours.TOURS, "riverside", (stops, {}))
+    p = tours.plan_tour(streets, "riverside")["properties"]
+    assert p["length_m"] == 200.0 and p["streets"] == ["Allee"]  # out to node 3 and back cancels
+
+
+def steps(*points, lengths):
+    return [{"coords": (p, q), "length": length} for p, q, length in zip(points, points[1:], lengths)]
+
+
+def test_loop_starts_on_its_ring_without_the_stem():
+    # a-b is the stem, b-c-d-e-b the ring
+    loop = steps("a", "b", "c", "d", "e", "b", "a", lengths=[50, 100, 100, 100, 100, 50])
+    assert [s["coords"] for s in tours._without_spurs(loop, True)] == [("b", "c"), ("c", "d"), ("d", "e"), ("e", "b")]
+    assert len(tours._without_spurs(loop, False)) == 6  # a one-way tour keeps it
+
+
+def test_loop_keeps_a_stem_longer_than_max_stem_share():
+    loop = steps("a", "b", "c", "d", "b", "a", lengths=[200, 100, 100, 100, 200])
+    assert len(tours._without_spurs(loop, True)) == 5
+
+
+def test_tours_endpoint(streets, monkeypatch):
+    stops = [("Start", *NODES[1]), ("End", *NODES[2])]
+    monkeypatch.setattr(tours, "TOURS", {tour_id: (stops, {}) for tour_id in tours.TOURS})
+    with TestClient(create_app(graph=streets)) as c:
+        r = c.get("/highlights/tours")
+    assert r.status_code == 200
+    body = TourCollection.model_validate(r.json())
+    assert [f.properties.id for f in body.features] == ["scenicGreen", "quietEscape", "riverside", "nature"]
