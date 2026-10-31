@@ -22,6 +22,8 @@ export type SavedRouteOptions = {
   prefer_time: boolean
   shade_penalty: number
   dark_penalty: number
+  /** Missing on routes saved before it existed: the default then. */
+  unpaved_penalty?: number
   depart_time: string | null
 }
 

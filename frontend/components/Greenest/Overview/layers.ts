@@ -87,6 +87,8 @@ export const OVERLAY_STYLES: Partial<
         GREEN,
       ),
       'line-width': LINE_WIDTH,
+      // Streets no sensor bike rode: scored from OpenStreetMap and nearby air only.
+      'line-opacity': ['case', ['get', 'ridden'], 1, 0.4] as never,
     },
   },
   'bike-friendly': {
@@ -157,14 +159,15 @@ export const ENVIRONMENT_LAYERS: EnvironmentLayer[] = [
     id: 'environmental-score',
     colorsStreets: true,
     overlay: 'score',
-    unit: 'score 0–100 (higher = better)',
-    source: 'GreenestBikeRoute routing: ATRAI senseBox:bike, OpenStreetMap',
+    unit: 'score 0–100 (higher = better; 50 = feels twice as long)',
+    source: 'GreenestBikeRoute: ATRAI senseBox:bike, OpenStreetMap',
     availability: 'measured',
     legend: [
-      { color: GREEN, label: '75–100 (best quarter)' },
+      { color: GREEN, label: '75–100 (calm, smooth)' },
       { color: LIME, label: '50–75' },
       { color: YELLOW, label: '25–50' },
-      { color: RED, label: '0–25 (worst quarter)' },
+      { color: RED, label: '0–25 (feels 4× as long or more)' },
+      { color: `${GREEN}66`, label: 'faded: no sensor bike rode it yet' },
     ],
   },
   {

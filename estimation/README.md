@@ -122,7 +122,7 @@ The router works on OpenStreetMap ways (one way = several segments). For every e
 
 The estimates live in `data/custom/roughness_estimates_heilbronn.json` and are loaded by `load_estimates` in `routing/graph.py`; each edge gets a `roughness_source`. Every `/route` response has `measured_share` and `estimated_share`; the rest of the route is unknown. `mean_roughness` still covers the measured part only.
 
-In the route cost (`edge_cost` in `routing/costs.py`) roughness adds `length × bump_penalty × roughness / 100`.
+In the route cost (`edge_cost` in `routing/costs.py`) roughness multiplies the street's cost by `1 + ¼ bump_penalty × bad(roughness)`, see [routing/README.md](../routing/README.md). The road surface (gravel, soil, grass) is a separate factor from OSM, `unpaved_penalty`: the sensors' roughness doesn't register it.
 
 ---
 

@@ -3,7 +3,11 @@
  * the current user and saved routes. Separate from greenestApi.ts (the routing
  * API), so the two can change without getting in each other's way.
  */
-import { GREENEST_API_URL, GreenestApiError } from '@/services/greenestApi'
+import {
+  DEFAULT_ROUTE_OPTIONS,
+  GREENEST_API_URL,
+  GreenestApiError,
+} from '@/services/greenestApi'
 import type { RouteOptions } from '@/types/greenest'
 import type {
   SavedRoute,
@@ -120,6 +124,7 @@ export function toSavedOptions(options: RouteOptions): SavedRouteOptions {
     pm_penalty: options.pm,
     stop_penalty: options.stop,
     prefer_bike_friendly: options.bikeFriendly,
+    unpaved_penalty: options.unpaved,
     prefer_time: options.preferTime,
     shade_penalty: options.shade,
     dark_penalty: options.dark,
@@ -135,6 +140,7 @@ export function fromSavedOptions(saved: SavedRouteOptions): RouteOptions {
     pm: saved.pm_penalty,
     stop: saved.stop_penalty,
     bikeFriendly: saved.prefer_bike_friendly,
+    unpaved: saved.unpaved_penalty ?? DEFAULT_ROUTE_OPTIONS.unpaved,
     preferTime: saved.prefer_time,
     shade: saved.shade_penalty,
     dark: saved.dark_penalty,

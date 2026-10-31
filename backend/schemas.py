@@ -16,17 +16,17 @@ ROUTE_EXAMPLE = {
                  "coordinates": [[9.2268683, 49.148385], [9.2227619, 49.139049], [9.2243909, 49.1262013]]},
     "properties": {
         "bump_penalty": 2, "danger_penalty": 10.0, "pm_penalty": 1, "stop_penalty": 1, "prefer_time": False,
-        "shade_penalty": 2, "dark_penalty": 10, "prefer_bike_friendly": 0, "depart_time": None, "daylight": None, "shade_slot": None,
+        "shade_penalty": 2, "dark_penalty": 10, "prefer_bike_friendly": 0, "unpaved_penalty": 6, "depart_time": None, "daylight": None, "shade_slot": None,
         "length_m": 3257.1, "duration_s": 959, "climb_m": 26.2, "kcal": 147.6, "speed_measured_share": 0.89, "mean_roughness": 12.4, "measured_share": 0.88, "estimated_share": 0.0,
-        "danger_points": 11, "danger_risk": 9.0, "mean_pm_risk": 0.506, "pm_measured_share": 0.63,
+        "danger_points": 9, "danger_risk": 7.41, "mean_pm_risk": 0.506, "pm_measured_share": 0.63,
         "mean_stop_go": 0.68, "stop_measured_share": 0.89,
         "mean_shade": None, "shade_known_share": 0.95, "mean_lit": 0.988, "lit_known_share": 1.0, "lifts": 0,
         "reported_closures": 0,
-        "bumpy_m": 202, "bad_air_m": 292, "stop_go_m": 379, "sunny_m": None, "unlit_m": None, "dim_m": None, "bike_friendly_m": 1160, "pushed_m": 0,
+        "bumpy_m": 202, "bad_air_m": 292, "stop_go_m": 379, "sunny_m": None, "unlit_m": None, "dim_m": None, "bike_friendly_m": 1160, "unpaved_m": 0, "pushed_m": 0,
         # Shortened: the real route has 44 stretches.
         "segments": [
-            {"from_index": 0, "to_index": 4, "start_m": 0.0, "length_m": 36.4, "name": "Kleiststraße", "way": None, "along": False, "flags": [], "roughness": 11.833, "danger_points": 0, "pm_risk": 0.494, "stop_go": 0.652, "speed_kmh": 14.495, "shade": None, "lit": 1.0, "bike_friendly": False, "pushed": False, "segments": ["1214835654-11925390607", "26890921-1214835654"]},
-            {"from_index": 4, "to_index": 7, "start_m": 36.4, "length_m": 36.2, "name": "Sichererstraße", "way": None, "along": False, "flags": ["bike_friendly_m"], "roughness": 9.485, "danger_points": 0, "pm_risk": 0.507, "stop_go": 0.636, "speed_kmh": 13.248, "shade": None, "lit": 1.0, "bike_friendly": True, "pushed": False, "segments": ["26890921-1214745069", "1214745069-1216889477", "1028721133-1216889477"]},
+            {"from_index": 0, "to_index": 4, "start_m": 0.0, "length_m": 36.4, "name": "Kleiststraße", "way": None, "along": False, "flags": [], "roughness": 11.833, "danger_points": 0, "pm_risk": 0.494, "stop_go": 0.652, "speed_kmh": 14.495, "shade": None, "lit": 1.0, "bike_friendly": False, "unpaved": 0.0, "pushed": False, "segments": ["1214835654-11925390607", "26890921-1214835654"]},
+            {"from_index": 4, "to_index": 7, "start_m": 36.4, "length_m": 36.2, "name": "Sichererstraße", "way": None, "along": False, "flags": ["bike_friendly_m"], "roughness": 9.485, "danger_points": 0, "pm_risk": 0.507, "stop_go": 0.636, "speed_kmh": 13.248, "shade": None, "lit": 1.0, "bike_friendly": True, "unpaved": 0.0, "pushed": False, "segments": ["26890921-1214745069", "1214745069-1216889477", "1028721133-1216889477"]},
         ],
     },
 }
@@ -36,17 +36,17 @@ SHORTEST_EXAMPLE = {
                  "coordinates": [[9.2268683, 49.148385], [9.2294832, 49.1399564], [9.2243909, 49.1262013]]},
     "properties": {
         "bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0, "prefer_time": False,
-        "shade_penalty": 0, "dark_penalty": 0, "prefer_bike_friendly": 0, "depart_time": None, "daylight": None, "shade_slot": None,
+        "shade_penalty": 0, "dark_penalty": 0, "prefer_bike_friendly": 0, "unpaved_penalty": 0, "depart_time": None, "daylight": None, "shade_slot": None,
         "length_m": 3061.2, "duration_s": 940, "climb_m": 30.7, "kcal": 148.8, "speed_measured_share": 0.97, "mean_roughness": 24.7, "measured_share": 0.97, "estimated_share": 0.02,
-        "danger_points": 10, "danger_risk": 7.94, "mean_pm_risk": 0.524, "pm_measured_share": 0.75,
+        "danger_points": 8, "danger_risk": 6.35, "mean_pm_risk": 0.524, "pm_measured_share": 0.75,
         "mean_stop_go": 0.665, "stop_measured_share": 0.97,
         "mean_shade": None, "shade_known_share": 1.0, "mean_lit": 0.931, "lit_known_share": 1.0, "lifts": 0,
         "reported_closures": 0,
-        "bumpy_m": 1895, "bad_air_m": 733, "stop_go_m": 481, "sunny_m": None, "unlit_m": None, "dim_m": None, "bike_friendly_m": 874, "pushed_m": 0,
+        "bumpy_m": 1895, "bad_air_m": 733, "stop_go_m": 481, "sunny_m": None, "unlit_m": None, "dim_m": None, "bike_friendly_m": 874, "unpaved_m": 0, "pushed_m": 0,
         # Shortened: the real route has 35 stretches.
         "segments": [
-            {"from_index": 0, "to_index": 4, "start_m": 0.0, "length_m": 36.4, "name": "Kleiststraße", "way": None, "along": False, "flags": [], "roughness": 11.833, "danger_points": 0, "pm_risk": 0.494, "stop_go": 0.652, "speed_kmh": 14.495, "shade": None, "lit": 1.0, "bike_friendly": False, "pushed": False, "segments": ["1214835654-11925390607", "26890921-1214835654"]},
-            {"from_index": 4, "to_index": 11, "start_m": 36.4, "length_m": 89.8, "name": "Sichererstraße", "way": None, "along": False, "flags": ["bike_friendly_m"], "roughness": 9.485, "danger_points": 0, "pm_risk": 0.491, "stop_go": 0.636, "speed_kmh": 13.248, "shade": None, "lit": 1.0, "bike_friendly": True, "pushed": False, "segments": ["26890921-1214835706", "1214835682-1214835706", "1214835682-1216735058", "1214835677-1216735058", "1214835597-1214835677", "1214835597-1214835623", "1214835623-1558436876"]},
+            {"from_index": 0, "to_index": 4, "start_m": 0.0, "length_m": 36.4, "name": "Kleiststraße", "way": None, "along": False, "flags": [], "roughness": 11.833, "danger_points": 0, "pm_risk": 0.494, "stop_go": 0.652, "speed_kmh": 14.495, "shade": None, "lit": 1.0, "bike_friendly": False, "unpaved": 0.0, "pushed": False, "segments": ["1214835654-11925390607", "26890921-1214835654"]},
+            {"from_index": 4, "to_index": 11, "start_m": 36.4, "length_m": 89.8, "name": "Sichererstraße", "way": None, "along": False, "flags": ["bike_friendly_m"], "roughness": 9.485, "danger_points": 0, "pm_risk": 0.491, "stop_go": 0.636, "speed_kmh": 13.248, "shade": None, "lit": 1.0, "bike_friendly": True, "unpaved": 0.0, "pushed": False, "segments": ["26890921-1214835706", "1214835682-1214835706", "1214835682-1216735058", "1214835677-1216735058", "1214835597-1214835677", "1214835597-1214835623", "1214835623-1558436876"]},
         ],
     },
 }
@@ -98,7 +98,8 @@ class MultiLineString(BaseModel):
 PLANNED_WITH = "The penalty this route was planned with, as requested (0 for the shortest route)"
 
 
-Flag = Literal["bumpy_m", "danger_points", "bad_air_m", "stop_go_m", "sunny_m", "unlit_m", "dim_m", "bike_friendly_m"]
+Flag = Literal["bumpy_m", "danger_points", "bad_air_m", "stop_go_m", "sunny_m", "unlit_m", "dim_m", "bike_friendly_m",
+               "unpaved_m"]
 
 
 class RouteSegment(BaseModel):
@@ -117,7 +118,8 @@ class RouteSegment(BaseModel):
     flags: list[Flag] = Field(description=(
         "What the stretch counts towards, named after the route totals: bumpy_m, bad_air_m and stop_go_m by the same "
         "thresholds, danger_points if it has a close-overtaking spot, sunny_m less than half in shade at shade_slot (by "
-        "day), unlit_m probably unlit (lit < 0.5, after dark), dim_m dimly lit (probably lit, but few street lights seen; after dark), bike_friendly_m on a bike path, lane or route"))
+        "day), unlit_m probably unlit (lit < 0.5, after dark), dim_m dimly lit (probably lit, but few street lights seen; after dark), bike_friendly_m on a bike path, lane or route, "
+        "unpaved_m on an unpaved way (compacted, gravel, soil or grass)"))
     roughness: Optional[float] = Field(description="Roughness, measured or estimated (length-weighted); null if unknown")
     danger_points: int = Field(description="Close-overtaking spots on the stretch")
     pm_risk: Optional[float] = Field(description="Air score 0-1, higher = more fine dust; null if not measured")
@@ -126,6 +128,9 @@ class RouteSegment(BaseModel):
     shade: Optional[float] = Field(description="Share in shade at shade_slot, 0-1; null at night, without a departure or data")
     lit: Optional[float] = Field(description="Chance the street is lit at night, 0-1; null without lighting data")
     bike_friendly: bool = Field(description="On a bike path, bike lane or bike route")
+    unpaved: float = Field(description=(
+        "How unpaved, from OSM surface and tracktype (length-weighted): 0 paved, 0.25 compacted, 0.5 loose gravel or "
+        "cobblestones, 1 soil or grass"))
     pushed: bool = Field(description="An e-scooter is pushed here (footway or pedestrian street); always false for bikes")
     segments: list[str] = Field(description=(
         "The street segments (\"u-v\", as in `/reports/closures`) the stretch rides, in riding order: the app reports "
@@ -141,6 +146,7 @@ class RouteProperties(BaseModel):
     shade_penalty: float = Field(description=PLANNED_WITH)
     dark_penalty: float = Field(description=PLANNED_WITH)
     prefer_bike_friendly: float = Field(description="How much bike-friendly streets were preferred, as requested (0 for the shortest route)")
+    unpaved_penalty: float = Field(description=PLANNED_WITH)
     depart_time: Optional[str] = Field(description="The requested depart_time in Heilbronn local time (ISO 8601), or null")
     daylight: Optional[bool] = Field(
         description="Whether the sun is up at depart_time (then shade_penalty applies, else dark_penalty); null without depart_time")
@@ -187,6 +193,7 @@ class RouteProperties(BaseModel):
     unlit_m: Optional[int] = Field(description="After dark: metres on probably unlit streets (chance not lit, over the streets with lighting data); null otherwise")
     dim_m: Optional[int] = Field(description="After dark: metres on dimly lit streets, probably lit but with fewer than 1 street light per 100 m seen on Mapillary (/lighting lights_per_100m); null otherwise")
     bike_friendly_m: int = Field(description="Metres on bike paths, bike lanes and bike routes (see /bike-friendly-streets)")
+    unpaved_m: int = Field(description="Metres on unpaved ways: gravel, compacted, cobblestones, soil or grass (OSM surface and tracktype)")
     pushed_m: int = Field(description="Metres an e-scooter is pushed at walking pace, on footways and pedestrian streets it must not ride on (eKFV); 0 for bikes")
     segments: list[RouteSegment] = Field(description=(
         "The route as stretches with what is measured on them, in riding order, e.g. for a tooltip when pointing at the "
@@ -490,14 +497,23 @@ class TourCollection(BaseModel):
             "streets": ["Am Neckaruferpark", "Untere Neckarstraße", "Neckarhalde", "Schleusenbrücke Horkheim"]}}]}}}
 
 
+class ScoreProperties(BaseModel):
+    score: float = Field(description=(
+        "Overall score 0-100 (higher = better): 100 / how many times its length the street feels to ride. 100 = a calm "
+        "street (car-free, 30 km/h or a bike path) measured typical or better, 50 = feels twice its length, 25 = four "
+        "times. An absolute scale, not a rank. Multiplies traffic stress (1-4 from OSM road type, speed limit, lanes "
+        "and bike lane: 1x, 1.15x, 1.5x, 2x), roughness, air and stop-and-go (worse than typical costs as in routing, "
+        "as much better earns the inverse back), close-overtaking spots per metre and lifts; with depart_time also sun "
+        "(by day) or no street lighting (after dark), and the OSM surface (unpaved_penalty: soil or grass 2.5x at the "
+        "default). Air where no sensor passed: the measured streets within 300 m"))
+    ridden: bool = Field(description=(
+        "Whether ATRAI bikes measured the street. Without, the score rests on OSM, nearby air and estimates only"))
+
+
 class ScoreFeature(BaseModel):
     type: Literal["Feature"]
     geometry: LineString
-    properties: dict[Literal["score"], float] = Field(
-        description="Overall score 0-100: the street's percentile, by length, among Heilbronn streets ranked by routing cost per "
-                    "metre for the request's penalties (higher = better; 50 = median). Combines roughness, close-overtaking spots "
-                    "and air-quality points snapped to the street, stop-and-go and lifts; with depart_time also sun "
-                    "(by day) or no street lighting (after dark). Streets without data count at the routing defaults")
+    properties: ScoreProperties
 
 
 class ScoreCollection(BaseModel):

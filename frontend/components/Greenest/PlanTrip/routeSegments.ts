@@ -211,6 +211,20 @@ type Row = {
   tone?: 'bad' | 'good'
 }
 
+/** The surface class of a stretch's length-weighted unpavedness (0, 0.25, 0.5 or 1 per street, routing/surface.py). */
+function surfaceKind(unpaved: number): string {
+  if (unpaved < 0.125) {
+    return 'paved'
+  }
+  if (unpaved < 0.375) {
+    return 'compacted'
+  }
+  if (unpaved < 0.75) {
+    return 'gravel'
+  }
+  return 'soil'
+}
+
 /**
  * What a stretch is like, for the factors the rider cares about (slider above
  * 0, from your route's settings) and anything flagged on it.
@@ -248,6 +262,13 @@ function segmentRows(
       value: known(s.stop_go, v => labels.number(v, 2)),
       tone: flagged('stop_go_m') ? 'bad' : undefined,
       on: settings.stop_penalty > 0 || flagged('stop_go_m'),
+    },
+    {
+      key: 'surface',
+      value: labels.row(`surfaces.${surfaceKind(s.unpaved)}`),
+      tone: flagged('unpaved_m') ? 'bad' : undefined,
+      on:
+        (settings.unpaved_penalty > 0 && s.unpaved > 0) || flagged('unpaved_m'),
     },
     {
       key: 'speed',

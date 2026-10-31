@@ -41,6 +41,7 @@ type SliderKey =
   | 'pm'
   | 'stop'
   | 'bikeFriendly'
+  | 'unpaved'
   | 'shade'
   | 'dark'
 
@@ -64,6 +65,7 @@ const OPTION_SLIDERS: SliderSpec[] = [
   { key: 'danger', min: 0, max: 100, step: 1 },
   points('pm'),
   points('stop'),
+  points('unpaved'),
   points('bikeFriendly'),
 ]
 

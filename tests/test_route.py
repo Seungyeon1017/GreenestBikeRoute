@@ -6,7 +6,7 @@ import pytest
 from routing import graph
 from routing.calories import DEFAULT_WEIGHT_KG, ride_kcal, walk_kcal
 from routing.costs import AIR_HOTSPOT_OFFSET, AIR_PRIOR_RIDES
-from routing.graph import attach_bike_friendly, attach_danger, attach_lighting, attach_roughness, attach_shade, attach_speed, attach_stop_go
+from routing.graph import AIR_NEAR_M, AIR_NEAR_PRIOR, attach_bike_friendly, attach_bike_lanes, attach_danger, attach_nearby_air, attach_surface, attach_lighting, attach_roughness, attach_shade, attach_speed, attach_stop_go
 from routing.route import WALK_KMH, RouteError, compare_routes, day_routes, find_route, sky
 from tests.conftest import COORDS, A, B, C
 
@@ -154,6 +154,52 @@ def test_attach_danger_snaps_points_to_the_nearest_street(toy_graph):
     assert (ac["danger"], ac["danger_points"], ac["pm_risk"]) == (0, 0, None)
     assert cb["danger_points"] == 0 and cb["pm_rides"] == 2
     assert cb["pm_risk"] == pytest.approx((0.2 + 0.4 + AIR_PRIOR_RIDES * 0.5) / (2 + AIR_PRIOR_RIDES))
+
+
+def test_attach_danger_drops_overtaking_on_car_free_ways(toy_graph):
+    toy_graph.edges[A, B, 0]["highway"] = "cycleway"  # a bike on it reads the cars on the road beside it
+    toy_graph.edges[C, B, 0]["highway"] = "residential"
+    attach_danger(toy_graph, ([ON_AB, NEAR_CB], [1.0, 0.5]), ([ON_AB], [0.9], ["r1"]))
+    ab, cb = toy_graph.edges[A, B, 0], toy_graph.edges[C, B, 0]
+    assert (ab["danger"], ab["danger_points"]) == (0, 0)
+    assert (cb["danger"], cb["danger_points"]) == (0.5, 1)  # not moved to C -> B either
+    assert ab["pm_rides"] == 1  # air still counts where it was measured
+
+
+def test_attach_nearby_air_estimates_unmeasured_streets_from_measured_ones_close_by(toy_graph):
+    attach_danger(toy_graph, ([], []), ([NEAR_CB], [0.9], ["r1"]))
+    attach_nearby_air(toy_graph)
+    ab, ac, cb = (toy_graph.edges[e] for e in ((A, B, 0), (A, C, 0), (C, B, 0)))
+    assert cb["pm_near"] is None  # measured itself
+    # A -> C and A -> B touch C -> B (distance 0): weight 1, against AIR_NEAR_PRIOR at the prior
+    assert ac["pm_near"] == pytest.approx((cb["pm_risk"] + AIR_NEAR_PRIOR * 0.5) / (1 + AIR_NEAR_PRIOR))
+    toy_graph.add_edge(4, 5, osmid=15, length=50.0, roughness=None)
+    toy_graph.add_node(4, y=49.1500, x=9.2100)  # ~1 km away
+    toy_graph.add_node(5, y=49.1504, x=9.2100)
+    attach_danger(toy_graph, ([], []), ([NEAR_CB], [0.9], ["r1"]))
+    attach_nearby_air(toy_graph)
+    assert toy_graph.edges[4, 5, 0]["pm_near"] is None and AIR_NEAR_M < 1000
+
+
+def test_attach_surface_averages_the_ways_of_an_edge_and_counts_unlisted_ones_paved(toy_graph):
+    attach_surface(toy_graph, {11: 1.0, 13: 0.5})
+    assert [toy_graph.edges[e]["unpaved"] for e in ((A, B, 0), (A, C, 0), (C, B, 0))] == [1.0, 0.0, 0.25]
+
+
+def test_unpaved_penalty_detours_around_a_grass_track(toy_graph):
+    for d in toy_graph.edges.values():
+        d["roughness"] = 0.0
+    attach_surface(toy_graph, {11: 1.0})  # A -> B is grass, the 40% longer A -> C -> B paved
+    assert find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 0, 0, unpaved_penalty=1)["features"][0]["properties"]["length_m"] == 100
+    f = find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 0, 0, unpaved_penalty=2)["features"][0]
+    assert (f["properties"]["length_m"], f["properties"]["unpaved_m"]) == (140, 0)  # 1.5x outweighs 1.4x
+    shortest = find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 0, 0, unpaved_penalty=0)["features"][0]["properties"]
+    assert shortest["unpaved_m"] == 100 and shortest["segments"][0]["flags"] == ["unpaved_m"]
+
+
+def test_attach_bike_lanes_keeps_the_best_kind_of_the_ways_of_an_edge(toy_graph):
+    attach_bike_lanes(toy_graph, {11: "lane", 13: "lane", 14: "track"})
+    assert [toy_graph.edges[e]["bike_lane"] for e in ((A, B, 0), (A, C, 0), (C, B, 0))] == ["lane", None, "track"]
 
 
 def test_attach_danger_counts_each_ride_once_and_pulls_few_rides_towards_typical(toy_graph):

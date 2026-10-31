@@ -244,7 +244,7 @@
       },
       "environmental-score": {
         "label": "Gesamtwert",
-        "description": "Wie gut jede Straße zum Radfahren ist (0–100): glatter Belag, sicheres Überholen, saubere Luft, wenige Stopps, etc. Höher ist besser."
+        "description": "Wie gut sich jede Straße fahren lässt (0–100, höher ist besser): Verkehr (Straßentyp, Tempolimit, Radwege), glatter Belag, sicheres Überholen, saubere Luft, wenig Stopps. 50 heißt: fühlt sich doppelt so lang an wie eine ruhige Straße. Blasse Straßen hat noch kein Sensor-Rad befahren."
       },
       "bike-friendly": {
         "label": "Radwege & Radspuren",
@@ -316,6 +316,7 @@
         "danger": "Enges Überholen meiden",
         "pm": "Schlechte Luft meiden",
         "stop": "Stop-and-go meiden",
+        "unpaved": "Unbefestigte Wege meiden",
         "bikeFriendly": "Radwege und Radspuren bevorzugen",
         "shade": "Schatten bevorzugen (tagsüber)",
         "dark": "Beleuchtete Straßen bevorzugen (nachts)"
@@ -532,6 +533,11 @@
           "note": "Viel Stop-and-go = die schlechtesten 10 % der Straßen (Ampeln, Stau). Jeder Aufzug unterwegs zählt außerdem wie {{lift}} m.",
           "example": "Mit {{p}} fährst du bis zu {{m}} m Umweg, um 100 m mit viel Stop-and-go zu meiden."
         },
+        "unpaved": {
+          "question": "Wie viel länger fühlt sich ein Erd- oder Grasweg für dich an?",
+          "note": "Aus OpenStreetMap: Erde und Gras zählen voll, loser Schotter und Kopfsteinpflaster halb, wassergebundene Parkwege ein Viertel. Asphaltierte Feldwege zählen als befestigt.",
+          "example": "Mit {{p}} fährst du bis zu {{m}} m Umweg, um 100 m Erd- oder Grasweg zu meiden."
+        },
         "bikeFriendly": {
           "question": "Wie viel länger fühlt sich eine Straße ohne Radweg oder Radspur für dich an?",
           "note": "Radwege, Radspuren und ausgeschilderte Radrouten aus OpenStreetMap.",
@@ -574,6 +580,7 @@
           "sunny_m": "In der Sonne",
           "unlit_m": "Auf unbeleuchteten Straßen",
           "dim_m": "Auf schwach beleuchteten Straßen",
+          "unpaved_m": "Auf unbefestigten Wegen",
           "bike_friendly_m": "Auf Radwegen und Radspuren"
         }
       },
@@ -599,10 +606,17 @@
           "overtaking": "Stellen mit engem Überholen",
           "fineDust": "Feinstaub (0,5 = üblich)",
           "stopGo": "Stop-and-go (0–1)",
+          "surface": "Belag",
           "speed": "Übliches Radtempo",
           "shade": "Im Schatten",
           "lit": "Nachts beleuchtet",
-          "bikePath": "Radweg oder Radspur"
+          "bikePath": "Radweg oder Radspur",
+          "surfaces": {
+            "paved": "befestigt",
+            "compacted": "wassergebunden / Feinsplitt",
+            "gravel": "Schotter / Kopfstein",
+            "soil": "Erde / Gras"
+          }
         }
       },
       "reports": {

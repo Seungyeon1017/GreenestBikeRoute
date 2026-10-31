@@ -10,12 +10,13 @@ import pandas as pd
 from shapely import LineString, STRtree, points, union_all
 
 from download_data import load_features
-from routing.costs import AIR_HOTSPOT_OFFSET, AIR_PRIOR_RIDES, DEFAULT_PM_RISK, SNAP_M, air_scores, clean_overtaking, edge_roughness, osm_way_ids, point_risks, way_roughness, way_speed, way_stop_go
+from routing.costs import AIR_HOTSPOT_OFFSET, AIR_PRIOR_RIDES, CAR_HIGHWAYS, DEFAULT_PM_RISK, SNAP_M, air_scores, clean_overtaking, edge_roughness, osm_way_ids, point_risks, way_roughness, way_speed, way_stop_go
 from routing.footways import DROPPED_FOOTWAYS_PATH, footway_collection, save_footways
 from routing.lighting import load_light_density, load_lighting
 from routing.rideable_ways import RIDEABLE_WAYS
 from routing.shade import load_way_shade
 from routing.shadow import load_shadow
+from routing.surface import load_surface
 
 CACHE_DIR = Path(__file__).resolve().parent.parent / "cache"
 # Renamed when the filter below changes, so an old cached graph isn't reused.
@@ -28,6 +29,11 @@ ESTIMATED_ROUGHNESS_PATH = CACHE_DIR.parent / "data" / "custom" / "roughness_est
 AIR_HOTSPOTS_PATH = CACHE_DIR.parent / "data" / "custom" / "air_hotspots_heilbronn.json"
 HOTSPOT_ALONG_M = 15.0
 HOTSPOT_ALONG_SHARE = 0.5
+# attach_nearby_air: a street no air sensor passed takes the air of measured streets within this distance. 300 m
+# reaches 61% of the street length (25% is measured itself); each counts 1 next to the street, 0 at the limit, and
+# AIR_NEAR_PRIOR virtual streets at the prior keep one far neighbour from deciding alone.
+AIR_NEAR_M = 300.0
+AIR_NEAR_PRIOR = 1.0
 # Bike paths, bike lanes and bike routes from OSM (Overpass query next to it), for prefer_bike_friendly.
 BIKE_FRIENDLY_PATH = CACHE_DIR.parent / "data" / "custom" / "bike_friendly_streets_heilbronn.geojson"
 PLACE = "Heilbronn, Germany"
@@ -153,6 +159,9 @@ def load_graph(path=GRAPH_PATH, footways_path=DROPPED_FOOTWAYS_PATH):
     attach_shade(G, *load_shadow(), load_way_shade())
     attach_lighting(G, load_lighting(), load_light_density())
     attach_bike_friendly(G, load_bike_friendly_ways())
+    attach_bike_lanes(G, load_bike_lanes())
+    attach_surface(G, load_surface())
+    attach_nearby_air(G)
     return G
 
 
@@ -231,6 +240,68 @@ def attach_bike_friendly(G, ways):
         d["bike_friendly"] = any(i in ways for i in osm_way_ids(d["osmid"]))
 
 
+def load_bike_lanes(path=BIKE_FRIENDLY_PATH):
+    """What the bike-friendly roads give bikes, per OSM way id: "bicycle_road" (Fahrradstraße), "track" (a bike
+    path along the road, tagged on the road) or "lane" (painted). Bike routes, shared lanes and ways mapped as their
+    own bike path are left out. Empty if the file is missing."""
+    path = Path(path)
+    if not path.exists():
+        return {}
+    lanes = {}
+    for f in json.loads(path.read_text(encoding="utf-8"))["features"]:
+        p = f["properties"]
+        tags = {p.get(k) for k in ("cycleway", "cycleway:both", "cycleway:left", "cycleway:right")}
+        kind = "bicycle_road" if p.get("bicycle_road") == "yes" else "track" if "track" in tags else "lane" if "lane" in tags else None
+        if kind:
+            lanes[int(f["id"].split("/")[1])] = kind
+    return lanes
+
+
+def attach_bike_lanes(G, lanes):
+    """Set edge attribute `bike_lane`: the best of load_bike_lanes' kinds among the OSM ways of the edge, or None."""
+    best = ("bicycle_road", "track", "lane")
+    for _, _, d in G.edges(data=True):
+        kinds = {lanes.get(i) for i in osm_way_ids(d["osmid"])}
+        d["bike_lane"] = next((k for k in best if k in kinds), None)
+
+
+def attach_nearby_air(G):
+    """Set edge attribute `pm_near` on streets no air sensor passed (`pm_risk` None): the measured streets within
+    AIR_NEAR_M, weighted by how close they are (1 next to it, 0 at AIR_NEAR_M), pulled towards the street's own
+    `pm_prior` by AIR_NEAR_PRIOR. Air spreads over an area, not along one street. None with no measured street near.
+    Only for the overall score (routing.score); routing leaves unmeasured streets at their prior."""
+    lat0 = float(np.mean([y for _, y in G.nodes(data="y")]))
+    streets = _streets(G, lat0)
+    first = [G.edges[edges[0]] for _, edges in streets]
+    measured = [i for i, d in enumerate(first) if d.get("pm_risk") is not None]
+    near = {}
+    if measured:
+        tree = STRtree([streets[i][0] for i in measured])
+        todo = [i for i, d in enumerate(first) if d.get("pm_risk") is None]
+        pairs = tree.query([streets[i][0] for i in todo], predicate="dwithin", distance=AIR_NEAR_M)
+        for t, m in zip(*pairs):
+            i, j = todo[t], measured[m]
+            w = 1 - streets[i][0].distance(streets[j][0]) / AIR_NEAR_M
+            s, n = near.get(i, (0.0, 0.0))
+            near[i] = (s + w * first[j]["pm_risk"], n + w)
+    for i, (_, edges) in enumerate(streets):
+        for e in edges:
+            d = G.edges[e]
+            if i in near:
+                s, n = near[i]
+                d["pm_near"] = float((s + AIR_NEAR_PRIOR * d.get("pm_prior", DEFAULT_PM_RISK)) / (n + AIR_NEAR_PRIOR))
+            else:
+                d["pm_near"] = None
+
+
+def attach_surface(G, way_unpaved):
+    """Set edge attribute `unpaved` (0 paved to 1 soil or grass, routing.surface): the mean over the OSM ways of the
+    edge, ways not in `way_unpaved` counting as paved."""
+    for _, _, d in G.edges(data=True):
+        ids = osm_way_ids(d["osmid"])
+        d["unpaved"] = sum(way_unpaved.get(i, 0.0) for i in ids) / len(ids)
+
+
 def attach_lighting(G, way_lit, way_lights=None):
     """Set edge attributes `lit` (chance the street is lit at night, 0-1, or None where unknown) and
     `lights_per_100m` (Mapillary street lights per 100 m, or None where none was seen) from routing.lighting."""
@@ -269,9 +340,15 @@ def snap_to_streets(lines, lonlat, lat0, max_m=SNAP_M):
     return snapped
 
 
+def _car_street(d):
+    """Whether cars drive on the edge (CAR_HIGHWAYS, or no highway tag)."""
+    h = d.get("highway")
+    return h is None or bool({str(x) for x in (h if isinstance(h, list) else [h])} & CAR_HIGHWAYS)
+
+
 def attach_danger(G, overtaking, pm, hotspot_roads=()):
     """Snap the overtaking and PM points to their nearest street and set edge attributes:
-    `danger` (summed Risk Index Overtaking), `danger_points` (how many),
+    `danger` (summed Risk Index Overtaking; 0 on car-free ways, see CAR_HIGHWAYS), `danger_points` (how many),
     `pm_prior` (air score before any ride: DEFAULT_PM_RISK, plus AIR_HOTSPOT_OFFSET on a street that runs along
     one of `hotspot_roads`, [(lon, lat), ...] lines), `pm_risk` (air score, or None where none was measured) and `pm_rides` (how many rides
     measured it). `pm_risk` is the mean over rides of each ride's mean score on the street, pulled towards
@@ -291,6 +368,8 @@ def attach_danger(G, overtaking, pm, hotspot_roads=()):
         return n, total
 
     danger_n, danger_sum = per_street(*overtaking)
+    car_free = ~np.array([_car_street(G.edges[edges[0]]) for _, edges in streets], dtype=bool)
+    danger_n[car_free], danger_sum[car_free] = 0, 0.0
     pm_lonlat, pm_score, pm_ride = pm
     pm_street = snap_to_streets(lines, pm_lonlat, lat0)
     per_ride = pd.DataFrame({"street": pm_street, "ride": pm_ride, "score": pm_score}, columns=["street", "ride", "score"])

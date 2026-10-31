@@ -64,6 +64,12 @@ def test_edge_cost_sun_and_dark_scale_length():
     assert edge_cost(100, 0, **ZERO, shade_penalty=10, dark_penalty=10) == 100
 
 
+def test_edge_cost_unpaved_scales_length():
+    assert edge_cost(100, 0, **ZERO, unpaved=1.0, unpaved_penalty=4) == 200  # soil or grass
+    assert edge_cost(100, 0, **ZERO, unpaved=0.5, unpaved_penalty=4) == 150  # gravel
+    assert edge_cost(100, 0, **ZERO, unpaved_penalty=10) == 100  # paved
+
+
 def test_edge_cost_factors_multiply_so_one_penalty_does_not_drown_another():
     """Raising one penalty keeps the cost ratio two streets get from another: a high prefer_bike_friendly still
     tells a bumpy street from a smooth one as much as without it (with a sum it would barely)."""

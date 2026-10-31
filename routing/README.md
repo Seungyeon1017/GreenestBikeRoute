@@ -6,6 +6,7 @@ The Heilbronn street map (OpenStreetMap, ~42k street pieces) is a graph. Every s
 cost = (length + danger_penalty × danger)
        × (1 + ¼ bump_penalty × bad(roughness)) × (1 + ¼ pm_penalty × bad(pm_risk)) × (1 + ¼ stop_penalty × bad(stop_go))
        × (1 + ¼ shade_penalty × sun) × (1 + ¼ dark_penalty × unlit³) × (1 + ¼ prefer_bike_friendly × not_bike_friendly)
+       × (1 + ¼ unpaved_penalty × unpaved)
      + stop_penalty × 25 m × lifts
 
 bad(x) = max(0, (x − typical) / (bad line − typical))
@@ -106,6 +107,13 @@ OSMnx's bike network, with these changes:
 - **Lighting** (`data/custom/lighting_heilbronn.json`) is the chance a way is lit: OSM `lit=*`, else Mapillary street lights, else a road-type and buildings rule. Unknown ways get 0.5; about 11% of the graph's ways have no value yet. Over 40 random night trips, the default `dark_penalty` 10 cuts metres on dark streets (lit < 0.2) from 630 to 159 per trip for 1.8 points more detour; 40 gets to 132 m, near the 127 m no route can avoid (mostly near start or end).
 - Routes report `daylight`, `shade_slot`, `mean_shade` (by day only), `mean_lit` and the share of the route each is known for. **Map overlays:** `/shade` (all slots per street, plus `slots`) and `/lighting`.
 
+### Surface: `data/custom/surface_heilbronn.json`, for `unpaved_penalty`
+
+- **Why OSM and not the bike sensors:** on the few unpaved ways bikes measured, roughness reads like asphalt (median 10.0 on grass and on tracktype grade4/5, 11.2 on asphalt; 25-35 stretches each), likely as riders slow down there. The roughness estimates (estimation/README.md) dropped OSM surface for the same data, rightly: among the measured streets, 90% asphalt, it doesn't sort roughness. It just never saw the farm tracks, 43% of the graph and 12% measured.
+- `unpaved` per OSM way, from `surface`, else `tracktype` (on 99% of tracks), else 0.5 for a track: 0 paved (asphalt, concrete, paving stones, sett, grade1: half the track length, paved farm roads), 0.25 compacted or fine gravel (most park paths, grade2), 0.5 loose gravel or cobblestones (grade3), 1 soil or grass (grade4/5). Ways with neither count as paved. Rebuild with `python -X utf8 -m routing.surface` (from the OSM tags OSMnx cached).
+- **Default 6:** a soil or grass track costs 2.5×, loose gravel 1.75×, a compacted path 1.375×. Over 40 random trips of 1.5-5 km, routes ride 75% less soil and grass than with 0 (1.9 km → 0.5 km of 168 km) for 0.5 points more detour; 3 cuts only 43%. The nature tour sets 2: field and forest tracks are its point.
+- Routes report `unpaved_m` (compacted or worse) and each stretch its `unpaved`.
+
 ## Which overtaking readings count
 
 Each row in `danger_zones_raw_heilbronn` is one overtake, with the gap between car and bike as the sensor measured it. Route planning and `/danger` only count gaps of **more than 25 cm**:
@@ -127,6 +135,7 @@ Note: This is a judgement from the data; the hardware owners haven't confirmed i
 ## Snapping points to streets
 
 - Each overtaking and PM point is assigned to the nearest street within **25 m** (GPS noise). A point with no street that close is ignored. That is 13% of the overtaking points we use and 16% of the PM points.
+- An overtaking point whose nearest street is car-free (bike path, footway, path, track, pedestrian zone) is dropped: the bike was not in traffic, and its sensor read the cars on the road beside it or parked ones. That was 44% of the overtaking risk, and had put bike paths and pedestrian zones among the worst-scored streets in town. It is not moved to the road either, as no bike rode the road.
 - A two-way street gets the same values in both directions.
 - The start and end you request are moved onto the nearest street, which is split there so the route can enter or leave it. If that street is more than 500 m away (for example outside Heilbronn), the API returns an error (HTTP 400).
 

@@ -5,7 +5,7 @@ import math
 from datetime import datetime
 
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_PM_PENALTY, \
-    DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY
+    DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, DEFAULT_UNPAVED_PENALTY
 from routing.calories import ride_kcal, total_climb
 from routing.route import LOCAL_TZ, edge_coords, route_duration, route_edges, street_name
 
@@ -21,7 +21,8 @@ TOURS = {
     # Trappensee: over half of it under tree crowns.
     "scenicGreen": ([
         ("Neckarbogen", 49.14727, 9.21156),
-        ("Obere Neckarstraße", 49.14100, 9.21551),
+        ("Untere Neckarstraße", 49.14359, 9.21691),
+        ("Obere Neckarstraße", 49.14154, 9.21584),
         ("Stadtgarten", 49.14216, 9.22498),
         ("Pfühlpark", 49.14004, 9.24122),
         ("Trappensee", 49.13922, 9.25405),
@@ -46,21 +47,23 @@ TOURS = {
         ("Schleuse Horkheim", 49.11771, 9.16632),
     ], {"prefer_bike_friendly": 4}),
     # A loop out at the eastern edge of town: from the Trappensee up the Kirschenallee to the Waldheide by the
-    # Stadtwald and back down the Böckinger Hangweg.
+    # Stadtwald and back down the Böckinger Hangweg. Field and forest tracks are the point here, so they cost less than
+    # usual (from 3 on the loop rides part of its way twice).
     "nature": ([
         ("Trappensee", 49.13687, 9.25586),
         ("Kirschenallee", 49.13355, 9.27183),
         ("Waldheide", 49.12612, 9.27085),
         ("Böckinger Hangweg", 49.12805, 9.25988),
         ("Trappensee", 49.13687, 9.25586),
-    ], {"bump_penalty": 1, "prefer_bike_friendly": 2}),
+    ], {"bump_penalty": 1, "prefer_bike_friendly": 2, "unpaved_penalty": 2}),
 }
 
 # The route penalties in route_edges' order, at their defaults.
 DEFAULTS = {"bump_penalty": DEFAULT_BUMP_PENALTY, "danger_penalty": DEFAULT_DANGER_PENALTY,
             "pm_penalty": DEFAULT_PM_PENALTY, "stop_penalty": DEFAULT_STOP_PENALTY, "prefer_time": False,
             "shade_penalty": DEFAULT_SHADE_PENALTY, "dark_penalty": DEFAULT_DARK_PENALTY,
-            "prefer_bike_friendly": DEFAULT_PREFER_BIKE_FRIENDLY, "depart_time": None}
+            "prefer_bike_friendly": DEFAULT_PREFER_BIKE_FRIENDLY, "unpaved_penalty": DEFAULT_UNPAVED_PENALTY,
+            "depart_time": None}
 
 def _steps(G, a, b, penalties):
     """The route from a to b, both (lat, lon), as steps from one point of its line to the next, each with its share

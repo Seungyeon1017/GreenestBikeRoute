@@ -20,7 +20,7 @@ from backend.users.saved_routes import TAG as SAVED_ROUTES_TAG
 from download_data import DATA_DIR, load_features
 from routing.calories import DEFAULT_WEIGHT_KG
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_PM_PENALTY, \
-    DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, MAX_DARK_POINTS, MAX_POINTS, air_scores, clean_overtaking, \
+    DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, DEFAULT_UNPAVED_PENALTY, MAX_DARK_POINTS, MAX_POINTS, air_scores, clean_overtaking, \
     osm_way_ids
 from routing.elevation import attach_elevation, load_crests, load_elevation
 from routing.grade import NoElevationError, route_grade
@@ -28,7 +28,8 @@ from routing.graph import load_graph
 from routing.highlights import greenest_streets
 from routing.tours import plan_tours
 from routing.footways import Footways
-from routing.route import RouteError, compare_routes, day_routes, edge_coords, find_route, nearest_street, segment_id, set_closures, street_name,     sky, street_scores
+from routing.route import RouteError, compare_routes, day_routes, edge_coords, find_route, nearest_street, segment_id, set_closures, street_name, sky
+from routing.score import street_scores
 from routing.sharing_trip import WalkNetwork, load_walk_graph, plan_sharing_trip
 
 
@@ -177,10 +178,12 @@ allows 1 search a second for everyone, so results are cached and searches queue.
   value is 0-1 (roughness 0-100), and higher is always worse. `/speed` gives km/h, where higher is faster.
   `/shade` (share in shade per time slot) and `/lighting` (chance a street is lit at night) are 0-1 where higher
   is better. `/bike-friendly-streets` shows the bike paths, bike lanes and bike routes `prefer_bike_friendly` favours.
-- **Overall score:** `/score` puts every street on one 0-100 scale (higher = better): its percentile, by length, among
-  Heilbronn streets ranked by routing cost per metre. It takes the same penalties, `prefer_time`, `prefer_bike_friendly` and `depart_time` as
-  `/route`, so it shows the streets the way that route request weighs them. Overtaking spots and air points count for
-  the street they are snapped to.
+- **Overall score:** `/score` puts every street on one absolute 0-100 scale (higher = better): 100 / how many times its
+  length it feels to ride, so 50 = twice. Its own formula, not routing's cost: it adds traffic stress from OSM (road
+  type, speed limit, lanes, bike lane), so streets no bike rode still get a fair score (`ridden` false), lets
+  measured values better than typical earn credit, and takes air from measured streets within 300 m where no sensor
+  passed. It takes the same penalties, `prefer_time`, `prefer_bike_friendly`, `unpaved_penalty` and `depart_time` as
+  `/route`.
 
 ### Highlights
 `/highlights/greenest-streets` ranks named streets by street trees, clean air and bike paths (`green_score` 0-100).
@@ -249,14 +252,20 @@ def penalty_query(
     prefer_bike_friendly: float = Query(DEFAULT_PREFER_BIKE_FRIENDLY, ge=0, le=MAX_POINTS, description=(
         "How much do you prefer bike-friendly streets (bike paths, bike lanes, bike routes; see /bike-friendly-streets). "
         "In points 0-10: each point makes other streets cost 25% more (4 = they feel twice as long). 0 = ignore. Multiplies with the other dislikes, so it doesn't drown them")),
+    unpaved_penalty: float = Query(DEFAULT_UNPAVED_PENALTY, ge=0, le=MAX_POINTS, description=(
+        "How much do you hate unpaved ways (soil, grass, gravel), in points 0-10: each point makes a soil or grass "
+        "track cost 25% more, loose gravel or cobblestones half that, a compacted park path a quarter (6 = 2.5x, "
+        "1.75x, 1.375x). From OSM surface and tracktype; paved farm roads count as paved. 0 = ignore")),
     depart_time: Optional[datetime] = Query(None, description=(
         "When the trip starts, e.g. 2026-07-21T15:00 (Heilbronn local time) or with a time zone. Sun up: "
         "shade_penalty applies; sun down: dark_penalty applies. Leave out to ignore both"),
         openapi_examples={"afternoon": {"summary": "Summer afternoon (shade counts)", "value": "2026-07-21T15:00"},
                           "night": {"summary": "Autumn evening after sunset (lighting counts)", "value": "2026-10-28T19:30"}}),
 ):
-    """The penalties, prefer_time, prefer_bike_friendly and depart_time, shared by the routes and /score."""
-    return bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty,         prefer_bike_friendly, depart_time
+    """The penalties, prefer_time, prefer_bike_friendly, unpaved_penalty and depart_time, shared by the routes and
+    /score."""
+    return bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty, \
+        prefer_bike_friendly, unpaved_penalty, depart_time
 
 
 def route_query(

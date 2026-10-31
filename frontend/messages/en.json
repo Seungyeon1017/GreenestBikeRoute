@@ -244,7 +244,7 @@
       },
       "environmental-score": {
         "label": "Overall score",
-        "description": "How good each street is for cycling (0–100): smooth surface, safe overtaking, clean air, few stops, etc. Higher is better."
+        "description": "How good each street feels to ride (0–100, higher is better): traffic (road type, speed limit, bike lanes), smooth surface, safe overtaking, clean air, few stops. 50 means it feels twice as long as a calm street. Faded streets have no sensor-bike data yet."
       },
       "bike-friendly": {
         "label": "Bike paths & lanes",
@@ -316,6 +316,7 @@
         "danger": "Dislike close overtaking",
         "pm": "Dislike bad air",
         "stop": "Dislike stop-and-go",
+        "unpaved": "Dislike unpaved ways",
         "bikeFriendly": "Prefer bike paths and lanes",
         "shade": "Prefer shade (by day)",
         "dark": "Prefer lit streets (after dark)"
@@ -532,6 +533,11 @@
           "note": "Lots of stop-and-go = the worst 10 % of streets (traffic lights, congestion). Each lift on the way also counts as {{lift}} m.",
           "example": "With {{p}}, you’d ride up to {{m}} m extra to skip 100 m of heavy stop-and-go."
         },
+        "unpaved": {
+          "question": "How much longer does a soil or grass track feel to you?",
+          "note": "From OpenStreetMap: soil and grass count fully, loose gravel and cobblestones half, compacted park paths a quarter. Paved farm roads count as paved.",
+          "example": "With {{p}}, you’d ride up to {{m}} m extra to skip 100 m of soil or grass."
+        },
         "bikeFriendly": {
           "question": "How much longer does a street without a bike path or lane feel to you?",
           "note": "Bike paths, bike lanes and signposted bike routes from OpenStreetMap.",
@@ -574,6 +580,7 @@
           "sunny_m": "In the sun",
           "unlit_m": "On unlit streets",
           "dim_m": "On dimly lit streets",
+          "unpaved_m": "On unpaved ways",
           "bike_friendly_m": "On bike paths and lanes"
         }
       },
@@ -599,10 +606,17 @@
           "overtaking": "Close-overtaking spots",
           "fineDust": "Fine dust (0.5 = usual)",
           "stopGo": "Stop-and-go (0–1)",
+          "surface": "Surface",
           "speed": "Usual bike speed",
           "shade": "In shade",
           "lit": "Lit at night",
-          "bikePath": "Bike path or lane"
+          "bikePath": "Bike path or lane",
+          "surfaces": {
+            "paved": "paved",
+            "compacted": "compacted / fine gravel",
+            "gravel": "gravel / cobbles",
+            "soil": "soil / grass"
+          }
         }
       },
       "reports": {

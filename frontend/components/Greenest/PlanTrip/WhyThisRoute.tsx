@@ -24,6 +24,7 @@ const FACTORS: Factor[] = [
   { key: 'danger_points', metres: false },
   { key: 'bad_air_m', metres: true },
   { key: 'stop_go_m', metres: true },
+  { key: 'unpaved_m', metres: true },
   { key: 'sunny_m', metres: true },
   { key: 'unlit_m', metres: true },
   { key: 'dim_m', metres: true },
@@ -42,11 +43,22 @@ const TONE_CLASS: Record<Tone, string> = {
 }
 
 /** One bar, as wide as `value` is of `max`. */
-function Bar({ value, max, color }: { value: number; max: number; color: string }) {
+function Bar({
+  value,
+  max,
+  color,
+}: {
+  value: number
+  max: number
+  color: string
+}) {
   return (
     <div
       className="h-1 min-w-px rounded-full"
-      style={{ width: `${(100 * value) / Math.max(max, 1)}%`, background: color }}
+      style={{
+        width: `${(100 * value) / Math.max(max, 1)}%`,
+        background: color,
+      }}
     />
   )
 }
@@ -165,7 +177,11 @@ export default function WhyThisRoute({
               </span>
             </div>
             {f.metres && (
-              <Bar color={ROUTE_COLORS.greenest} max={max} value={value(r, f) ?? 0} />
+              <Bar
+                color={ROUTE_COLORS.greenest}
+                max={max}
+                value={value(r, f) ?? 0}
+              />
             )}
           </FactorRow>
         ))}
@@ -178,8 +194,7 @@ export default function WhyThisRoute({
 
   const extraM = Math.round(r.length_m - s.length_m)
   // From the rounded minutes, so it matches the table (3 min vs 4 min = 1 min slower).
-  const extraMin =
-    Math.round(r.duration_s / 60) - Math.round(s.duration_s / 60)
+  const extraMin = Math.round(r.duration_s / 60) - Math.round(s.duration_s / 60)
   const pct = `${result.detour_pct >= 0 ? '+' : '−'}${number(Math.abs(result.detour_pct), 1)} %`
   const time =
     extraMin > 0

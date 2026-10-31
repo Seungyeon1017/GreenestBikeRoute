@@ -30,6 +30,11 @@ DEFAULT_BUMP_PENALTY = 2
 # A danger point counts for its nearest street when within this distance (GPS noise).
 # Catches ~90% of the points inside the city; the rest are mostly rides outside Heilbronn.
 SNAP_M = 25.0
+# Overtaking points count only on streets cars drive on: a bike on a cycleway or in a pedestrian zone reads the cars
+# on the road beside it (or parked ones), and cars can't overtake it there. Points whose nearest street is car-free
+# are dropped, not moved to the road: the bike wasn't on it (44% of the risk). Edges without a highway tag count.
+CAR_HIGHWAYS = {"trunk", "primary", "secondary", "tertiary", "unclassified", "residential", "living_street", "service",
+                "trunk_link", "primary_link", "secondary_link", "tertiary_link", "road"}
 
 # danger_zones_raw: points where a car overtook a bike, Risk Index Overtaking 0-1. They add up,
 # so this is the detour in metres you'd ride to pass one fewer full-risk overtaking spot.
@@ -123,6 +128,12 @@ MAX_DARK_POINTS = 40
 # NOT on that list cost 1 + this x POINT times as much, so routes prefer the ones on it. 0 leaves routes as they were;
 # 4 makes other streets feel twice as long.
 DEFAULT_PREFER_BIKE_FRIENDLY = 0
+# Surface (routing.surface, from OSM): how unpaved a street is, 0 paved, 0.25 compacted (park paths), 0.5 loose gravel
+# or cobblestones, 1 soil or grass. Each point makes a soil or grass track 25% dearer (6 = 2.5x), gravel half that,
+# compacted a quarter. The bike sensors can't tell (see routing.surface), so this is OSM only. Over 40 random trips of
+# 1.5-5 km, 6 rides 75% less soil and grass than 0 (1.9 km -> 0.5 km of 168 km) for 0.5 points more detour; 3 only
+# 43% less, 8 96% less but compacted park paths then cost 1.5x.
+DEFAULT_UNPAVED_PENALTY = 6
 
 
 def osm_way_ids(osmid):
@@ -234,11 +245,13 @@ def edge_cost(length_m, normalized_roughness=DEFAULT_ROUGHNESS, bump_penalty=DEF
               pm_risk=DEFAULT_PM_RISK, pm_penalty=DEFAULT_PM_PENALTY,
               stop_go=DEFAULT_STOP_GO, stop_penalty=DEFAULT_STOP_PENALTY, lift_ends=0, speed_kmh=MEDIAN_SPEED_KMH,
               sun=0.0, shade_penalty=DEFAULT_SHADE_PENALTY, dark=0.0, dark_penalty=DEFAULT_DARK_PENALTY,
-              bike_friendly=False, prefer_bike_friendly=DEFAULT_PREFER_BIKE_FRIENDLY):
+              bike_friendly=False, prefer_bike_friendly=DEFAULT_PREFER_BIKE_FRIENDLY,
+              unpaved=0.0, unpaved_penalty=DEFAULT_UNPAVED_PENALTY):
     """Routing cost: plain length plus `danger_penalty` metres per unit of overtaking risk (`danger` = summed risk on
     the edge), times one factor per dislike: 1 + penalty x POINT x badness for roughness, air and stop-and-go (0 on
     a typical street, 1 on the bad-street line), 1 + penalty x POINT x share for sun (`sun`, by day), 1 + penalty x
-    POINT x dark ** DARK_EXPONENT for the chance of being unlit (`dark`, at night), 1 + prefer_bike_friendly x POINT on streets that are not bike-friendly. Plus a fixed
+    POINT x dark ** DARK_EXPONENT for the chance of being unlit (`dark`, at night), 1 + prefer_bike_friendly x POINT on
+    streets that are not bike-friendly, 1 + unpaved_penalty x POINT x `unpaved` (0 paved to 1 soil or grass). Plus a fixed
     `stop_penalty * POINT * LIFT_WAIT_M` metres per lift ridden through. A lift sits where two edges meet, so each edge ending at one
     (`lift_ends` = 0, 1 or 2) carries half of it.
 
@@ -257,5 +270,6 @@ def edge_cost(length_m, normalized_roughness=DEFAULT_ROUGHNESS, bump_penalty=DEF
               * (1 + pm_penalty * POINT * badness(pm_risk, DEFAULT_PM_RISK, BAD_AIR_RISK))
               * (1 + stop_penalty * POINT * badness(stop_go, DEFAULT_STOP_GO, STOP_GO_HEAVY))
               * (1 + shade_penalty * POINT * sun) * (1 + dark_penalty * POINT * dark ** DARK_EXPONENT)
-              * (1 + (0 if bike_friendly else prefer_bike_friendly * POINT)))
+              * (1 + (0 if bike_friendly else prefer_bike_friendly * POINT))
+              * (1 + unpaved_penalty * POINT * unpaved))
     return (base + danger_penalty * danger) * factor + stop_penalty * POINT * LIFT_WAIT_M * lift_ends / 2

@@ -85,6 +85,7 @@ export type RouteProperties = {
   shade_penalty: number
   dark_penalty: number
   prefer_bike_friendly: number
+  unpaved_penalty: number
   /** The requested departure time (Heilbronn local time, ISO 8601), or null. */
   depart_time: string | null
   /** True if the sun is up at depart_time (shade counted), false after dark (lighting counted), null without depart_time. */
@@ -133,6 +134,8 @@ export type RouteProperties = {
   dim_m: number | null
   /** More is better here. */
   bike_friendly_m: number
+  /** On gravel, compacted, cobblestones, soil or grass (OSM surface). */
+  unpaved_m: number
 
   /** The route as stretches with what is measured on them, in riding order. */
   segments: RouteSegment[]
@@ -148,6 +151,7 @@ export type RouteFlag =
   | 'unlit_m'
   | 'dim_m'
   | 'bike_friendly_m'
+  | 'unpaved_m'
 
 /** The kinds of way a stretch can be on (see backend/schemas.py). */
 export type WayKind =
@@ -183,6 +187,8 @@ export type RouteSegment = {
   shade: number | null
   lit: number | null
   bike_friendly: boolean
+  /** How unpaved, from OSM: 0 paved, 0.25 compacted, 0.5 gravel, 1 soil or grass (length-weighted). */
+  unpaved: number
   pushed: boolean
   /** The street segments ("u-v", as in /reports/closures) the stretch rides, to report it closed. */
   segments: string[]
@@ -223,6 +229,8 @@ export type RouteOptions = {
   stop: number
   /** 0–10 points: prefer bike paths, bike lanes and bike routes. */
   bikeFriendly: number
+  /** 0–10 points: avoid unpaved ways (soil, grass, gravel). */
+  unpaved: number
   /** Plan by riding time (fastest) instead of length (shortest). */
   preferTime: boolean
   /** Departure as "YYYY-MM-DDTHH:mm" in Heilbronn time, or "" for none. */

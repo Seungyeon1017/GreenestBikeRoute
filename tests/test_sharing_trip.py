@@ -6,7 +6,7 @@ from routing.route import RouteError, find_route
 from routing.sharing_trip import WALK_MAX_M, ParkingRules, WalkNetwork, plan_sharing_trip
 from tests.conftest import COORDS, A, B
 
-ZERO = (0, 0, 0, 0, False, 0, 0, 0, None)  # all penalties 0: the shortest ride
+ZERO = (0, 0, 0, 0, False, 0, 0, 0, 0, None)  # all penalties 0: the shortest ride
 
 
 @pytest.fixture
