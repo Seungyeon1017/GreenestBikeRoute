@@ -573,6 +573,7 @@
           "stop_go_m": "On stop-and-go streets",
           "sunny_m": "In the sun",
           "unlit_m": "On unlit streets",
+          "dim_m": "On dimly lit streets",
           "bike_friendly_m": "On bike paths and lanes"
         }
       },

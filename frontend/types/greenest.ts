@@ -129,6 +129,8 @@ export type RouteProperties = {
   sunny_m: number | null
   /** Only after dark with depart_time. */
   unlit_m: number | null
+  /** Probably lit but few street lights seen; only after dark with depart_time. */
+  dim_m: number | null
   /** More is better here. */
   bike_friendly_m: number
 
@@ -144,6 +146,7 @@ export type RouteFlag =
   | 'stop_go_m'
   | 'sunny_m'
   | 'unlit_m'
+  | 'dim_m'
   | 'bike_friendly_m'
 
 /** The kinds of way a stretch can be on (see backend/schemas.py). */

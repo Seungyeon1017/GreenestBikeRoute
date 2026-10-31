@@ -26,6 +26,7 @@ const FACTORS: Factor[] = [
   { key: 'stop_go_m', metres: true },
   { key: 'sunny_m', metres: true },
   { key: 'unlit_m', metres: true },
+  { key: 'dim_m', metres: true },
   { key: 'bike_friendly_m', metres: true, more: true },
 ]
 

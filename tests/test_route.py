@@ -309,6 +309,15 @@ def test_dimly_lit_streets_cost_a_quarter_of_a_dark_one(toy_graph):
     assert route_props(toy_graph, shade_penalty=0, dark_penalty=10, depart_time=SUMMER_NIGHT)["length_m"] == 100
 
 
+def test_route_reports_dimly_lit_metres_after_dark(toy_graph):
+    attach_lighting(toy_graph, {11: 1.0, 12: 1.0, 13: 1.0, 14: 1.0}, {11: 0.5, 12: 3.0, 13: 3.0, 14: 3.0})
+    p = route_props(toy_graph, shade_penalty=0, dark_penalty=0, depart_time=SUMMER_NIGHT)  # the dim A -> B
+    assert (p["length_m"], p["unlit_m"], p["dim_m"]) == (100, 0, 100)
+    assert [s["flags"] for s in p["segments"]] == [["bumpy_m", "dim_m"]]
+    p = route_props(toy_graph, shade_penalty=0, dark_penalty=0, depart_time=SUMMER_AFTERNOON)
+    assert (p["dim_m"], [s["flags"] for s in p["segments"]]) == (None, [["bumpy_m"]])
+
+
 def test_without_depart_time_shade_and_lighting_change_nothing(sunny_unlit_shortcut):
     p = route_props(sunny_unlit_shortcut, shade_penalty=10, dark_penalty=10)
     assert (p["length_m"], p["depart_time"], p["daylight"], p["mean_shade"], p["mean_lit"]) == (100, None, None, None, 0.0)

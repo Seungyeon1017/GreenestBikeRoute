@@ -245,11 +245,16 @@ def _lit(d):
     return DEFAULT_LIT if d.get("lit") is None else d["lit"]
 
 
-def _dark(d):
-    """Chance the street is unlit, for routing after dark. A dimly lit street (lit, but few lamps seen) counts as
-    unlit with chance DIM_SHARE ** (1 / DARK_EXPONENT) at least, so it costs DIM_SHARE of a surely dark one."""
+def _dim(d):
+    """Whether the street is dimly lit: probably lit, but Mapillary saw few street lights on it."""
     lights = d.get("lights_per_100m")
-    if lights is not None and lights < DIM_LIGHTS_PER_100M and _lit(d) >= 0.5:
+    return lights is not None and lights < DIM_LIGHTS_PER_100M and _lit(d) >= 0.5
+
+
+def _dark(d):
+    """Chance the street is unlit, for routing after dark. A dimly lit street counts as unlit with chance
+    DIM_SHARE ** (1 / DARK_EXPONENT) at least, so it costs DIM_SHARE of a surely dark one."""
+    if _dim(d):
         return max(1 - _lit(d), DIM_SHARE ** (1 / DARK_EXPONENT))
     return 1 - _lit(d)
 
@@ -463,6 +468,7 @@ def _edge_facts(G, u, v, d, slot, dark, scooter):
         "speed_kmh": d.get("speed_kmh"),
         "shade": d["shade"][slot] if slot is not None and d.get("shade") is not None else None,
         "lit": d.get("lit"),
+        "dim": _dim(d),
         "bike_friendly": bool(d.get("bike_friendly")),
         "pushed": bool(scooter and scooter_pushes(d)),
     }
@@ -473,6 +479,7 @@ def _edge_facts(G, u, v, d, slot, dark, scooter):
         ("stop_go_m", facts["stop_go"] is not None and facts["stop_go"] >= STOP_GO_HEAVY),
         ("sunny_m", facts["shade"] is not None and facts["shade"] < 0.5),
         ("unlit_m", dark and facts["lit"] is not None and facts["lit"] < 0.5),
+        ("dim_m", dark and facts["dim"]),
         ("bike_friendly_m", facts["bike_friendly"]),
     ) if bad]
     return {**facts, "flags": flags}
@@ -531,7 +538,7 @@ def _route_feature(G, a, b, penalties, weight_kg=DEFAULT_WEIGHT_KG, e_bike=False
     danger, danger_points, pm_len, pm_measured_len = 0.0, 0, 0.0, 0.0
     stop_len, stop_measured_len = 0.0, 0.0
     shade_len, shade_known_len, lit_len, lit_known_len = 0.0, 0.0, 0.0, 0.0
-    bumpy_m, bad_air_m, stop_go_m, sunny_m, unlit_m, bike_friendly_m, pushed_m = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    bumpy_m, bad_air_m, stop_go_m, sunny_m, unlit_m, dim_m, bike_friendly_m, pushed_m = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
     speed_measured_len = 0.0
     closures, edges, pieces = set(), [], []
     for u, v in zip(path[:-1], path[1:]):
@@ -572,6 +579,8 @@ def _route_feature(G, a, b, penalties, weight_kg=DEFAULT_WEIGHT_KG, e_bike=False
             lit_known_len += edge_len
             lit_len += d["lit"] * edge_len
             unlit_m += (1 - d["lit"]) * edge_len
+        if _dim(d):
+            dim_m += edge_len
         if d.get("bike_friendly"):
             bike_friendly_m += edge_len
         if scooter and scooter_pushes(d):
@@ -634,6 +643,8 @@ def _route_feature(G, a, b, penalties, weight_kg=DEFAULT_WEIGHT_KG, e_bike=False
         # streets with data); null at other times.
         "sunny_m": round(sunny_m) if slot is not None else None,
         "unlit_m": round(unlit_m) if dark else None,
+        # Metres on dimly lit streets after dark (probably lit, but few street lights seen); null otherwise.
+        "dim_m": round(dim_m) if dark else None,
         # Metres on bike paths, bike lanes and bike routes (/bike-friendly-streets).
         "bike_friendly_m": round(bike_friendly_m),
         # Metres an e-scooter is pushed (footways and pedestrian streets); 0 for bikes.

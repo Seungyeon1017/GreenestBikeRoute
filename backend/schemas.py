@@ -22,7 +22,7 @@ ROUTE_EXAMPLE = {
         "mean_stop_go": 0.68, "stop_measured_share": 0.89,
         "mean_shade": None, "shade_known_share": 0.95, "mean_lit": 0.988, "lit_known_share": 1.0, "lifts": 0,
         "reported_closures": 0,
-        "bumpy_m": 202, "bad_air_m": 292, "stop_go_m": 379, "sunny_m": None, "unlit_m": None, "bike_friendly_m": 1160, "pushed_m": 0,
+        "bumpy_m": 202, "bad_air_m": 292, "stop_go_m": 379, "sunny_m": None, "unlit_m": None, "dim_m": None, "bike_friendly_m": 1160, "pushed_m": 0,
         # Shortened: the real route has 44 stretches.
         "segments": [
             {"from_index": 0, "to_index": 4, "start_m": 0.0, "length_m": 36.4, "name": "Kleiststraße", "way": None, "along": False, "flags": [], "roughness": 11.833, "danger_points": 0, "pm_risk": 0.494, "stop_go": 0.652, "speed_kmh": 14.495, "shade": None, "lit": 1.0, "bike_friendly": False, "pushed": False, "segments": ["1214835654-11925390607", "26890921-1214835654"]},
@@ -42,7 +42,7 @@ SHORTEST_EXAMPLE = {
         "mean_stop_go": 0.665, "stop_measured_share": 0.97,
         "mean_shade": None, "shade_known_share": 1.0, "mean_lit": 0.931, "lit_known_share": 1.0, "lifts": 0,
         "reported_closures": 0,
-        "bumpy_m": 1895, "bad_air_m": 733, "stop_go_m": 481, "sunny_m": None, "unlit_m": None, "bike_friendly_m": 874, "pushed_m": 0,
+        "bumpy_m": 1895, "bad_air_m": 733, "stop_go_m": 481, "sunny_m": None, "unlit_m": None, "dim_m": None, "bike_friendly_m": 874, "pushed_m": 0,
         # Shortened: the real route has 35 stretches.
         "segments": [
             {"from_index": 0, "to_index": 4, "start_m": 0.0, "length_m": 36.4, "name": "Kleiststraße", "way": None, "along": False, "flags": [], "roughness": 11.833, "danger_points": 0, "pm_risk": 0.494, "stop_go": 0.652, "speed_kmh": 14.495, "shade": None, "lit": 1.0, "bike_friendly": False, "pushed": False, "segments": ["1214835654-11925390607", "26890921-1214835654"]},
@@ -98,7 +98,7 @@ class MultiLineString(BaseModel):
 PLANNED_WITH = "The penalty this route was planned with, as requested (0 for the shortest route)"
 
 
-Flag = Literal["bumpy_m", "danger_points", "bad_air_m", "stop_go_m", "sunny_m", "unlit_m", "bike_friendly_m"]
+Flag = Literal["bumpy_m", "danger_points", "bad_air_m", "stop_go_m", "sunny_m", "unlit_m", "dim_m", "bike_friendly_m"]
 
 
 class RouteSegment(BaseModel):
@@ -117,7 +117,7 @@ class RouteSegment(BaseModel):
     flags: list[Flag] = Field(description=(
         "What the stretch counts towards, named after the route totals: bumpy_m, bad_air_m and stop_go_m by the same "
         "thresholds, danger_points if it has a close-overtaking spot, sunny_m less than half in shade at shade_slot (by "
-        "day), unlit_m probably unlit (lit < 0.5, after dark), bike_friendly_m on a bike path, lane or route"))
+        "day), unlit_m probably unlit (lit < 0.5, after dark), dim_m dimly lit (probably lit, but few street lights seen; after dark), bike_friendly_m on a bike path, lane or route"))
     roughness: Optional[float] = Field(description="Roughness, measured or estimated (length-weighted); null if unknown")
     danger_points: int = Field(description="Close-overtaking spots on the stretch")
     pm_risk: Optional[float] = Field(description="Air score 0-1, higher = more fine dust; null if not measured")
@@ -185,6 +185,7 @@ class RouteProperties(BaseModel):
     stop_go_m: int = Field(description="Metres on stop-and-go streets: measured stop_go 0.77 or more, the worst tenth of measured street length")
     sunny_m: Optional[int] = Field(description="By day: metres in the sun at shade_slot (share not in shade, over the streets with shade data); null otherwise")
     unlit_m: Optional[int] = Field(description="After dark: metres on probably unlit streets (chance not lit, over the streets with lighting data); null otherwise")
+    dim_m: Optional[int] = Field(description="After dark: metres on dimly lit streets, probably lit but with fewer than 1 street light per 100 m seen on Mapillary (/lighting lights_per_100m); null otherwise")
     bike_friendly_m: int = Field(description="Metres on bike paths, bike lanes and bike routes (see /bike-friendly-streets)")
     pushed_m: int = Field(description="Metres an e-scooter is pushed at walking pace, on footways and pedestrian streets it must not ride on (eKFV); 0 for bikes")
     segments: list[RouteSegment] = Field(description=(
