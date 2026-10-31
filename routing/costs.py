@@ -111,6 +111,11 @@ DEFAULT_LIT = 0.5
 # 10 cubed 8.0% / 159 m; 40 cubed 10.4% / 132 m; linear 4 (the old default) 6.6% / 224 m, 10 9.2% / 167 m,
 # 40 11.6% / 148 m.
 DARK_EXPONENT = 3
+# A lit street where Mapillary saw few lamps (routing.lighting DIM_LIGHTS_PER_100M) is dimly lit: it costs at least
+# this share of the penalty of a surely dark street, as if it were unlit with chance DIM_SHARE ** (1 / DARK_EXPONENT).
+# Over the 40 night trips at dark_penalty 10, dimly lit metres per trip fell from 408 to 115 for a 9.6% instead of
+# 7.9% mean detour; a share of 0.5 got to 50 m for 10.4%. Few lamps seen can also mean few photos, so a quarter.
+DIM_SHARE = 0.25
 DEFAULT_DARK_PENALTY = 10
 # dark_penalty goes higher than the other dislikes, for riders who avoid dark streets at almost any detour.
 MAX_DARK_POINTS = 40

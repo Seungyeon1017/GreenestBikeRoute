@@ -544,7 +544,7 @@
         },
         "dark": {
           "question": "After dark: how much longer does an unlit street feel to you?",
-          "note": "This is for streets that are surely dark. Streets that may be lit count much less: one without lighting data counts ⅛. Up to 40, to avoid dark streets at almost any detour. Only used with a departure time after sunset.",
+          "note": "This is for streets that are surely dark. Streets that may be lit count much less: one without lighting data counts ⅛, a dimly lit one ¼. Up to 40, to avoid dark streets at almost any detour. Only used with a departure time after sunset.",
           "example": "With {{p}}, you’d ride up to {{m}} m extra to skip 100 m of unlit street."
         }
       },

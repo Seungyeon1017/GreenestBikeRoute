@@ -13,9 +13,11 @@ from shapely import LineString, Point, STRtree
 from shapely.ops import substring
 
 from routing.calories import DEFAULT_WEIGHT_KG, ride_kcal, route_climb, walk_kcal
-from routing.costs import BAD_AIR_RISK, BUMPY_ROUGHNESS, DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_LIT, \
-    DEFAULT_PM_PENALTY, DEFAULT_PM_RISK, DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_ROUGHNESS, DEFAULT_SHADE, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_GO, \
-    DEFAULT_STOP_PENALTY, LIFT_WAIT_M, MEDIAN_SPEED_KMH, STOP_GO_HEAVY, edge_cost, osm_way_ids
+from routing.costs import BAD_AIR_RISK, BUMPY_ROUGHNESS, DARK_EXPONENT, DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, \
+    DEFAULT_DARK_PENALTY, DEFAULT_LIT, DEFAULT_PM_PENALTY, DEFAULT_PM_RISK, DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_ROUGHNESS, \
+    DEFAULT_SHADE, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_GO, DEFAULT_STOP_PENALTY, DIM_SHARE, LIFT_WAIT_M, MEDIAN_SPEED_KMH, \
+    STOP_GO_HEAVY, edge_cost, osm_way_ids
+from routing.lighting import DIM_LIGHTS_PER_100M
 from routing.shadow import sun_position
 
 # Start/end points further than this from any street are treated as outside Heilbronn.
@@ -243,6 +245,15 @@ def _lit(d):
     return DEFAULT_LIT if d.get("lit") is None else d["lit"]
 
 
+def _dark(d):
+    """Chance the street is unlit, for routing after dark. A dimly lit street (lit, but few lamps seen) counts as
+    unlit with chance DIM_SHARE ** (1 / DARK_EXPONENT) at least, so it costs DIM_SHARE of a surely dark one."""
+    lights = d.get("lights_per_100m")
+    if lights is not None and lights < DIM_LIGHTS_PER_100M and _lit(d) >= 0.5:
+        return max(1 - _lit(d), DIM_SHARE ** (1 / DARK_EXPONENT))
+    return 1 - _lit(d)
+
+
 def local_time(depart_time):
     """`depart_time` in Heilbronn local time; one without a time zone is taken as local time already."""
     return depart_time.replace(tzinfo=LOCAL_TZ) if depart_time.tzinfo is None else depart_time.astimezone(LOCAL_TZ)
@@ -290,7 +301,7 @@ def _cost(d, plan):
                      lift_ends=d.get("lift_start", False) + d.get("lift_end", False),
                      speed_kmh=_speed_kmh(d) if prefer_time else MEDIAN_SPEED_KMH,
                      sun=0.0 if slot is None else 1 - _shade(d, slot), shade_penalty=shade_penalty,
-                     dark=1 - _lit(d) if dark else 0.0, dark_penalty=dark_penalty,
+                     dark=_dark(d) if dark else 0.0, dark_penalty=dark_penalty,
                      bike_friendly=d.get("bike_friendly", False), prefer_bike_friendly=prefer_bike_friendly)
 
 

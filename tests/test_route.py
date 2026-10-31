@@ -297,6 +297,18 @@ def test_dark_penalty_detours_onto_lit_streets_after_dark_only(sunny_unlit_short
     assert route_props(G, shade_penalty=0, dark_penalty=4, depart_time=SUMMER_AFTERNOON)["length_m"] == 100
 
 
+def test_dimly_lit_streets_cost_a_quarter_of_a_dark_one(toy_graph):
+    """A -> B is lit but Mapillary saw few lamps on it; the 40 % longer detour via C has plenty."""
+    for d in toy_graph.edges.values():
+        d["roughness"] = 0.0
+    attach_lighting(toy_graph, {11: 1.0, 12: 1.0, 13: 1.0, 14: 1.0}, {11: 0.5, 12: 3.0, 13: 3.0, 14: 3.0})
+    # 100 m x (1 + 10 x 0.25 x 0.25) = 162.5 > 140, but 100 m x (1 + 2 x 0.25 x 0.25) = 112.5 < 140
+    assert route_props(toy_graph, shade_penalty=0, dark_penalty=10, depart_time=SUMMER_NIGHT)["length_m"] == 140
+    assert route_props(toy_graph, shade_penalty=0, dark_penalty=2, depart_time=SUMMER_NIGHT)["length_m"] == 100
+    attach_lighting(toy_graph, {11: 1.0, 12: 1.0, 13: 1.0, 14: 1.0})  # no Mapillary data: just lit
+    assert route_props(toy_graph, shade_penalty=0, dark_penalty=10, depart_time=SUMMER_NIGHT)["length_m"] == 100
+
+
 def test_without_depart_time_shade_and_lighting_change_nothing(sunny_unlit_shortcut):
     p = route_props(sunny_unlit_shortcut, shade_penalty=10, dark_penalty=10)
     assert (p["length_m"], p["depart_time"], p["daylight"], p["mean_shade"], p["mean_lit"]) == (100, None, None, None, 0.0)

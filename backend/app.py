@@ -244,7 +244,7 @@ def penalty_query(
     dark_penalty: float = Query(DEFAULT_DARK_PENALTY, ge=0, le=MAX_DARK_POINTS, description=(
         "After dark: how much do you hate unlit streets, in points 0-40: each point makes a surely unlit street cost "
         "25% more; the chance of being unlit counts cubed, so a street without lighting data (chance 0.5) costs only "
-        "1/8 of that. 0 = ignore. "
+        "1/8 of that, and a dimly lit one (lit, but few street lamps seen) 1/4. 0 = ignore. "
         "Only applies with a depart_time between sunset and sunrise")),
     prefer_bike_friendly: float = Query(DEFAULT_PREFER_BIKE_FRIENDLY, ge=0, le=MAX_POINTS, description=(
         "How much do you prefer bike-friendly streets (bike paths, bike lanes, bike routes; see /bike-friendly-streets). "

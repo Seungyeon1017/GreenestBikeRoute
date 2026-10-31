@@ -544,7 +544,7 @@
         },
         "dark": {
           "question": "Nach Einbruch der Dunkelheit: Wie viel länger fühlt sich eine unbeleuchtete Straße für dich an?",
-          "note": "Das gilt für sicher dunkle Straßen. Straßen, die vielleicht beleuchtet sind, zählen viel weniger: eine ohne Beleuchtungsdaten zählt ⅛. Bis 40, um dunkle Straßen fast um jeden Preis zu meiden. Nur mit Abfahrtszeit nach Sonnenuntergang.",
+          "note": "Das gilt für sicher dunkle Straßen. Straßen, die vielleicht beleuchtet sind, zählen viel weniger: eine ohne Beleuchtungsdaten zählt ⅛, eine schwach beleuchtete ¼. Bis 40, um dunkle Straßen fast um jeden Preis zu meiden. Nur mit Abfahrtszeit nach Sonnenuntergang.",
           "example": "Mit {{p}} fährst du bis zu {{m}} m Umweg, um 100 m unbeleuchtete Straße zu meiden."
         }
       },
