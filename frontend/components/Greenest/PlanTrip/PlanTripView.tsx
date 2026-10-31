@@ -1338,6 +1338,10 @@ export default function PlanTripView() {
       data-workspace
     >
       <PageIntro
+        note={{
+          term: t('greenest.planTrip.greenTerm'),
+          text: t('greenest.planTrip.greenNote'),
+        }}
         subtitle={t('greenest.planTrip.subtitle')}
         title={t('greenest.planTrip.title')}
       />

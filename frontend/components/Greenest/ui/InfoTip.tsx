@@ -7,7 +7,9 @@ import type { ReactNode } from 'react'
 
 type InfoTipProps = {
   /** Accessible name of the (i) button, e.g. "About: Dislike bumps". */
-  label: string
+  label?: string
+  /** Text to show instead of the (i), with a dashed underline, e.g. a term in a heading. */
+  term?: string
   children: ReactNode
   className?: string
   /** Open the panel above the button, e.g. near the bottom of the map. */
@@ -22,6 +24,7 @@ type InfoTipProps = {
  */
 export default function InfoTip({
   label,
+  term,
   children,
   className,
   above = false,
@@ -66,16 +69,21 @@ export default function InfoTip({
         aria-controls={id}
         aria-expanded={open}
         aria-label={label}
-        className="rounded-full text-leaf-muted hover:text-leaf-forest focus:outline-none focus-visible:ring-2 focus-visible:ring-leaf-moss"
+        className={cx(
+          'focus:outline-none focus-visible:ring-2 focus-visible:ring-leaf-moss',
+          term
+            ? 'cursor-help rounded underline decoration-leaf-moss decoration-dashed decoration-2 underline-offset-[0.2em]'
+            : 'rounded-full text-leaf-muted hover:text-leaf-forest',
+        )}
         onClick={() => setPinned(p => !p)}
         type="button"
       >
-        <Info aria-hidden className="h-4 w-4" />
+        {term ?? <Info aria-hidden className="h-4 w-4" />}
       </button>
       {open && (
         <span
           className={cx(
-            'absolute inset-x-0 z-20 block rounded-xl border border-leaf-sand bg-white p-3 text-xs font-normal leading-relaxed text-leaf-ink/80 shadow-soft',
+            'absolute inset-x-0 z-20 block rounded-xl border border-leaf-sand bg-white p-3 font-inter text-xs font-normal leading-relaxed tracking-normal text-leaf-ink/80 shadow-soft',
             above ? 'bottom-full mb-1' : 'top-full mt-1',
           )}
           id={id}
