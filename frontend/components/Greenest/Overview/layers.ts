@@ -50,9 +50,10 @@ const LINE_WIDTH = [
 ] as never
 
 // Lit streets where Mapillary saw fewer lights per 100 m than this are dimly
-// lit (routing.lighting DIM_LIGHTS_PER_100M).
+// lit (routing.lighting DIM_LIGHTS_PER_100M). Drawn halfway between lit
+// (#eab308) and dark (#334155).
 const DIM_LIGHTS_PER_100M = 1
-const DIM = '#a16207'
+const DIM = '#8f7a2e'
 
 /** Colour along a value range, e.g. [0, RED, 100, GREEN]. */
 const ramp = (property: string, ...stops: Array<number | string>) =>
