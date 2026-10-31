@@ -20,7 +20,7 @@ ROUTE_EXAMPLE = {
         "length_m": 3257.1, "duration_s": 959, "climb_m": 26.2, "kcal": 147.6, "speed_measured_share": 0.89, "mean_roughness": 12.4, "measured_share": 0.88, "estimated_share": 0.0,
         "danger_points": 11, "danger_risk": 9.0, "mean_pm_risk": 0.506, "pm_measured_share": 0.63,
         "mean_stop_go": 0.68, "stop_measured_share": 0.89,
-        "mean_shade": None, "shade_known_share": 0.95, "mean_lit": 0.986, "lit_known_share": 0.89, "lifts": 0,
+        "mean_shade": None, "shade_known_share": 0.95, "mean_lit": 0.988, "lit_known_share": 1.0, "lifts": 0,
         "reported_closures": 0,
         "bumpy_m": 202, "bad_air_m": 292, "stop_go_m": 379, "sunny_m": None, "unlit_m": None, "bike_friendly_m": 1160, "pushed_m": 0,
         # Shortened: the real route has 44 stretches.
@@ -40,7 +40,7 @@ SHORTEST_EXAMPLE = {
         "length_m": 3061.2, "duration_s": 940, "climb_m": 30.7, "kcal": 148.8, "speed_measured_share": 0.97, "mean_roughness": 24.7, "measured_share": 0.97, "estimated_share": 0.02,
         "danger_points": 10, "danger_risk": 7.94, "mean_pm_risk": 0.524, "pm_measured_share": 0.75,
         "mean_stop_go": 0.665, "stop_measured_share": 0.97,
-        "mean_shade": None, "shade_known_share": 1.0, "mean_lit": 0.93, "lit_known_share": 0.99, "lifts": 0,
+        "mean_shade": None, "shade_known_share": 1.0, "mean_lit": 0.931, "lit_known_share": 1.0, "lifts": 0,
         "reported_closures": 0,
         "bumpy_m": 1895, "bad_air_m": 733, "stop_go_m": 481, "sunny_m": None, "unlit_m": None, "bike_friendly_m": 874, "pushed_m": 0,
         # Shortened: the real route has 35 stretches.
@@ -380,8 +380,10 @@ class ShadeCollection(BaseModel):
 class LightingFeature(BaseModel):
     type: Literal["Feature"]
     geometry: LineString
-    properties: dict[Literal["lit"], float] = Field(
-        description="Chance the street is lit at night, 0-1: 1/0 from OSM lit=*, else from Mapillary street lights or a road-type rule")
+    properties: dict[Literal["lit", "lights_per_100m"], float] = Field(
+        description="`lit`: chance the street is lit at night, 0-1: 1/0 from OSM lit=*, else from Mapillary street lights "
+                    "or a road-type rule. `lights_per_100m` (only where Mapillary saw at least one): street lights seen per "
+                    "100 m, about half the real number as Mapillary misses lamps; a lit street under 1 counts as dimly lit")
 
 
 class LightingCollection(BaseModel):
@@ -390,7 +392,7 @@ class LightingCollection(BaseModel):
     type: Literal["FeatureCollection"]
     features: list[LightingFeature]
 
-    model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"lit": 0.96}})
+    model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"lit": 0.96, "lights_per_100m": 2.4}})
 
 
 class BikeFriendlyFeature(BaseModel):

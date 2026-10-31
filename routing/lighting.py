@@ -15,6 +15,10 @@ streets in the same situation that are tagged lit=yes (see the constants below).
 Combined, the three are right for ~91% of the tagged length (rule alone: ~90%), and
 Mapillary turns ~300 km of guessed streets into observed ones.
 Also stored: lights per 100 m from Mapillary, a rough hint of how well a street is lit.
+Mapillary often places one lamp several times a few metres apart (once per photo campaign),
+so lights closer than MERGE_M are counted once. It also misses about half the lamps (55% of
+the 350 OSM-mapped lamps in areas with Mapillary photos were found), so the real count is
+roughly twice the stored one; below DIM_LIGHTS_PER_100M a lit street counts as dimly lit.
 
 Inputs: the OSM ways and tags OSMnx cached in cache/*.json when routing.graph built the
 graph (run the API once first), the LoD2 building tiles from routing.shadow --download, and
@@ -41,12 +45,17 @@ CAR_STREETS = {"residential", "living_street", "pedestrian", "unclassified", "cy
 # without Mapillary data
 LIT_IF_RULE_SAYS_LIT = 0.91    # 268 of 295 km the rule calls lit
 LIT_IF_RULE_SAYS_DARK = 0.14   # 11 of 78 km the rule calls dark
-# with Mapillary data
-LIT_IF_LIGHTS_SEEN = 0.96      # 248 km with >= 1 light per 200 m
-LIT_IF_NOT_SEEN_RULE_LIT = 0.63   # 61 km: no light detected, rule says lit
-LIT_IF_NOT_SEEN_RULE_DARK = 0.03  # 63 km: no light detected, rule says dark
+# with Mapillary data (duplicates merged)
+LIT_IF_LIGHTS_SEEN = 0.95      # 256 km with >= 1 light per 200 m
+LIT_IF_NOT_SEEN_RULE_LIT = 0.67   # 90 km: no light detected, rule says lit
+LIT_IF_NOT_SEEN_RULE_DARK = 0.04  # 78 km: no light detected, rule says dark
 MIN_LIGHTS_PER_100M = 0.5
+# Lit streets with fewer lights seen are dimly lit: the bottom quarter of the OSM lit=yes streets.
+DIM_LIGHTS_PER_100M = 1.0
 SNAP_M = 20.0
+# Mapillary lights closer than this are one lamp: 34% of the Mapillary lights have another
+# within 8 m, but only 5% of the OSM-mapped lamps do.
+MERGE_M = 8.0
 LIGHTS = DATA_DIR / "custom" / "street_lights_mapillary.geojson"
 GRID_M = 25.0
 
@@ -102,6 +111,22 @@ def _dist_to_segment(px, py, a, b):
     l2 = dx * dx + dy * dy
     t = 0.0 if l2 == 0 else max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / l2))
     return math.hypot(px - ax - t * dx, py - ay - t * dy)
+
+
+def merge_duplicates(features, merge_m=MERGE_M):
+    """[(lon, lat)] of Mapillary light features, one per lamp: a light within merge_m of one already kept
+    is dropped, keeping the most recently seen."""
+    grid, kept = defaultdict(list), []
+    for f in sorted(features, key=lambda f: f["properties"].get("last_seen_at") or "", reverse=True):
+        lon, lat = f["geometry"]["coordinates"][:2]
+        x, y = to_xy(lon, lat)
+        cx, cy = int(x // merge_m), int(y // merge_m)
+        if any((x - a) ** 2 + (y - b) ** 2 < merge_m ** 2
+               for dx in (-1, 0, 1) for dy in (-1, 0, 1) for a, b in grid[(cx + dx, cy + dy)]):
+            continue
+        grid[(cx, cy)].append((x, y))
+        kept.append((lon, lat))
+    return kept
 
 
 def lights_per_way(osm_ways, lights_lonlat, snap_m=SNAP_M):
@@ -198,9 +223,11 @@ def main(argv=None):
 
     counts = None
     if args.lights.exists():
-        lights = [f["geometry"]["coordinates"] for f in json.loads(args.lights.read_text())["features"]]
+        features = json.loads(args.lights.read_text())["features"]
+        lights = merge_duplicates(features)
         counts = lights_per_way(osm_ways, lights)
-        print(f"{len(lights):,} Mapillary lights, {sum(counts.values()):,} within {SNAP_M:.0f} m of a street")
+        print(f"{len(features):,} Mapillary lights, {len(lights):,} after merging those within {MERGE_M:.0f} m, "
+              f"{sum(counts.values()):,} within {SNAP_M:.0f} m of a street")
     else:
         print(f"No {args.lights.name}: OSM tags + rule only (run routing.mapillary_lights to add it)")
 
@@ -208,8 +235,8 @@ def main(argv=None):
     density = {w: round(100 * c / lengths[w], 2) for w, c in (counts or {}).items() if lengths.get(w, 0) > 0}
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps({
-        "about": "chance each OSM way is lit at night: 1/0 from OSM lit=*, 0.96 if Mapillary saw >= 1 light "
-                 "per 200 m, else 0.63/0.03 (0.91/0.14 without Mapillary) from the road-type + buildings rule",
+        "about": "chance each OSM way is lit at night: 1/0 from OSM lit=*, 0.95 if Mapillary saw >= 1 light "
+                 "per 200 m, else 0.67/0.04 (0.91/0.14 without Mapillary) from the road-type + buildings rule",
         "source": "OpenStreetMap contributors (ODbL); Mapillary (CC BY-SA 4.0); LGL BW LoD2 (dl-de/by-2-0)",
         "ways": {str(w): v for w, (v, _) in lighting.items()},
         "lights_per_100m": {str(w): v for w, v in density.items()},

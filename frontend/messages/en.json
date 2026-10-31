@@ -268,7 +268,7 @@
       },
       "lighting": {
         "label": "Street lighting",
-        "description": "How likely each street is to be lit at night."
+        "description": "How likely each street is to be lit at night, and where few street lamps were seen."
       }
     },
     "overview": {

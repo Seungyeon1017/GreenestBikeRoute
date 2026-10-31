@@ -12,7 +12,7 @@ from shapely import LineString, STRtree, points, union_all
 from download_data import load_features
 from routing.costs import AIR_HOTSPOT_OFFSET, AIR_PRIOR_RIDES, DEFAULT_PM_RISK, SNAP_M, air_scores, clean_overtaking, edge_roughness, osm_way_ids, point_risks, way_roughness, way_speed, way_stop_go
 from routing.footways import DROPPED_FOOTWAYS_PATH, footway_collection, save_footways
-from routing.lighting import load_lighting
+from routing.lighting import load_light_density, load_lighting
 from routing.rideable_ways import RIDEABLE_WAYS
 from routing.shade import load_way_shade
 from routing.shadow import load_shadow
@@ -151,7 +151,7 @@ def load_graph(path=GRAPH_PATH, footways_path=DROPPED_FOOTWAYS_PATH):
                   air_scores(load_features("air_quality_heilbronn"), load_features("air_background_heilbronn")),
                   load_hotspot_roads())
     attach_shade(G, *load_shadow(), load_way_shade())
-    attach_lighting(G, load_lighting())
+    attach_lighting(G, load_lighting(), load_light_density())
     attach_bike_friendly(G, load_bike_friendly_ways())
     return G
 
@@ -231,10 +231,12 @@ def attach_bike_friendly(G, ways):
         d["bike_friendly"] = any(i in ways for i in osm_way_ids(d["osmid"]))
 
 
-def attach_lighting(G, way_lit):
-    """Set edge attribute `lit` (chance the street is lit at night, 0-1, or None where unknown) from routing.lighting."""
+def attach_lighting(G, way_lit, way_lights=None):
+    """Set edge attributes `lit` (chance the street is lit at night, 0-1, or None where unknown) and
+    `lights_per_100m` (Mapillary street lights per 100 m, or None where none was seen) from routing.lighting."""
     for _, _, d in G.edges(data=True):
         d["lit"] = edge_roughness(d["osmid"], way_lit)
+        d["lights_per_100m"] = edge_roughness(d["osmid"], way_lights or {})
 
 
 def _to_metres(lonlat, lat0):

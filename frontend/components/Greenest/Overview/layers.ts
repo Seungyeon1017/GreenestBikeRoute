@@ -49,6 +49,11 @@ const LINE_WIDTH = [
   4,
 ] as never
 
+// Lit streets where Mapillary saw fewer lights per 100 m than this are dimly
+// lit (routing.lighting DIM_LIGHTS_PER_100M).
+const DIM_LIGHTS_PER_100M = 1
+const DIM = '#a16207'
+
 /** Colour along a value range, e.g. [0, RED, 100, GREEN]. */
 const ramp = (property: string, ...stops: Array<number | string>) =>
   ['interpolate', ['linear'], ['get', property], ...stops] as never
@@ -127,7 +132,17 @@ export const OVERLAY_STYLES: Partial<
   lighting: {
     type: 'line',
     paint: {
-      'line-color': ramp('lit', 0, '#334155', 0.5, '#94a3b8', 1, '#eab308'),
+      'line-color': [
+        'case',
+        [
+          'all',
+          ['has', 'lights_per_100m'],
+          ['>=', ['get', 'lit'], 0.5],
+          ['<', ['get', 'lights_per_100m'], DIM_LIGHTS_PER_100M],
+        ],
+        DIM,
+        ramp('lit', 0, '#334155', 0.5, '#94a3b8', 1, '#eab308'),
+      ] as never,
       'line-width': LINE_WIDTH,
     },
   },
@@ -236,6 +251,7 @@ export const ENVIRONMENT_LAYERS: EnvironmentLayer[] = [
     availability: 'estimated',
     legend: [
       { color: '#eab308', label: 'probably lit' },
+      { color: DIM, label: 'dimly lit (few lamps seen)' },
       { color: '#94a3b8', label: 'unknown' },
       { color: '#334155', label: 'probably dark' },
     ],

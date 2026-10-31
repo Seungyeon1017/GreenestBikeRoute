@@ -154,7 +154,7 @@ SLOTS = ["2026-07-21T09:00+02:00", "2026-07-21T15:00+02:00"]
 @pytest.fixture
 def lit_client(toy_graph):
     attach_shade(toy_graph, SLOTS, {11: [0.2, 0.6], 13: [1.0, 1.0]})
-    attach_lighting(toy_graph, {11: 0.96, 12: 0.0})
+    attach_lighting(toy_graph, {11: 0.96, 12: 0.0}, {11: 0.7})
     with TestClient(create_app(graph=toy_graph)) as c:
         yield c
 
@@ -187,7 +187,7 @@ def test_lighting_overlay(lit_client):
     r = lit_client.get("/lighting")
     assert r.status_code == 200
     features = r.json()["features"]
-    assert [f["properties"]["lit"] for f in features] == [0.96, 0.0]
+    assert [f["properties"] for f in features] == [{"lit": 0.96, "lights_per_100m": 0.7}, {"lit": 0.0}]
     assert features[0]["geometry"]["type"] == "LineString"
     LightingCollection.model_validate(r.json())
 
