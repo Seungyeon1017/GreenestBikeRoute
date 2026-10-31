@@ -1,4 +1,5 @@
 import { cx } from 'class-variance-authority'
+import type { ReactNode } from 'react'
 import InfoTip from '@/components/Greenest/ui/InfoTip'
 
 export default function PageIntro({
@@ -10,7 +11,7 @@ export default function PageIntro({
   title: string
   subtitle: string
   /** Explains `term`, a word in the title, in a tooltip on that word. */
-  note?: { term: string; text: string }
+  note?: { term: string; text: ReactNode }
   className?: string
 }) {
   const termAt = note ? title.indexOf(note.term) : -1
