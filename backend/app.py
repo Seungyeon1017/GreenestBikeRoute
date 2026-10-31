@@ -20,7 +20,7 @@ from backend.users.saved_routes import TAG as SAVED_ROUTES_TAG
 from download_data import DATA_DIR, load_features
 from routing.calories import DEFAULT_WEIGHT_KG
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_PM_PENALTY, \
-    DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, MAX_POINTS, air_scores, clean_overtaking, \
+    DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, MAX_DARK_POINTS, MAX_POINTS, air_scores, clean_overtaking, \
     osm_way_ids
 from routing.elevation import attach_elevation, load_crests, load_elevation
 from routing.grade import NoElevationError, route_grade
@@ -241,9 +241,10 @@ def penalty_query(
         "By day: how much do you hate riding in the sun, in points 0-10: each point makes a fully sunny street cost 25% "
         "more. 0 = ignore. "
         "Only applies with a depart_time when the sun is up")),
-    dark_penalty: float = Query(DEFAULT_DARK_PENALTY, ge=0, le=MAX_POINTS, description=(
-        "After dark: how much do you hate unlit streets, in points 0-10: each point makes a surely unlit street cost "
-        "25% more. 0 = ignore. "
+    dark_penalty: float = Query(DEFAULT_DARK_PENALTY, ge=0, le=MAX_DARK_POINTS, description=(
+        "After dark: how much do you hate unlit streets, in points 0-40: each point makes a surely unlit street cost "
+        "25% more; the chance of being unlit counts cubed, so a street without lighting data (chance 0.5) costs only "
+        "1/8 of that. 0 = ignore. "
         "Only applies with a depart_time between sunset and sunrise")),
     prefer_bike_friendly: float = Query(DEFAULT_PREFER_BIKE_FRIENDLY, ge=0, le=MAX_POINTS, description=(
         "How much do you prefer bike-friendly streets (bike paths, bike lanes, bike routes; see /bike-friendly-streets). "

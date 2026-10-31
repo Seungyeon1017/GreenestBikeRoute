@@ -19,7 +19,7 @@ STOP_GO_HEAVY = 0.77  # stop_go at least this
 
 # The dislike penalties (all but danger_penalty) count in whole points, 0 to MAX_POINTS: each point makes a street
 # 25% dearer per metre when it is on the bad line (bumps, air, stop-and-go), fully sunny (by day), unlit (after dark)
-# or not bike-friendly (see edge_cost). 10 points = 3.5x.
+# or not bike-friendly (see edge_cost). 10 points = 3.5x. Unlit streets go up to MAX_DARK_POINTS.
 POINT = 0.25
 MAX_POINTS = 10
 
@@ -104,9 +104,16 @@ DEFAULT_SHADE_PENALTY = 2
 # Street lighting (routing.lighting): chance a street is lit at night, 0-1. Used only after dark (sun below the
 # horizon at the departure time): routing uses dark = 1 - lit, length-scaled. Unknown streets get 0.5.
 DEFAULT_LIT = 0.5
-# Over the same trips at 21:00, dark_penalty 4 changes 26 of 30 routes for a 3% mean detour, raising the
-# length-weighted chance of being lit from 0.80 to 0.91; 8 adds little more (0.92 for a 4% detour).
-DEFAULT_DARK_PENALTY = 4
+# The chance of being unlit counts cubed, so a street that is surely dark costs the full penalty while an unknown one
+# (dark 0.5) costs 1/8 of it: detours go around dark streets, not around every street without lighting data.
+# Over 40 random night trips of 1.5-6 km, of which at least 127 m per trip are on dark streets (lit < 0.2, 60% of
+# it within 300 m of start or end), the mean detour and dark metres per trip were: no penalty 6.2% / 630 m;
+# 10 cubed 8.0% / 159 m; 40 cubed 10.4% / 132 m; linear 4 (the old default) 6.6% / 224 m, 10 9.2% / 167 m,
+# 40 11.6% / 148 m.
+DARK_EXPONENT = 3
+DEFAULT_DARK_PENALTY = 10
+# dark_penalty goes higher than the other dislikes, for riders who avoid dark streets at almost any detour.
+MAX_DARK_POINTS = 40
 # bike_friendly (OSM bike paths, bike lanes and bike routes, data/custom/bike_friendly_streets_heilbronn.*): streets
 # NOT on that list cost 1 + this x POINT times as much, so routes prefer the ones on it. 0 leaves routes as they were;
 # 4 makes other streets feel twice as long.
@@ -225,8 +232,8 @@ def edge_cost(length_m, normalized_roughness=DEFAULT_ROUGHNESS, bump_penalty=DEF
               bike_friendly=False, prefer_bike_friendly=DEFAULT_PREFER_BIKE_FRIENDLY):
     """Routing cost: plain length plus `danger_penalty` metres per unit of overtaking risk (`danger` = summed risk on
     the edge), times one factor per dislike: 1 + penalty x POINT x badness for roughness, air and stop-and-go (0 on
-    a typical street, 1 on the bad-street line), 1 + penalty x POINT x share for sun (`sun`, by day) and unlit
-    (`dark`, at night), 1 + prefer_bike_friendly x POINT on streets that are not bike-friendly. Plus a fixed
+    a typical street, 1 on the bad-street line), 1 + penalty x POINT x share for sun (`sun`, by day), 1 + penalty x
+    POINT x dark ** DARK_EXPONENT for the chance of being unlit (`dark`, at night), 1 + prefer_bike_friendly x POINT on streets that are not bike-friendly. Plus a fixed
     `stop_penalty * POINT * LIFT_WAIT_M` metres per lift ridden through. A lift sits where two edges meet, so each edge ending at one
     (`lift_ends` = 0, 1 or 2) carries half of it.
 
@@ -244,6 +251,6 @@ def edge_cost(length_m, normalized_roughness=DEFAULT_ROUGHNESS, bump_penalty=DEF
     factor = ((1 + bump_penalty * POINT * badness(normalized_roughness, DEFAULT_ROUGHNESS, BUMPY_ROUGHNESS))
               * (1 + pm_penalty * POINT * badness(pm_risk, DEFAULT_PM_RISK, BAD_AIR_RISK))
               * (1 + stop_penalty * POINT * badness(stop_go, DEFAULT_STOP_GO, STOP_GO_HEAVY))
-              * (1 + shade_penalty * POINT * sun) * (1 + dark_penalty * POINT * dark)
+              * (1 + shade_penalty * POINT * sun) * (1 + dark_penalty * POINT * dark ** DARK_EXPONENT)
               * (1 + (0 if bike_friendly else prefer_bike_friendly * POINT)))
     return (base + danger_penalty * danger) * factor + stop_penalty * POINT * LIFT_WAIT_M * lift_ends / 2

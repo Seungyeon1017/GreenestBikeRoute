@@ -45,7 +45,7 @@ export const DEFAULT_ROUTE_OPTIONS: RouteOptions = {
   preferTime: false,
   departTime: '',
   shade: 2,
-  dark: 4,
+  dark: 10,
 }
 
 export class GreenestApiError extends Error {

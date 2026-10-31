@@ -5,7 +5,7 @@ The Heilbronn street map (OpenStreetMap, ~42k street pieces) is a graph. Every s
 ```
 cost = (length + danger_penalty × danger)
        × (1 + ¼ bump_penalty × bad(roughness)) × (1 + ¼ pm_penalty × bad(pm_risk)) × (1 + ¼ stop_penalty × bad(stop_go))
-       × (1 + ¼ shade_penalty × sun) × (1 + ¼ dark_penalty × unlit) × (1 + ¼ prefer_bike_friendly × not_bike_friendly)
+       × (1 + ¼ shade_penalty × sun) × (1 + ¼ dark_penalty × unlit³) × (1 + ¼ prefer_bike_friendly × not_bike_friendly)
      + stop_penalty × 25 m × lifts
 
 bad(x) = max(0, (x − typical) / (bad line − typical))
@@ -101,9 +101,9 @@ OSMnx's bike network, with these changes:
 
 ### Shade and street lighting, chosen by `depart_time`
 
-- Both apply only with a `depart_time`. The sun's altitude at that time and date (NOAA equations, `routing.shadow.sun_position`) decides which one: above the horizon (-0.833°, as for sunrise and sunset), sunny streets cost `¼ shade_penalty × (1 − shade)` more per metre; below it, unlit streets cost `¼ dark_penalty × (1 − lit)` more.
+- Both apply only with a `depart_time`. The sun's altitude at that time and date (NOAA equations, `routing.shadow.sun_position`) decides which one: above the horizon (-0.833°, as for sunrise and sunset), sunny streets cost `¼ shade_penalty × (1 − shade)` more per metre; below it, unlit streets cost `¼ dark_penalty × (1 − lit)³` more. Cubed, so surely dark streets are avoided while streets without lighting data (0.5) count ⅛; `dark_penalty` goes up to 40, for riders who avoid dark streets at almost any detour.
 - **Shade** (`data/custom/shadow_heilbronn.json`, building and tree shadow per OSM way) exists for 21 July at 09, 12, 15 and 18 h; a route uses the slot nearest its time of day, whatever the date. Ways without it fall back to the static tree canopy (`shade_heilbronn.json`), then 0.1 (most streets get little shade: median ~0.05 at noon). Over 30 random trips at 15:00, `shade_penalty` 2 changes 23 routes for a 0.5% mean detour (mean shade 0.18 → 0.21).
-- **Lighting** (`data/custom/lighting_heilbronn.json`) is the chance a way is lit: OSM `lit=*`, else Mapillary street lights, else a road-type and buildings rule. Unknown ways get 0.5; about 11% of the graph's ways have no value yet. Over the same trips at 21:00, `dark_penalty` 4 changes 26 of 30 routes for a 3% mean detour, raising the chance of being lit from 0.80 to 0.91.
+- **Lighting** (`data/custom/lighting_heilbronn.json`) is the chance a way is lit: OSM `lit=*`, else Mapillary street lights, else a road-type and buildings rule. Unknown ways get 0.5; about 11% of the graph's ways have no value yet. Over 40 random night trips, the default `dark_penalty` 10 cuts metres on dark streets (lit < 0.2) from 630 to 159 per trip for 1.8 points more detour; 40 gets to 132 m, near the 127 m no route can avoid (mostly near start or end).
 - Routes report `daylight`, `shade_slot`, `mean_shade` (by day only), `mean_lit` and the share of the route each is known for. **Map overlays:** `/shade` (all slots per street, plus `slots`) and `/lighting`.
 
 ## Which overtaking readings count

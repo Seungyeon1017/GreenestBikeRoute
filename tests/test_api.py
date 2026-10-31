@@ -161,7 +161,7 @@ def lit_client(toy_graph):
 
 def test_depart_time_is_passed_through_and_off_by_default(lit_client):
     p = lit_client.get("/route", params=params()).json()["features"][0]["properties"]
-    assert (p["depart_time"], p["daylight"], p["shade_penalty"], p["dark_penalty"]) == (None, None, 2, 4)
+    assert (p["depart_time"], p["daylight"], p["shade_penalty"], p["dark_penalty"]) == (None, None, 2, 10)
     p = lit_client.get("/route", params={**params(), "depart_time": "2026-07-21T14:00", "shade_penalty": 2}).json()["features"][0]["properties"]
     assert (p["depart_time"], p["daylight"], p["shade_slot"], p["shade_penalty"]) == ("2026-07-21T14:00+02:00", True, SLOTS[1], 2)
     p = lit_client.get("/route", params={**params(), "depart_time": "2026-10-28T19:30"}).json()["features"][0]["properties"]

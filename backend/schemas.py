@@ -16,7 +16,7 @@ ROUTE_EXAMPLE = {
                  "coordinates": [[9.2268683, 49.148385], [9.2227619, 49.139049], [9.2243909, 49.1262013]]},
     "properties": {
         "bump_penalty": 2, "danger_penalty": 10.0, "pm_penalty": 1, "stop_penalty": 1, "prefer_time": False,
-        "shade_penalty": 2, "dark_penalty": 4, "prefer_bike_friendly": 0, "depart_time": None, "daylight": None, "shade_slot": None,
+        "shade_penalty": 2, "dark_penalty": 10, "prefer_bike_friendly": 0, "depart_time": None, "daylight": None, "shade_slot": None,
         "length_m": 3257.1, "duration_s": 959, "climb_m": 26.2, "kcal": 147.6, "speed_measured_share": 0.89, "mean_roughness": 12.4, "measured_share": 0.88, "estimated_share": 0.0,
         "danger_points": 11, "danger_risk": 9.0, "mean_pm_risk": 0.506, "pm_measured_share": 0.63,
         "mean_stop_go": 0.68, "stop_measured_share": 0.89,

@@ -57,7 +57,9 @@ def test_edge_cost_air_and_stop_go_cost_only_above_typical():
 
 def test_edge_cost_sun_and_dark_scale_length():
     assert edge_cost(100, 0, **ZERO, sun=0.5, shade_penalty=8) == 200
-    assert edge_cost(100, 0, **ZERO, dark=0.5, dark_penalty=8) == 200
+    assert edge_cost(100, 0, **ZERO, dark=1.0, dark_penalty=8) == 300
+    # The chance of being unlit counts cubed: an unknown street (0.5) pays 1/8 of the penalty.
+    assert edge_cost(100, 0, **ZERO, dark=0.5, dark_penalty=8) == 125
     # Without a departure time the router passes sun = dark = 0: the penalties change nothing.
     assert edge_cost(100, 0, **ZERO, shade_penalty=10, dark_penalty=10) == 100
 

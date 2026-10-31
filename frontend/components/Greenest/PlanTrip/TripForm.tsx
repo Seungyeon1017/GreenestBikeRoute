@@ -67,14 +67,21 @@ const OPTION_SLIDERS: SliderSpec[] = [
   points('bikeFriendly'),
 ]
 
+/** Unlit streets go higher, to avoid dark streets at almost any detour (routing/costs.py, MAX_DARK_POINTS). */
+const MAX_DARK_POINTS = 40
+
 /** Only used by the backend when a departure time is set: shade by day, lighting after dark. */
-const TIME_SLIDERS: SliderSpec[] = [points('shade'), points('dark')]
+const TIME_SLIDERS: SliderSpec[] = [
+  points('shade'),
+  { key: 'dark', min: 0, max: MAX_DARK_POINTS, step: 1 },
+]
 
 /** Share each dislike point adds on a bad street (routing/costs.py, POINT). */
 const POINT = 0.25
 
 /** Rows of the info panel: 0, 4 (twice as long) and the maximum, plus the rider's own value. */
 const POINT_ROWS = [0, 4, MAX_POINTS]
+const DARK_ROWS = [0, 10, MAX_DARK_POINTS]
 const DANGER_ROWS = [0, 100]
 
 /**
@@ -94,7 +101,10 @@ function SliderInfo({
   const number = (n: number) => n.toLocaleString(i18n.language)
   const isDanger = sliderKey === 'danger'
   const rows = Array.from(
-    new Set([...(isDanger ? DANGER_ROWS : POINT_ROWS), value]),
+    new Set([
+      ...(isDanger ? DANGER_ROWS : sliderKey === 'dark' ? DARK_ROWS : POINT_ROWS),
+      value,
+    ]),
   ).sort((a, b) => a - b)
 
   return (

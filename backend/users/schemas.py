@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_PM_PENALTY,     DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, MAX_POINTS
+from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_PM_PENALTY,     DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, MAX_DARK_POINTS, MAX_POINTS
 
 
 class UserCreate(BaseModel):
@@ -48,7 +48,7 @@ class RouteOptions(BaseModel):
     prefer_bike_friendly: float = Field(DEFAULT_PREFER_BIKE_FRIENDLY, ge=0, le=MAX_POINTS)
     prefer_time: bool = False
     shade_penalty: float = Field(DEFAULT_SHADE_PENALTY, ge=0, le=MAX_POINTS)
-    dark_penalty: float = Field(DEFAULT_DARK_PENALTY, ge=0, le=MAX_POINTS)
+    dark_penalty: float = Field(DEFAULT_DARK_PENALTY, ge=0, le=MAX_DARK_POINTS)
     depart_time: str | None = Field(None, max_length=40, description="e.g. 2026-07-21T15:00, or null")
 
 
