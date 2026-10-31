@@ -268,7 +268,7 @@
       },
       "lighting": {
         "label": "Straßenbeleuchtung",
-        "description": "Wie wahrscheinlich jede Straße nachts beleuchtet ist."
+        "description": "Wie wahrscheinlich jede Straße nachts beleuchtet ist, und wo nur wenige Laternen gesehen wurden."
       }
     },
     "overview": {

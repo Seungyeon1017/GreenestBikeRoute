@@ -121,9 +121,9 @@ def mapping_feature(report):
             "properties": properties}
 
 
-def street_collection(G, key):
+def street_collection(G, key, *extra):
     """The graph's streets with a value for edge attribute `key`, each street once (a two-way street is two edges),
-    trimmed to geometry + that value."""
+    trimmed to geometry + that value (+ the `extra` attributes the edge has a value for)."""
     features, seen = [], set()
     for u, v, d in G.edges(data=True):
         street = (min(u, v), max(u, v), str(d["osmid"]), round(float(d["length"]), 1))
@@ -132,8 +132,9 @@ def street_collection(G, key):
         seen.add(street)
         coords = [[round(x, 6), round(y, 6)] for x, y in edge_coords(G, u, v, d)]
         value = [round(x, 2) for x in d[key]] if isinstance(d[key], list) else round(d[key], 2)
+        properties = {key: value, **{k: round(d[k], 2) for k in extra if d.get(k) is not None}}
         features.append({"type": "Feature", "geometry": {"type": "LineString", "coordinates": coords},
-                         "properties": {key: value}})
+                         "properties": properties})
     return {"type": "FeatureCollection", "features": features}
 
 
@@ -478,10 +479,11 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
 
     @app.get("/lighting", tags=[OVERLAYS], summary="Chance each street is lit at night, as GeoJSON for a map overlay",
              response_class=GeoJSONResponse, response_model=LightingCollection,
-             response_description="LineStrings with `lit` 0-1 (higher = more likely lit); streets without data are left out")
+             response_description="LineStrings with `lit` 0-1 (higher = more likely lit) and, where Mapillary saw street "
+                                  "lights, `lights_per_100m`; streets without data are left out")
     def lighting():
         if not hasattr(app.state, "lighting"):
-            app.state.lighting = street_collection(app.state.graph, "lit")
+            app.state.lighting = street_collection(app.state.graph, "lit", "lights_per_100m")
         return GeoJSONResponse(app.state.lighting)
 
     @app.get("/bike-friendly-streets", tags=[OVERLAYS],

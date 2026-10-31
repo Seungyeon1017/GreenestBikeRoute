@@ -51,3 +51,18 @@ def test_edge_lit():
     assert edge_lit([1, 2], ways) == pytest.approx(0.5)
     assert edge_lit(1, ways) == 1.0
     assert edge_lit(9, ways, default=0.3) == 0.3
+
+
+def test_merge_duplicates_keeps_one_light_per_lamp():
+    from routing.lighting import merge_duplicates
+    lon0, lat0 = LINE[0]
+
+    def light(north_m, seen):
+        return {"geometry": {"coordinates": [lon0, lat0 + north_m / M_PER_DEG_LAT]},
+                "properties": {"last_seen_at": seen}}
+
+    lights = [light(0, "2016-09-22"), light(3, "2026-05-21"),  # one lamp seen twice, 3 m apart
+              light(30, "2022-07-02")]                         # the next lamp
+    kept = merge_duplicates(lights)
+    assert len(kept) == 2
+    assert kept[0][1] == pytest.approx(lat0 + 3 / M_PER_DEG_LAT)  # the most recently seen one stays
