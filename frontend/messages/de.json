@@ -356,7 +356,8 @@
         "kcal": "kcal",
         "scales": "Unebenheit 0–100 · Feinstaub 0,5 = üblich, höher = mehr Feinstaub · Stop-and-go, Schatten und Beleuchtet 0–1 (Anteil der Strecke) · kcal grob geschätzt.",
         "tips": {
-          "roughnessRoute": "{{measured}} gemessen, {{estimated}} geschätzt, {{unknown}} unbekannt",
+          "duration": "Berechnet mit den gemessenen Geschwindigkeiten von Radfahrenden.",
+        "roughnessRoute":"{{measured}} gemessen, {{estimated}} geschätzt, {{unknown}} unbekannt",
           "roughness": "Geschätzt aus gemessenen Straßen in der Nähe, wo keine Sensorräder gefahren sind.",
           "kcalRoute": "inklusive {{m}} m Anstieg",
           "kcalNoHeight": "keine Höhendaten, Anstiege nicht mitgezählt",

@@ -102,7 +102,7 @@ function MetricTip({
   ]
   return (
     <>
-      {routes.map(([kind, p]) => {
+      {(metric in TIPS ? routes : []).map(([kind, p]) => {
         const [key, values] = TIPS[metric](p)
         return (
           <span className="block" key={kind}>
@@ -113,7 +113,9 @@ function MetricTip({
           </span>
         )
       })}
-      <span className="mt-1 block text-leaf-muted">
+      <span
+        className={cx('block text-leaf-muted', metric in TIPS && 'mt-1')}
+      >
         {t(`greenest.planTrip.metrics.tips.${metric}`)}
       </span>
     </>
@@ -270,7 +272,7 @@ export default function RouteComparison({
                 >
                   <span className="inline-flex items-center gap-1">
                     {t(`greenest.planTrip.metrics.${key}`)}
-                    {result && key in TIPS && (
+                    {result && (key in TIPS || key === 'duration') && (
                       <InfoTip
                         label={t('greenest.planTrip.info.about', {
                           name: t(`greenest.planTrip.metrics.${key}`),
