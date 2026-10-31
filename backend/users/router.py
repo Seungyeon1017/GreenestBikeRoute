@@ -13,7 +13,8 @@ from backend.users.schemas import Token, UserCreate, UserOut
 from backend.users.security import CurrentUser, create_access_token, hash_password, verify_password
 from backend.users import community_routes, saved_routes
 
-router = APIRouter(tags=["Users"])
+TAG = "Users"  # its group on /docs; on each endpoint, since a router's tags would also go to the routers it includes
+router = APIRouter()
 # /users/me/routes: saved routes (saved_routes.py). Included here so backend/app.py stays unchanged.
 router.include_router(saved_routes.router)
 # /community-routes: riders' leisure routes (community_routes.py).
@@ -22,7 +23,7 @@ router.include_router(community_routes.router)
 DB = Annotated[Session, Depends(get_db)]
 
 
-@router.post("/users", status_code=status.HTTP_201_CREATED, response_model=UserOut,
+@router.post("/users", tags=[TAG], status_code=status.HTTP_201_CREATED, response_model=UserOut,
              summary="Create an account", responses={409: {"description": "Email already registered"}})
 def create_user(body: UserCreate, db: DB) -> User:
     email = body.email.lower()
@@ -51,7 +52,7 @@ def wrong_login() -> HTTPException:
     )
 
 
-@router.post("/auth/login", response_model=Token, summary="Log in and get a token",
+@router.post("/auth/login", tags=[TAG], response_model=Token, summary="Log in and get a token",
              responses={401: {"description": "Wrong email or password"}})
 def login(form: Annotated[OAuth2PasswordRequestForm, Depends()], db: DB) -> Token:
     """Takes a form (not JSON) with `username` = the email and `password`, as OAuth2 expects.
@@ -66,7 +67,7 @@ def login(form: Annotated[OAuth2PasswordRequestForm, Depends()], db: DB) -> Toke
     return Token(access_token=create_access_token(user.id))
 
 
-@router.get("/users/me", response_model=UserOut, summary="The logged-in user",
+@router.get("/users/me", tags=[TAG], response_model=UserOut, summary="The logged-in user",
             responses={401: {"description": "Not logged in"}})
 def read_me(user: CurrentUser) -> User:
     return user

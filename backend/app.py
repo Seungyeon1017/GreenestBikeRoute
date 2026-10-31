@@ -14,7 +14,9 @@ from backend.schemas import EXAMPLE_TRIP, AirCollection, BikeFriendlyCollection,
 from backend.geocoding import Geocoder, GeocodingUnavailable, normalize
 from backend.sharing import ATTRIBUTION, Sharing, SharingUnavailable
 from backend.transit import LOCAL_TZ, Transit, TransitUnavailable
-from backend.users.router import router as users_router
+from backend.users.community_routes import TAG as RIDERS_ROUTES_TAG
+from backend.users.router import TAG as USERS_TAG, router as users_router
+from backend.users.saved_routes import TAG as SAVED_ROUTES_TAG
 from download_data import DATA_DIR, load_features
 from routing.calories import DEFAULT_WEIGHT_KG
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_PM_PENALTY, \
@@ -141,14 +143,14 @@ based on ATRAI bike sensor data, optionally the fastest one by measured cyclist 
 
 **Quick start:** call `/route/compare` with the example trip (pre-filled under *Try it out*) and draw
 `route` and `shortest` on a map. `/route` returns just the route as GeoJSON.
-`/route/grade` returns the same route split into pieces coloured by how steep they are (display only:
-grade doesn't change which route is picked).
 
+### For every endpoint
 - **Coordinate order:** the query takes `lat` and `lon` separately, but every GeoJSON response is in
   **[lon, lat]** order (Leaflet's `L.geoJSON` handles this; raw `L.polyline` needs `[lat, lon]`).
-- **Place names:** routes take coordinates only. For a landmark, address or street, search it with `/geocode`,
-  let the rider pick one of the candidates ("did you mean …") and route with its coordinates. Search on Enter, not
-  while typing: Nominatim allows 1 search a second for everyone, so results are cached and searches queue.
+- **Errors:** 422 when a parameter is missing or out of range; 503 with a readable `detail` when a source the
+  endpoint needs (sharing feed, place search, timetable, elevation data) can't be read. Each endpoint lists its own.
+
+### Routing
 - **Penalties:** 0 ignores a factor; all four at 0 give the shortest route. Higher values accept longer detours.
 - **prefer_time:** weighs each street by its riding time at the speed bikes were measured at (`speed_map`) instead
   of its length. Every route reports its expected `duration_s` either way.
@@ -158,15 +160,38 @@ grade doesn't change which route is picked).
   Without `depart_time`, neither applies. Shade is computed for a summer day (21 July, 09/12/15/18 h), so in other
   seasons it shows where buildings and trees shade a street, not the exact shadow of that day.
 - **Errors:** 400 with a readable `detail` when a point is more than 500 m from a Heilbronn street or no
-  route exists; 422 when a parameter is missing or out of range; 503 from `/route/grade` when the server
-  has no elevation data (`python -m routing.elevation`).
-- **Grade:** each piece has `grade_pct` (positive uphill in the travel direction), `severity` (flat < 2 %,
-  gentle 2-4, noticeable 4-6, steep 6-10, very_steep 10 % and more) and a suggested `color`; `summary` has
-  climb, descent and the steepest pieces. Very short steep pieces can be terrain-model noise.
-- **Map overlays:** `/roughness`, `/danger`, `/air` and `/flow` are static GeoJSON layers. Each
+  route exists; 503 from `/route/grade` when the server has no elevation data (`python -m routing.elevation`).
+- **Grade:** `/route/grade` returns the route split into pieces coloured by how steep they are (display only: grade
+  doesn't change which route is picked). Each piece has `grade_pct` (positive uphill in the travel direction),
+  `severity` (flat < 2 %, gentle 2-4, noticeable 4-6, steep 6-10, very_steep 10 % and more) and a suggested `color`;
+  `summary` has climb, descent and the steepest pieces. Very short steep pieces can be terrain-model noise.
+
+### Places
+Routes take coordinates only. For a landmark, address or street, search it with `/geocode`, let the rider pick one
+of the candidates ("did you mean …") and route with its coordinates. Search on Enter, not while typing: Nominatim
+allows 1 search a second for everyone, so results are cached and searches queue.
+
+### Map overlays
+- **Layers:** `/roughness`, `/danger`, `/air` and `/flow` are static GeoJSON layers. Each
   value is 0-1 (roughness 0-100), and higher is always worse. `/speed` gives km/h, where higher is faster.
   `/shade` (share in shade per time slot) and `/lighting` (chance a street is lit at night) are 0-1 where higher
   is better. `/bike-friendly-streets` shows the bike paths, bike lanes and bike routes `prefer_bike_friendly` favours.
+- **Overall score:** `/score` puts every street on one 0-100 scale (higher = better): its percentile, by length, among
+  Heilbronn streets ranked by routing cost per metre. It takes the same penalties, `prefer_time`, `prefer_bike_friendly` and `depart_time` as
+  `/route`, so it shows the streets the way that route request weighs them. Overtaking spots and air points count for
+  the street they are snapped to.
+
+### Highlights
+`/highlights/greenest-streets` ranks named streets by street trees, clean air and bike paths (`green_score` 0-100).
+Only streets ATRAI bikes have ridden qualify, and only their ridden stretches count.
+
+### Trains
+`/transit/stops` lists every Stadtbahn and train station of the region (also outside Heilbronn, e.g. Mosbach) with a
+`stop_id`; `/transit/departures?stop_id=…&to=…` gives the next trains between two of them, so a rider knows when to
+start riding to the station. Bikes ride free on HNV trains except Monday to Friday 06:00-09:00 (`bike_ticket_needed`).
+The timetable has no live delays.
+
+### Reports
 - **Closures:** riders report closed streets with `POST /reports/closures`, optionally with `until` (the last day,
   e.g. from the sign; else the report counts for 24 h, at most 30 days). Three live independent reports close the
   street segment for every route; with fewer, routes avoid it if the detour is at most 4x its length, and
@@ -177,21 +202,17 @@ grade doesn't change which route is picked).
 - **Mapping mistakes:** `POST /reports/mapping` with `kind=rideable` reports a footway bikes ride on that routing
   leaves out (OSM lacks bicycle=yes). A maintainer checks it (`python -m backend.reports`); approved ways are routed
   from the next server start.
-- **Bike + train:** `/transit/stops` lists every Stadtbahn and train station of the region (also outside Heilbronn,
-  e.g. Mosbach) with a `stop_id`; `/transit/departures?stop_id=…&to=…` gives the next trains between two of them, so a
-  rider knows when to start riding to the station. Bikes ride free on HNV trains except Monday to Friday 06:00-09:00
-  (`bike_ticket_needed`). The timetable has no live delays.
-- **Overall score:** `/score` puts every street on one 0-100 scale (higher = better): its percentile, by length, among
-  Heilbronn streets ranked by routing cost per metre. It takes the same penalties, `prefer_time`, `prefer_bike_friendly` and `depart_time` as
-  `/route`, so it shows the streets the way that route request weighs them. Overtaking spots and air points count for
-  the street they are snapped to.
-- **Greenest streets:** `/highlights/greenest-streets` ranks named streets by street trees, clean air and bike paths
-  (`green_score` 0-100). Only streets ATRAI bikes have ridden qualify, and only their ridden stretches count.
 
-Heights for `/route/grade`: Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0 (DGM1).
-Shade: LGL BW LoD2 (dl-de/by-2-0) and Stadt Heilbronn Baumkataster (dl-de/by-2-0).
-Lighting: OpenStreetMap contributors (ODbL), Mapillary (CC BY-SA 4.0), LGL BW LoD2 (dl-de/by-2-0).
-Air: ATRAI bike sensors and senseBox:home stations (openSenseMap); streets along the NO₂ hotspots of the Luftreinhalteplan Heilbronn (Regierungspräsidium Stuttgart, 2020, Tabelle 3) start slightly worse.
+### Accounts
+Create one with `POST /users`, then press **Authorize** (top right) with its email and password: the endpoints with a
+lock then send its token. Saved routes and publishing riders' routes need it; browsing riders' routes doesn't.
+
+### Data credits
+- Heights for `/route/grade`: Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0 (DGM1).
+- Shade: LGL BW LoD2 (dl-de/by-2-0) and Stadt Heilbronn Baumkataster (dl-de/by-2-0).
+- Lighting: OpenStreetMap contributors (ODbL), Mapillary (CC BY-SA 4.0), LGL BW LoD2 (dl-de/by-2-0).
+- Air: ATRAI bike sensors and senseBox:home stations (openSenseMap); streets along the NO₂ hotspots of the
+  Luftreinhalteplan Heilbronn (Regierungspräsidium Stuttgart, 2020, Tabelle 3) start slightly worse.
 """
 
 
@@ -281,11 +302,16 @@ TAGS_METADATA = [
     {"name": OVERLAYS, "description": "Static GeoJSON layers of the measured data, to draw on a map."},
     {"name": HIGHLIGHTS, "description": "Rankings for the app's Highlights tab, e.g. the greenest streets bikes have ridden and suggested tours."},
     {"name": SHARING, "description": "Shared e-bikes and e-scooters free to rent right now and their parking zones, "
-                                       "live from MobiData BW (Heilbronn: Dott). Each vehicle links to the provider's app."},
+                                       "live from MobiData BW (Heilbronn: Dott). Each vehicle links to the provider's app. "
+                                       "To plan a trip with one, see `/route/sharing` under Routing."},
     {"name": TRANSIT, "description": "Stadtbahn and train stations of the region and their next departures, to combine "
                                        "a bike ride with the train (NVBW timetable, no live delays)."},
     {"name": REPORTS, "description": "Riders report closed streets (routing uses them right away) and mapping mistakes "
                                        "(checked by a maintainer first)."},
+    {"name": USERS_TAG, "description": "Create an account and log in; press Authorize to send its token."},
+    {"name": SAVED_ROUTES_TAG, "description": "The logged-in rider's saved routes (the newest few are kept)."},
+    {"name": RIDERS_ROUTES_TAG, "description": "Leisure rides riders recorded (GPX) and published for everyone: browse, "
+                                                "heart, save to the Profile or flag them."},
 ]
 
 
@@ -384,7 +410,7 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
         except NoElevationError as e:
             raise HTTPException(status_code=503, detail=str(e))
 
-    @app.get("/route/sharing", tags=[ROUTING, SHARING], summary="Walk to a shared e-bike or e-scooter, ride it, walk to the end",
+    @app.get("/route/sharing", tags=[ROUTING], summary="Walk to a shared e-bike or e-scooter, ride it, walk to the end",
              response_model=SharingTrip, responses={**ROUTE_ERRORS, **SHARING_ERRORS},
              response_description="The vehicle to rent, the parking zone to leave it at, and the three legs")
     def route_sharing(query=Depends(route_query), vehicle: Literal["all", "bike", "scooter"] = Query(
@@ -514,6 +540,14 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
     def sharing_zones(query=Depends(near_query)):
         return GeoJSONResponse(shared("zones", query))
 
+    @app.get("/sharing/geofencing", tags=[SHARING], summary="Where shared vehicles may be left: the provider's geofencing zones",
+             response_class=GeoJSONResponse, response_model=GeofencingCollection, responses=SHARING_ERRORS,
+             response_description="Polygons in feed order (an earlier zone wins where zones overlap) with the end rule per vehicle kind")
+    def sharing_geofencing():
+        """Dott's no-parking zones (pedestrian zones, parks, ...), zones where vehicles may only be left at a parking
+        zone, exceptions inside them, and last its whole Heilbronn area, where a ride may end anywhere."""
+        return GeoJSONResponse(shared("geofencing", (None, None)))
+
     @app.get("/geocode", tags=[PLACES], summary="Places in Heilbronn matching a landmark, address or street, as GeoJSON points",
              response_class=GeoJSONResponse, response_model=PlaceCollection, responses=GEOCODE_ERRORS,
              response_description="Points with a `label` to show, best match first; empty if nothing matches")
@@ -610,18 +644,6 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
                                "name": street_name(G, u, v, d), "length_m": round(float(d["length"]), 1),
                                "status": state["status"] if state else None}}
 
-    @app.get("/reports/footway", tags=[REPORTS], summary="The footway routing leaves out nearest to a point",
-             response_model=FootwayFeature,
-             responses={400: {"description": "No such footway within 50 m of the point", "model": Error}},
-             response_description="The whole OSM way, to name in a `rideable` mapping report")
-    def report_footway(lat: float = Query(..., ge=-90, le=90), lon: float = Query(..., ge=-180, le=180)):
-        """Footways and paths without a bicycle tag in OSM are left out of routing. A rider who sees bikes ride on one
-        picks it here, so the report names its OSM way (`osm_way_id` in POST /reports/mapping)."""
-        feature, dist = app.state.footways.nearest(lat, lon)
-        if feature is None or dist > SNAP_M:
-            raise HTTPException(status_code=400, detail=f"no footway left out of routing within {SNAP_M} m")
-        return feature
-
     @app.post("/reports/closures", tags=[REPORTS], summary="Report that a street is closed right now",
               status_code=201, response_model=ClosureFeature,
               responses={400: {"description": "No street within 50 m of the point, or `until` is in the past", "model": Error}},
@@ -668,6 +690,18 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
         features = [closure_feature(app.state.graph, segment, state) for segment, state in reports.closure_states().items()]
         return GeoJSONResponse({"type": "FeatureCollection", "features": [f for f in features if f]})
 
+    @app.get("/reports/footway", tags=[REPORTS], summary="The footway routing leaves out nearest to a point",
+             response_model=FootwayFeature,
+             responses={400: {"description": "No such footway within 50 m of the point", "model": Error}},
+             response_description="The whole OSM way, to name in a `rideable` mapping report")
+    def report_footway(lat: float = Query(..., ge=-90, le=90), lon: float = Query(..., ge=-180, le=180)):
+        """Footways and paths without a bicycle tag in OSM are left out of routing. A rider who sees bikes ride on one
+        picks it here, so the report names its OSM way (`osm_way_id` in POST /reports/mapping)."""
+        feature, dist = app.state.footways.nearest(lat, lon)
+        if feature is None or dist > SNAP_M:
+            raise HTTPException(status_code=400, detail=f"no footway left out of routing within {SNAP_M} m")
+        return feature
+
     @app.post("/reports/mapping", tags=[REPORTS], summary="Report a mapping mistake, e.g. a footway bikes ride on",
               status_code=201, response_model=MappingFeature, response_description="The stored report, pending")
     def report_mapping(report: MappingReport, request: Request):
@@ -681,14 +715,6 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
             "pending", description="Only reports with this status")):
         return GeoJSONResponse({"type": "FeatureCollection",
                                 "features": [mapping_feature(r) for r in reports.mapping_reports(status)]})
-
-    @app.get("/sharing/geofencing", tags=[SHARING], summary="Where shared vehicles may be left: the provider's geofencing zones",
-             response_class=GeoJSONResponse, response_model=GeofencingCollection, responses=SHARING_ERRORS,
-             response_description="Polygons in feed order (an earlier zone wins where zones overlap) with the end rule per vehicle kind")
-    def sharing_geofencing():
-        """Dott's no-parking zones (pedestrian zones, parks, ...), zones where vehicles may only be left at a parking
-        zone, exceptions inside them, and last its whole Heilbronn area, where a ride may end anywhere."""
-        return GeoJSONResponse(shared("geofencing", (None, None)))
 
     app.include_router(users_router)
     return app

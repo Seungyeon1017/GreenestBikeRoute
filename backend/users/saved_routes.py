@@ -16,7 +16,8 @@ from backend.users.security import CurrentUser
 # How many routes each user keeps. Saving one more deletes the oldest.
 MAX_SAVED_ROUTES = 3
 
-router = APIRouter(prefix="/users/me/routes", tags=["Saved routes"])
+TAG = "Saved routes"  # its group on /docs
+router = APIRouter(prefix="/users/me/routes", tags=[TAG])
 
 DB = Annotated[Session, Depends(get_db)]
 

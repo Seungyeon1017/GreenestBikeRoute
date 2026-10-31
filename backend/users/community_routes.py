@@ -30,7 +30,8 @@ FLAGS_TO_HIDE = 3       # flags from different accounts that hide a route until 
 MAX_PER_DAY = 5         # routes one account may publish in 24 hours
 MAX_TAGS = 4
 
-router = APIRouter(tags=["Riders' routes"])
+TAG = "Riders' routes"  # its group on /docs
+router = APIRouter(tags=[TAG])
 
 DB = Annotated[Session, Depends(get_db)]
 
