@@ -1340,7 +1340,15 @@ export default function PlanTripView() {
       <PageIntro
         note={{
           term: t('greenest.planTrip.greenTerm'),
-          text: t('greenest.planTrip.greenNote'),
+          // Spans, not <p>: the tooltip sits inside the <h1>.
+          text: (
+            <>
+              {t('greenest.planTrip.greenNote')}
+              <span className="mt-2 block text-leaf-forest">
+                {t('greenest.planTrip.greenNoteSoon')}
+              </span>
+            </>
+          ),
         }}
         subtitle={t('greenest.planTrip.subtitle')}
         title={t('greenest.planTrip.title')}

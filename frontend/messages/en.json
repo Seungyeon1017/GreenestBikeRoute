@@ -308,6 +308,7 @@
       "subtitle": "Compare the shortest route with a route planned around what you care about: smooth streets, safe overtaking, clean air and fewer stops.",
       "greenTerm": "greenest",
       "greenNote":"\"Greenest\" doesn't mean the route with the lowest emissions: every bike ride is emission-free. It means the route you're most comfortable riding, so you'll choose the bike over the car more often, which helps reduce emissions.",
+      "greenNoteSoon": "Coming soon: an option to route you past the most trees and parks, for a ride that's literally green.",
       "formTitle": "Your trip",
       "clickHint": "Search for a place, or click the map: first the start, then the destination.",
       "penalties": {
