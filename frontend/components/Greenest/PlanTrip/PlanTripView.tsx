@@ -287,7 +287,7 @@ export default function PlanTripView() {
   // Shared vehicles: on the map, and a trip with a rented one. Nothing loads while unticked.
   const [showSharing, setShowSharing] = useState(false)
   const [sharingVehicle, setSharingVehicle] =
-    useState<SharingVehicleChoice>('bike')
+    useState<SharingVehicleChoice>('all')
   const [tripOn, setTripOn] = useState(false)
   const [tripVehicle, setTripVehicle] = useState<SharingVehicleChoice>('all')
   const [fences, setFences] = useState<GeofencingCollection | null>(null)
