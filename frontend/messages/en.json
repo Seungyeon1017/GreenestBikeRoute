@@ -277,7 +277,6 @@
       "title": "Explore your city's environment",
       "subtitle": "See what matters for cycling: air, road surface, traffic, shade and lighting. Turn layers on and off and click an area for details.",
       "layersTitle": "Environmental layers",
-      "layerInfo": "About this layer",
       "streetLayersHint": "Layers that colour the streets are shown one at a time.",
       "detailsTitle": "Area details",
       "detailsEmpty": "Click an area on the map to see its measured indicators, data source and unit.",
