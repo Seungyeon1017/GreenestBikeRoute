@@ -199,7 +199,8 @@
       "cmdScroll": "Use ⌘ + scroll to zoom the map",
       "twoFingers": "Use two fingers to move the map",
       "recenter": "Back to Heilbronn",
-      "recenterHint": "See the layer in Heilbronn"
+      "recenterHint": "See the layer in Heilbronn",
+      "showAll": "Show all of Heilbronn"
     },
     "nav": {
       "label": "Main navigation",
