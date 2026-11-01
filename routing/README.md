@@ -135,7 +135,7 @@ Note: This is a judgement from the data; the hardware owners haven't confirmed i
 ## Snapping points to streets
 
 - Each overtaking and PM point is assigned to the nearest street within **25 m** (GPS noise). A point with no street that close is ignored. That is 13% of the overtaking points we use and 16% of the PM points.
-- An overtaking point whose nearest street is car-free (bike path, footway, path, track, pedestrian zone) is dropped: the bike was not in traffic, and its sensor read the cars on the road beside it or parked ones. That was 44% of the overtaking risk, and had put bike paths and pedestrian zones among the worst-scored streets in town. It is not moved to the road either, as no bike rode the road.
+- An overtaking point whose nearest street is car-free (bike path, footway, path, track, pedestrian zone) is dropped: the bike was not in traffic, and its sensor read the cars on the road beside it or parked ones. That was 44% of the overtaking risk, and had put bike paths and pedestrian zones among the worst-scored streets in town. It moves to the nearest car street only when one is within `DANGER_MOVE_M` (15 m): there the bike was likely on that road and GPS put it on the path beside it (e.g. the Bleichinselbrücke); that is 468 of the 1,455 such points. Farther away, no bike rode the road.
 - A two-way street gets the same values in both directions.
 - The start and end you request are moved onto the nearest street, which is split there so the route can enter or leave it. If that street is more than 500 m away (for example outside Heilbronn), the API returns an error (HTTP 400).
 

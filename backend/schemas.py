@@ -13,17 +13,17 @@ ROUTE_EXAMPLE = {
     "type": "Feature",
     # Shortened: the real line has 160 points.
     "geometry": {"type": "LineString",
-                 "coordinates": [[9.2268683, 49.148385], [9.2227619, 49.139049], [9.2243909, 49.1262013]]},
+                 "coordinates": [[9.2268683, 49.148385], [9.2227436, 49.1391128], [9.2243909, 49.1262013]]},
     "properties": {
         "bump_penalty": 2, "danger_penalty": 10.0, "pm_penalty": 1, "stop_penalty": 1, "prefer_time": False,
         "shade_penalty": 2, "dark_penalty": 10, "prefer_bike_friendly": 0, "unpaved_penalty": 6, "depart_time": None, "daylight": None, "shade_slot": None,
-        "length_m": 3257.1, "duration_s": 959, "climb_m": 26.2, "kcal": 147.6, "speed_measured_share": 0.89, "mean_roughness": 12.4, "measured_share": 0.88, "estimated_share": 0.0,
-        "danger_points": 9, "danger_risk": 7.41, "mean_pm_risk": 0.506, "pm_measured_share": 0.63,
-        "mean_stop_go": 0.68, "stop_measured_share": 0.89,
+        "length_m": 3279.1, "duration_s": 960, "climb_m": 26.3, "kcal": 147.9, "speed_measured_share": 0.88, "mean_roughness": 12.3, "measured_share": 0.88, "estimated_share": 0.0,
+        "danger_points": 9, "danger_risk": 7.32, "mean_pm_risk": 0.508, "pm_measured_share": 0.63,
+        "mean_stop_go": 0.678, "stop_measured_share": 0.88,
         "mean_shade": None, "shade_known_share": 0.95, "mean_lit": 0.988, "lit_known_share": 1.0, "lifts": 0,
         "reported_closures": 0,
-        "bumpy_m": 202, "bad_air_m": 292, "stop_go_m": 379, "sunny_m": None, "unlit_m": None, "dim_m": None, "bike_friendly_m": 1160, "unpaved_m": 0, "pushed_m": 0,
-        # Shortened: the real route has 44 stretches.
+        "bumpy_m": 202, "bad_air_m": 291, "stop_go_m": 379, "sunny_m": None, "unlit_m": None, "dim_m": None, "bike_friendly_m": 1259, "unpaved_m": 0, "pushed_m": 0,
+        # Shortened: the real route has 49 stretches.
         "segments": [
             {"from_index": 0, "to_index": 4, "start_m": 0.0, "length_m": 36.4, "name": "Kleiststraße", "way": None, "along": False, "flags": [], "roughness": 11.833, "danger_points": 0, "pm_risk": 0.494, "stop_go": 0.652, "speed_kmh": 14.495, "shade": None, "lit": 1.0, "bike_friendly": False, "unpaved": 0.0, "pushed": False, "segments": ["1214835654-11925390607", "26890921-1214835654"]},
             {"from_index": 4, "to_index": 7, "start_m": 36.4, "length_m": 36.2, "name": "Sichererstraße", "way": None, "along": False, "flags": ["bike_friendly_m"], "roughness": 9.485, "danger_points": 0, "pm_risk": 0.507, "stop_go": 0.636, "speed_kmh": 13.248, "shade": None, "lit": 1.0, "bike_friendly": True, "unpaved": 0.0, "pushed": False, "segments": ["26890921-1214745069", "1214745069-1216889477", "1028721133-1216889477"]},
@@ -38,12 +38,12 @@ SHORTEST_EXAMPLE = {
         "bump_penalty": 0, "danger_penalty": 0, "pm_penalty": 0, "stop_penalty": 0, "prefer_time": False,
         "shade_penalty": 0, "dark_penalty": 0, "prefer_bike_friendly": 0, "unpaved_penalty": 0, "depart_time": None, "daylight": None, "shade_slot": None,
         "length_m": 3061.2, "duration_s": 940, "climb_m": 30.7, "kcal": 148.8, "speed_measured_share": 0.97, "mean_roughness": 24.7, "measured_share": 0.97, "estimated_share": 0.02,
-        "danger_points": 8, "danger_risk": 6.35, "mean_pm_risk": 0.524, "pm_measured_share": 0.75,
+        "danger_points": 12, "danger_risk": 9.42, "mean_pm_risk": 0.524, "pm_measured_share": 0.75,
         "mean_stop_go": 0.665, "stop_measured_share": 0.97,
         "mean_shade": None, "shade_known_share": 1.0, "mean_lit": 0.931, "lit_known_share": 1.0, "lifts": 0,
         "reported_closures": 0,
         "bumpy_m": 1895, "bad_air_m": 733, "stop_go_m": 481, "sunny_m": None, "unlit_m": None, "dim_m": None, "bike_friendly_m": 874, "unpaved_m": 0, "pushed_m": 0,
-        # Shortened: the real route has 35 stretches.
+        # Shortened: the real route has 39 stretches.
         "segments": [
             {"from_index": 0, "to_index": 4, "start_m": 0.0, "length_m": 36.4, "name": "Kleiststraße", "way": None, "along": False, "flags": [], "roughness": 11.833, "danger_points": 0, "pm_risk": 0.494, "stop_go": 0.652, "speed_kmh": 14.495, "shade": None, "lit": 1.0, "bike_friendly": False, "unpaved": 0.0, "pushed": False, "segments": ["1214835654-11925390607", "26890921-1214835654"]},
             {"from_index": 4, "to_index": 11, "start_m": 36.4, "length_m": 89.8, "name": "Sichererstraße", "way": None, "along": False, "flags": ["bike_friendly_m"], "roughness": 9.485, "danger_points": 0, "pm_risk": 0.491, "stop_go": 0.636, "speed_kmh": 13.248, "shade": None, "lit": 1.0, "bike_friendly": True, "unpaved": 0.0, "pushed": False, "segments": ["26890921-1214835706", "1214835682-1214835706", "1214835682-1216735058", "1214835677-1216735058", "1214835597-1214835677", "1214835597-1214835623", "1214835623-1558436876"]},
@@ -68,10 +68,10 @@ GRADE_EXAMPLE = {
                         "start_m": 110.4}},
     ],
     "summary": {
-        "length_m": 3257.1, "climb_m": 26.2, "descent_m": 8.0, "start_elevation_m": 162.7, "end_elevation_m": 180.8,
+        "length_m": 3279.1, "climb_m": 26.3, "descent_m": 8.1, "start_elevation_m": 162.7, "end_elevation_m": 180.8,
         "max_grade_pct": 4.1, "max_descent_grade_pct": -3.0,
-        "length_by_severity_m": {"flat": 2851.5, "gentle": 396.0, "noticeable": 9.6, "steep": 0.0, "very_steep": 0.0},
-        "kcal": 147.6,
+        "length_by_severity_m": {"flat": 2874.1, "gentle": 395.5, "noticeable": 9.6, "steep": 0.0, "very_steep": 0.0},
+        "kcal": 147.9,
     },
 }
 
@@ -262,7 +262,7 @@ class RouteComparison(BaseModel):
     same_path: bool = Field(description="True if the route follows the same streets as the shortest route")
 
     model_config = {"json_schema_extra": {"example": {
-        "route": ROUTE_EXAMPLE, "shortest": SHORTEST_EXAMPLE, "detour_pct": 6.4, "extra_time_pct": 2.0, "same_path": False}}}
+        "route": ROUTE_EXAMPLE, "shortest": SHORTEST_EXAMPLE, "detour_pct": 7.1, "extra_time_pct": 2.1, "same_path": False}}}
 
 
 class DayPeriod(RouteComparison):

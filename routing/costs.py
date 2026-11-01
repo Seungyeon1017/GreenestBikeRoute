@@ -32,9 +32,12 @@ DEFAULT_BUMP_PENALTY = 2
 SNAP_M = 25.0
 # Overtaking points count only on streets cars drive on: a bike on a cycleway or in a pedestrian zone reads the cars
 # on the road beside it (or parked ones), and cars can't overtake it there. Points whose nearest street is car-free
-# are dropped, not moved to the road: the bike wasn't on it (44% of the risk). Edges without a highway tag count.
+# are dropped (the bike wasn't on the road: 44% of the risk), unless a car street is within DANGER_MOVE_M: there the bike
+# was likely on that road and GPS put it on the path (e.g. the paths beside the Bleichinselbrücke). Edges without a
+# highway tag count.
 CAR_HIGHWAYS = {"trunk", "primary", "secondary", "tertiary", "unclassified", "residential", "living_street", "service",
                 "trunk_link", "primary_link", "secondary_link", "tertiary_link", "road"}
+DANGER_MOVE_M = 15.0
 
 # danger_zones_raw: points where a car overtook a bike, Risk Index Overtaking 0-1. They add up,
 # so this is the detour in metres you'd ride to pass one fewer full-risk overtaking spot.

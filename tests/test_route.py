@@ -166,8 +166,18 @@ def test_attach_danger_drops_overtaking_on_car_free_ways(toy_graph):
     attach_danger(toy_graph, ([ON_AB, NEAR_CB], [1.0, 0.5]), ([ON_AB], [0.9], ["r1"]))
     ab, cb = toy_graph.edges[A, B, 0], toy_graph.edges[C, B, 0]
     assert (ab["danger"], ab["danger_points"]) == (0, 0)
-    assert (cb["danger"], cb["danger_points"]) == (0.5, 1)  # not moved to C -> B either
+    assert (cb["danger"], cb["danger_points"]) == (0.5, 1)  # ON_AB is too far from C -> B to move there
     assert ab["pm_rides"] == 1  # air still counts where it was measured
+
+
+def test_attach_danger_moves_overtaking_on_a_car_free_way_to_a_car_street_close_by(toy_graph):
+    toy_graph.edges[A, B, 0]["highway"] = "cycleway"
+    toy_graph.edges[C, B, 0]["highway"] = "residential"
+    near_b = (9.21003, 49.14088)  # ~3 m from A -> B, ~5 m from C -> B
+    attach_danger(toy_graph, ([near_b], [0.8]), ([], [], []))
+    ab, cb = toy_graph.edges[A, B, 0], toy_graph.edges[C, B, 0]
+    assert (ab["danger"], ab["danger_points"]) == (0, 0)
+    assert (cb["danger"], cb["danger_points"]) == (0.8, 1)
 
 
 def test_attach_nearby_air_estimates_unmeasured_streets_from_measured_ones_close_by(toy_graph):

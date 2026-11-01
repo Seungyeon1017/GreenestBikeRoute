@@ -10,7 +10,7 @@ import pandas as pd
 from shapely import LineString, STRtree, points, union_all
 
 from download_data import load_features
-from routing.costs import AIR_HOTSPOT_OFFSET, AIR_PRIOR_RIDES, CAR_HIGHWAYS, DEFAULT_PM_RISK, SNAP_M, air_scores, clean_overtaking, edge_roughness, osm_way_ids, point_risks, way_roughness, way_speed, way_stop_go
+from routing.costs import AIR_HOTSPOT_OFFSET, AIR_PRIOR_RIDES, CAR_HIGHWAYS, DANGER_MOVE_M, DEFAULT_PM_RISK, SNAP_M, air_scores, clean_overtaking, edge_roughness, osm_way_ids, point_risks, way_roughness, way_speed, way_stop_go
 from routing.footways import DROPPED_FOOTWAYS_PATH, footway_collection, save_footways
 from routing.lighting import load_light_density, load_lighting
 from routing.named_roads import load_named_ways
@@ -350,7 +350,7 @@ def _car_street(d):
 
 def attach_danger(G, overtaking, pm, hotspot_roads=()):
     """Snap the overtaking and PM points to their nearest street and set edge attributes:
-    `danger` (summed Risk Index Overtaking; 0 on car-free ways, see CAR_HIGHWAYS), `danger_points` (how many),
+    `danger` (summed Risk Index Overtaking; 0 on car-free ways, see CAR_HIGHWAYS and DANGER_MOVE_M), `danger_points` (how many),
     `pm_prior` (air score before any ride: DEFAULT_PM_RISK, plus AIR_HOTSPOT_OFFSET on a street that runs along
     one of `hotspot_roads`, [(lon, lat), ...] lines), `pm_risk` (air score, or None where none was measured) and `pm_rides` (how many rides
     measured it). `pm_risk` is the mean over rides of each ride's mean score on the street, pulled towards
@@ -362,16 +362,29 @@ def attach_danger(G, overtaking, pm, hotspot_roads=()):
     streets = _streets(G, lat0)
     lines = [line for line, _ in streets]
 
-    def per_street(lonlat, risks):
+    car = np.array([_car_street(G.edges[edges[0]]) for _, edges in streets], dtype=bool)
+    car_streets = np.flatnonzero(car)
+
+    def snap_overtaking(lonlat):
+        """Street index per point (-1: none): a point whose nearest street is car-free moves to the nearest car street
+        within DANGER_MOVE_M, else it is dropped."""
         snapped = snap_to_streets(lines, lonlat, lat0)
+        free = (snapped >= 0) & ~car[snapped]
+        if free.any():
+            moved = np.full(int(free.sum()), -1)
+            if len(car_streets):
+                moved = snap_to_streets([lines[i] for i in car_streets], np.asarray(lonlat)[free], lat0, DANGER_MOVE_M)
+            snapped[free] = np.where(moved >= 0, car_streets[moved], -1)
+        return snapped
+
+    def per_street(lonlat, risks, snap=lambda lonlat: snap_to_streets(lines, lonlat, lat0)):
+        snapped = snap(lonlat)
         hit = snapped >= 0
         n = np.bincount(snapped[hit], minlength=len(lines))
         total = np.bincount(snapped[hit], weights=np.asarray(risks, dtype=float)[hit], minlength=len(lines))
         return n, total
 
-    danger_n, danger_sum = per_street(*overtaking)
-    car_free = ~np.array([_car_street(G.edges[edges[0]]) for _, edges in streets], dtype=bool)
-    danger_n[car_free], danger_sum[car_free] = 0, 0.0
+    danger_n, danger_sum = per_street(*overtaking, snap=snap_overtaking)
     pm_lonlat, pm_score, pm_ride = pm
     pm_street = snap_to_streets(lines, pm_lonlat, lat0)
     per_ride = pd.DataFrame({"street": pm_street, "ride": pm_ride, "score": pm_score}, columns=["street", "ride", "score"])
