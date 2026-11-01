@@ -246,7 +246,7 @@
       },
       "environmental-score": {
         "label": "Overall score",
-        "description": "How good each street feels to ride (0–100, higher is better): traffic (road type, speed limit, bike lanes), smooth surface, safe overtaking, clean air, few stops. 50 means it feels twice as long as a calm street. Faded streets have no sensor-bike data yet."
+        "description": "How good each street feels to ride (0–100, higher is better): traffic (road type, speed limit, bike lanes), smooth surface, safe overtaking, clean air, few stops. Faded streets have no sensor-bike data yet."
       },
       "bike-friendly": {
         "label": "Bike paths & lanes",
@@ -277,6 +277,7 @@
       "title": "Explore your city's environment",
       "subtitle": "See what matters for cycling: air, road surface, traffic, shade and lighting. Turn layers on and off and click an area for details.",
       "layersTitle": "Environmental layers",
+      "layerInfo": "About this layer",
       "streetLayersHint": "Layers that colour the streets are shown one at a time.",
       "detailsTitle": "Area details",
       "detailsEmpty": "Click an area on the map to see its measured indicators, data source and unit.",

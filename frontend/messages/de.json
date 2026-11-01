@@ -246,7 +246,7 @@
       },
       "environmental-score": {
         "label": "Gesamtwert",
-        "description": "Wie gut sich jede Straße fahren lässt (0–100, höher ist besser): Verkehr (Straßentyp, Tempolimit, Radwege), glatter Belag, sicheres Überholen, saubere Luft, wenig Stopps. 50 heißt: fühlt sich doppelt so lang an wie eine ruhige Straße. Blasse Straßen hat noch kein Sensor-Rad befahren."
+        "description": "Wie gut sich jede Straße fahren lässt (0–100, höher ist besser): Verkehr (Straßentyp, Tempolimit, Radwege), glatter Belag, sicheres Überholen, saubere Luft, wenig Stopps. Blasse Straßen hat noch kein Sensor-Rad befahren."
       },
       "bike-friendly": {
         "label": "Radwege & Radspuren",
@@ -277,6 +277,7 @@
       "title": "Entdecke die Umwelt deiner Stadt",
       "subtitle": "Was beim Radfahren zählt: Luft, Belag, Verkehr, Schatten und Licht. Ebenen ein- und ausblenden und ein Gebiet für Details anklicken.",
       "layersTitle": "Umweltebenen",
+      "layerInfo": "Infos zu dieser Ebene",
       "streetLayersHint": "Ebenen, die Straßen einfärben, werden einzeln gezeigt.",
       "detailsTitle": "Gebietsdetails",
       "detailsEmpty": "Klicke ein Gebiet auf der Karte an, um gemessene Indikatoren, Datenquelle und Einheit zu sehen.",
