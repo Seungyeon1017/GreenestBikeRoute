@@ -650,8 +650,7 @@
           "track": "Feldweg",
           "service": "Zufahrt",
           "pedestrian": "Fußgängerzone",
-          "link": "Auffahrt",
-          "road": "Fahrbahn"
+          "link": "Auffahrt"
         },
         "length": "{{m}} m",
         "notMeasured": "nicht gemessen",

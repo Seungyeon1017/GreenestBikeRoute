@@ -326,34 +326,34 @@ def route_duration(G, edges, scooter=False):
     return duration
 
 
-# Roads a footway, bike path or access road without a name can run beside (see _NamedRoads).
+# Roads a sidewalk or path without a name can run beside (see _NamedRoads).
 ROAD_HIGHWAYS = {"motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential",
                  "living_street", "service", "motorway_link", "trunk_link", "primary_link", "secondary_link",
                  "tertiary_link"}
 # Main roads are wide (several lanes, tram tracks, parking), so their sidewalks run further from OSM's centre line.
 MAIN_ROADS = {"motorway", "trunk", "primary", "secondary", "tertiary", "motorway_link", "trunk_link", "primary_link",
               "secondary_link", "tertiary_link"}
-# An unnamed way runs beside a named road where it is within ALONG_M of it (MAIN_ALONG_M of a main road) and heads the
-# same way (either direction) to within ALONG_DEG, checked every ALONG_STEP_M (at most ALONG_POINTS times, spread
-# evenly). It takes the name of the road it runs beside for most of its length, if that is at least MIN_ALONG_SHARE of
-# it (MIN_ALONG_SHARE_ACCESS for an access road or farm track, which may turn off it). A crossing takes the road it
-# crosses within CROSSING_M.
+# Only sidewalks and paths without a name (PATH_KINDS) take the name of a road, and crossings that of the road they
+# cross: a farm track, access road or slip road along a road isn't part of it. A path runs beside a named road where it
+# is within ALONG_M of it (MAIN_ALONG_M of a main road) and heads the same way (either direction) to within ALONG_DEG,
+# checked every ALONG_STEP_M (at most ALONG_POINTS times, spread evenly). It takes the name of the road it runs beside
+# for most of its length, if that is at least MIN_ALONG_SHARE of it. A crossing takes the road it crosses within
+# CROSSING_M.
 ALONG_M = 20
 MAIN_ALONG_M = 30
 ALONG_DEG = 25
 ALONG_STEP_M = 2
 ALONG_POINTS = 25
 MIN_ALONG_SHARE = 0.5
-MIN_ALONG_SHARE_ACCESS = 1 / 3
 CROSSING_M = 3
 # A way shorter than CORNER_M beside two roads for about as much of it (to within CORNER_MARGIN of its length), e.g.
 # a sidewalk round a corner, is named after both: "A / B".
 CORNER_M = 15
 CORNER_MARGIN = 0.1
-# The kind of way a stretch is on, from its OSM tags, in this order; "link" for a slip road (highway=*_link), "road"
-# for an unnamed road named after the one beside it (see _label); null for an ordinary road.
+# The kind of way a stretch is on, from its OSM tags, in this order; "link" for a slip road (highway=*_link); null for
+# an ordinary road.
 WAY_KINDS = ("crossing", "sidewalk", "cycleway", "footway", "path", "track", "service", "pedestrian")
-# Ways that are a sidewalk or path: not named after a road when another of them runs between it and the road.
+# Sidewalks and paths: the ways that take the name of the road they run beside, unless another of them runs between.
 PATH_KINDS = {"sidewalk", "footway", "path", "cycleway"}
 
 
@@ -421,9 +421,9 @@ class _NamedRoads:
         if not ranked:
             return None
         name = ranked[0]
-        if beside[name] < len(points) * (MIN_ALONG_SHARE_ACCESS if way in ("service", "track") else MIN_ALONG_SHARE):
+        if beside[name] < len(points) * MIN_ALONG_SHARE:
             return None
-        if way in PATH_KINDS and self._path_between(line, [self.lines[i] for i in found if self.names[i] == name]):
+        if self._path_between(line, [self.lines[i] for i in found if self.names[i] == name]):
             return None
         if line.length < CORNER_M and len(ranked) > 1 and beside[ranked[1]] >= beside[name] - CORNER_MARGIN * len(points):
             return f"{name} / {ranked[1]}"
@@ -483,11 +483,9 @@ def street_name(G, u, v, d):
 
 
 def _label(G, name, way, line):
-    """How the map names a line (lon, lat) with its own `name` and kind `way`: a way without a name takes the road's it
-    runs beside (`along`); an ordinary road then counts as "road", so the map doesn't show it as that road itself."""
-    beside = None if name else _named_roads(G).along(line, way)
-    if beside is not None and way is None:
-        way = "road"
+    """How the map names a line (lon, lat) with its own `name` and kind `way`: a sidewalk or path (PATH_KINDS) without
+    a name takes the road's it runs beside, a crossing the road's it crosses (`along`); other ways keep none."""
+    beside = None if name or (way not in PATH_KINDS and way != "crossing") else _named_roads(G).along(line, way)
     return {"name": name or beside, "way": way, "along": beside is not None}
 
 
