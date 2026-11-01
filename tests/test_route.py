@@ -635,6 +635,18 @@ def test_a_bike_path_over_a_road_is_across_it_also_beside_a_slip_road_of_it():
     assert way_label(G, 4, [lonlat(0, 0), lonlat(0, 15)]) == label_of(G, 4)
 
 
+def test_a_path_between_the_carriageways_is_across_the_road_not_beside_one_beyond_it():
+    # Austraße's two carriageways with platforms between; the footway runs from one to the other, and Goppeltstraße
+    # starts beyond the east one, heading the footway's way.
+    G = ways_graph((1, [(0, -100), (0, 100)], {"highway": "primary", "name": "Austraße"}),
+                   (2, [(25, -100), (25, 100)], {"highway": "primary", "name": "Austraße"}),
+                   (3, [(25, -10), (120, -25)], {**ROAD, "name": "Goppeltstraße"}),
+                   (4, [(0, 0), (25, 0)], {"highway": "footway", "bicycle": "yes"}))
+    assert label_of(G, 4) == {"name": "Austraße", "way": "footway", "along": True, "across": True}
+    # A piece of it near the east carriageway too.
+    assert way_label(G, 4, [lonlat(15, 0), lonlat(25, 0)])["name"] == "Austraße"
+
+
 def test_a_path_that_only_ends_at_a_road_or_runs_beside_another_is_not_across():
     G = ways_graph((1, [(-100, 0), (100, 0)], {**ROAD, "name": "Allee"}),
                    (2, [(50, 0), (50, 60)], PATH),  # leads away from Allee

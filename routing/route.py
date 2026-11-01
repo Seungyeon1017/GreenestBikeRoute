@@ -3,6 +3,7 @@ import ast
 import math
 import threading
 import weakref
+from collections import Counter
 from contextlib import contextmanager
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -336,11 +337,12 @@ MAIN_ROADS = {"motorway", "trunk", "primary", "secondary", "tertiary", "motorway
 # Only sidewalks and paths without a name (PATH_KINDS) take the name of a road, and crossings that of the road they
 # cross: a farm track, access road or slip road along a road isn't part of it. A way on another level than the road (a
 # footbridge over it, a tunnel under it; _levels) isn't beside it. A path runs beside a named road where it
-# is within ALONG_M of it (MAIN_ALONG_M of a main road) and heads the same way (either direction) to within ALONG_DEG,
+# is within ALONG_M of it (MAIN_ALONG_M of a main road), not past where the road ends (a path across Austraße isn't
+# beside Goppeltstraße starting on its far side), and heads the same way (either direction) to within ALONG_DEG,
 # checked every ALONG_STEP_M (at most ALONG_POINTS times, spread evenly). It takes the name of the road it runs beside
 # for most of its length, if that is at least MIN_ALONG_SHARE of it. A crossing takes the road it crosses within
-# CROSSING_M. A path whose OSM way passes through a named road, and that heads across it as near for as much of its
-# length, is `across` that road: when it runs beside no road, or only beside that one (the bike path over Mannheimer
+# CROSSING_M. A path whose OSM way passes through a named road (or runs from one carriageway of it to another), and
+# that heads across it as near for as much of its length, is `across` that road: when it runs beside no road, or only beside that one (the bike path over Mannheimer
 # Straße west of Schaeuffelenstraße, beside a slip road of it).
 ALONG_M = 20
 MAIN_ALONG_M = 30
@@ -416,6 +418,18 @@ class _NamedRoads:
         self.levels = [levels for _, _, levels, _ in roads]
         self.lines = [self.plane.to_m(line) for *_, line in roads]
         self.tree = STRtree(self.lines)
+        # Per line, whether the street ends at its first / last point: an end of the lines of its name joined (the
+        # same road comes as a graph edge per direction and as an OSM way), where no other one goes on.
+        by_name = {}
+        for name, line in zip(self.names, self.lines):
+            by_name.setdefault(name, []).append(line)
+        street_ends = {}
+        for name, lines in by_name.items():
+            union = shapely.unary_union(lines)
+            ends = Counter(c for part in getattr(union, "geoms", [union]) for c in (part.coords[0], part.coords[-1]))
+            street_ends[name] = shapely.MultiPoint([c for c, n in ends.items() if n == 1])
+        self.open_ends = [tuple(street_ends[name].distance(Point(c)) < 1 for c in (line.coords[0], line.coords[-1]))
+                          for name, line in zip(self.names, self.lines)]
         paths = {(min(u, v), max(u, v), str(d["osmid"])): _edge_line(G, u, v, d) for u, v, d in G.edges(data=True)
                  if not isinstance(u, str) and not isinstance(v, str) and way_kind(d) in PATH_KINDS}
         self.paths = [self.plane.to_m(line) for line in paths.values()]
@@ -447,7 +461,7 @@ class _NamedRoads:
             heading, near = _heading(line, p), {}
             for i in found:
                 road, dist = self.lines[i], self.lines[i].distance(p)
-                if dist > (MAIN_ALONG_M if self.wide[i] else ALONG_M):
+                if dist > (MAIN_ALONG_M if self.wide[i] else ALONG_M) or self._past_end(i, p):
                     continue
                 turn = abs(heading - _heading(road, p)) % 180
                 if min(turn, 180 - turn) <= ALONG_DEG:
@@ -469,16 +483,23 @@ class _NamedRoads:
 
     def across(self, line, ids, levels=None):
         """Name of the road a path, line (lon, lat) of OSM ways `ids` on `levels`, crosses: its way passes through the
-        road, and at least MIN_ALONG_SHARE of the line is within ALONG_M of it (MAIN_ALONG_M of a main road) heading
-        across it (more than ALONG_DEG off its way). None if none; the nearest if several."""
+        road, or runs from one carriageway of it to another (both its ends on the road; Austraße's platforms), and at
+        least MIN_ALONG_SHARE of the line is within ALONG_M of it (MAIN_ALONG_M of a main road) heading across it (more
+        than ALONG_DEG off its way). None if none; the nearest if several."""
         ways = [self.ways[i] for i in ids if i in self.ways]
         if not ways:
             return None
         line = self.plane.to_m(line)
         n = min(max(round(line.length / ALONG_STEP_M), 2), ALONG_POINTS)
         points = [line.interpolate(k / n, normalized=True) for k in range(n + 1)]
+        roads = {i for way in ways for i in self.tree.query(way, predicate="crosses")}
+        for way in ways:
+            for part in getattr(way, "geoms", [way]):
+                ends = [set(self.tree.query(Point(c), predicate="dwithin", distance=1)) for c in (part.coords[0], part.coords[-1])]
+                both = {self.names[i] for i in ends[0]} & {self.names[i] for i in ends[1]}
+                roads |= {i for i in ends[0] | ends[1] if self.names[i] in both}
         crossed = []
-        for i in {i for way in ways for i in self.tree.query(way, predicate="crosses")}:
+        for i in roads:
             if levels is not None and not levels & self.levels[i]:
                 continue
             road, limit, hits, metres = self.lines[i], MAIN_ALONG_M if self.wide[i] else ALONG_M, 0, 0.0
@@ -513,6 +534,13 @@ class _NamedRoads:
                     hits += 1
                     break
         return checks >= 2 and hits == checks
+
+    def _past_end(self, i, p):
+        """Whether point `p` (metres) lies past an end of road line i where the street ends: no other line of its name
+        goes on from there. Its nearest point is that end, so it isn't beside the street but before it."""
+        road = self.lines[i]
+        at = road.project(p)
+        return (at <= 0 and self.open_ends[i][0]) or (at >= road.length and self.open_ends[i][1])
 
 
 def _heading(line, point):

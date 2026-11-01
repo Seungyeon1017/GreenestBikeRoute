@@ -89,12 +89,12 @@ class StreetName(BaseModel):
     name: Optional[str] = Field(None, description=(
         "Its OSM street name; a street merged from several OSM ways with different names is one line per name. Only a "
         "sidewalk, footway, path or bike path without one takes the name of the road it runs beside for most of its "
-        "length (within 20 m, 30 m of a main road, heading the same way), also a road bikes may not ride, and a "
-        "crossing the road it crosses; then `along` is true. Not when another sidewalk or path runs between it and the "
-        "road. \"A / B\" for a piece under 15 m beside two roads alike, e.g. round a corner. A path whose OSM way passes "
-        "through a road, and that heads across it within 20 m (30 m of a main road) for most of its length, takes that road's name "
-        "when it runs beside no other road (`across`). Null if there is none (a park path, a farm track, an unnamed "
-        "access road or slip road)"))
+        "length (within 20 m, 30 m of a main road, heading the same way, not past where the road ends), also a road "
+        "bikes may not ride, and a crossing the road it crosses; then `along` is true. Not when another sidewalk or "
+        "path runs between it and the road. \"A / B\" for a piece under 15 m beside two roads alike, e.g. round a "
+        "corner. A path whose OSM way passes through a road or runs from one carriageway of it to another, and that "
+        "heads across it within 20 m (30 m) for most of its length, takes that road's name when it runs beside no "
+        "other road (`across`). Null if there is none (a park path, a farm track, an unnamed access road or slip road)"))
     way: Optional[WayKind] = Field(None, description=(
         "The kind of way, from highway=* and footway=* in OSM: service is an access road or car park; "
         "link is a slip road (highway=*_link); null for an ordinary road"))
