@@ -502,12 +502,14 @@ def test_a_footbridge_over_the_road_is_not_beside_it():
     G, _ = sidewalk_graph()
     sidewalk = G.edges["s1", "s2", 0]
     sidewalk.update(bridge="yes", layer="1")
-    assert street_label(G, "s1", "s2", sidewalk) == {"name": None, "way": "sidewalk", "along": False}
+    # Unnamed, it says it is on a bridge.
+    assert street_label(G, "s1", "s2", sidewalk) == {"name": None, "way": "sidewalk", "along": False, "structure": "bridge"}
     # On the road's own bridge, it is its sidewalk.
     G, _ = sidewalk_graph()
     G.edges["r1", "r2", 0].update(bridge="yes")
     G.edges["s1", "s2", 0].update(bridge="yes")
-    assert street_label(G, "s1", "s2", G.edges["s1", "s2", 0]) == {"name": "Allee", "way": "sidewalk", "along": True}
+    assert street_label(G, "s1", "s2", G.edges["s1", "s2", 0]) == {"name": "Allee", "way": "sidewalk", "along": True,
+                                                                   "structure": "bridge"}
 
 
 def test_map_lines_are_named_like_route_stretches():

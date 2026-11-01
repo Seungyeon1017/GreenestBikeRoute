@@ -644,6 +644,8 @@
       "segment": {
         "unnamed": "Straße ohne Namen",
         "beside": "{{way}} neben der Straße",
+        "on_bridge": "{{way}} auf einer Brücke",
+        "on_tunnel": "{{way}} im Tunnel",
         "ways": {
           "crossing": "Überweg",
           "sidewalk": "Gehweg",

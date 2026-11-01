@@ -197,6 +197,8 @@ export type SegmentLabels = {
   way: (_kind: WayKind) => string
   /** "Sidewalk beside the road" */
   beside: (_way: string) => string
+  /** "Footpath on a bridge", for a way without a name */
+  onStructure: (_way: string, _structure: 'bridge' | 'tunnel') => string
   length: (_m: number) => string
   row: (_key: string) => string
   notMeasured: string
@@ -214,6 +216,7 @@ export function segmentLabels(t: TFunction, language: string): SegmentLabels {
     unnamed: g('unnamed'),
     way: kind => g(`ways.${kind}`),
     beside: way => g('beside', { way }),
+    onStructure: (way, structure) => g(`on_${structure}`, { way }),
     length: m => g('length', { m }),
     row: key => g(`rows.${key}`),
     notMeasured: g('notMeasured'),
@@ -321,7 +324,10 @@ function segmentRows(
 }
 
 /** What a popup title names: a route stretch, or a street line on the Overview map. */
-export type StreetPlace = Pick<RouteSegment, 'name' | 'way' | 'along'>
+export type StreetPlace = Pick<RouteSegment, 'name' | 'way' | 'along'> & {
+  /** Set on a bridge or tunnel; names an unnamed way. */
+  structure?: 'bridge' | 'tunnel' | null
+}
 
 /** The box of a street popup, on Plan a trip and the Overview map alike. */
 export function popupBox(): HTMLElement {
@@ -346,11 +352,13 @@ export function streetTitle(
     dot.style.background = dotColor
     title.appendChild(dot)
   }
+  const kind = place.way ? labels.way(place.way) : labels.unnamed
   title.appendChild(
     el(
       'strong',
       'text-sm font-semibold text-leaf-forest',
-      place.name ?? (place.way ? labels.way(place.way) : labels.unnamed),
+      place.name ??
+        (place.structure ? labels.onStructure(kind, place.structure) : kind),
     ),
   )
   // Under a street name, what kind of way it is: "Sidewalk beside the road", or "Crossing" for the road it crosses.

@@ -97,6 +97,9 @@ class StreetName(BaseModel):
         "The kind of way, from highway=* and footway=* in OSM: service is an access road or car park; "
         "link is a slip road (highway=*_link); null for an ordinary road"))
     along: bool = Field(False, description="True if `name` is that of the road the way runs beside or crosses, not its own")
+    structure: Optional[Literal["bridge", "tunnel"]] = Field(None, description=(
+        "Present on a bridge or tunnel (OSM bridge=*, tunnel=*), so the map can tell an unnamed path on one apart. A "
+        "path on another level than a road (a footbridge over it) doesn't take that road's name"))
 
 
 NAMED_EXAMPLE = {"name": "Schaeuffelenstraße", "way": None, "along": False}

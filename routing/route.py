@@ -380,6 +380,14 @@ def _levels(d):
     return levels or {0}
 
 
+def _structure(d):
+    """"bridge" or "tunnel" if the way (its tags `d`) is one, else None."""
+    for structure in ("bridge", "tunnel"):
+        if _tags(d, structure) - {"None", "no"}:
+            return structure
+    return None
+
+
 def way_kind(d):
     """What kind of way the edge is (WAY_KINDS, or "link" for a slip road), from highway=* and footway=*; None for an
     ordinary road."""
@@ -504,12 +512,14 @@ def street_name(G, u, v, d):
     return street_label(G, u, v, d)["name"]
 
 
-def _label(G, name, way, line, levels=None):
-    """How the map names a line (lon, lat) with its own `name` and kind `way` on `levels` (_levels): a sidewalk or path
-    (PATH_KINDS) without a name takes the road's it runs beside, a crossing the road's it crosses (`along`); other ways
-    keep none."""
+def _label(G, name, way, line, tags=None):
+    """How the map names a line (lon, lat) with its own `name` and kind `way`, from OSM tags `tags` (None: unknown): a
+    sidewalk or path (PATH_KINDS) without a name takes the road's it runs beside, on its level (_levels), a crossing the
+    road's it crosses (`along`); other ways keep none. `structure` ("bridge" or "tunnel") only on one that is."""
+    levels = None if tags is None else _levels(tags)
     beside = None if name or (way not in PATH_KINDS and way != "crossing") else _named_roads(G).along(line, way, levels)
-    return {"name": name or beside, "way": way, "along": beside is not None}
+    structure = None if tags is None else _structure(tags)
+    return {"name": name or beside, "way": way, "along": beside is not None, **({"structure": structure} if structure else {})}
 
 
 def _names(d):
@@ -557,9 +567,9 @@ def _parts(G, d, ids, coords):
     if len(set(names)) > 1:
         runs = _way_runs(G, ids, coords)
         if runs:
-            return [(a, b, _label(G, name, kind or way_kind(d), LineString(coords[a:b + 1]), _levels(d)))
+            return [(a, b, _label(G, name, kind or way_kind(d), LineString(coords[a:b + 1]), d))
                     for a, b, name, kind in runs]
-    return [(0, len(coords) - 1, _label(G, names[0] if names else None, way_kind(d), LineString(coords), _levels(d)))]
+    return [(0, len(coords) - 1, _label(G, names[0] if names else None, way_kind(d), LineString(coords), d))]
 
 
 # street_parts per graph and edge, for the overlays (and every /score) that name all ~22,000 streets: ~10 s once.
@@ -639,12 +649,11 @@ def way_parts(G, osmid, coords, name=None):
         runs = _way_runs(G, ids, coords)
         if runs and len({run[2] for run in runs}) > 1:
             first = next((ways[i] for i in ids if i in ways), None)
-            levels = None if first is None else _levels(first)
-            return [(a, b, _label(G, n, k or kind, LineString(coords[a:b + 1]), levels)) for a, b, n, k in runs]
+            return [(a, b, _label(G, n, k or kind, LineString(coords[a:b + 1]), first)) for a, b, n, k in runs]
     named = G.graph.get("named_ways", {})
     known = next((named[i] for i in ids if i in named), None)
     d = next((ways[i] for i in ids if i in ways), None)
-    levels = None if known is None and d is None else _levels(known[1] if known else d)
+    tags = known[1] if known else d
     if known:
         own, kind = known[0], way_kind(known[1])
     elif d is not None:
@@ -654,7 +663,7 @@ def way_parts(G, osmid, coords, name=None):
         own = names.pop() if len(names) == 1 else None
     else:
         own = (_names({"name": name}) or [None])[0]
-    return [(0, len(coords) - 1, _label(G, own, kind, LineString(coords), levels))]
+    return [(0, len(coords) - 1, _label(G, own, kind, LineString(coords), tags))]
 
 
 def way_label(G, osmid, coords, name=None, named=True):
