@@ -53,13 +53,13 @@ docker compose logs -f backend
 docker compose down
 ```
 
-The backend is again at http://127.0.0.1:8001 (host port `8001` maps to Uvicorn's `8000` in the container). `./data` and `./cache` are mounted into the container, so datasets and the street graph persist. Users and saved routes stay in the `postgres-data` volume; `docker compose down -v` deletes them. `compose.override.yml` (merged in automatically) mounts `backend/` and `routing/` and runs Uvicorn with `--reload`, so code edits go live in a few seconds. Rebuild with `docker compose up --build -d` only after changing the Dockerfile or dependencies.
+The backend is again at http://127.0.0.1:8001 (host port `8001` maps to Uvicorn's `8000` in the container). `./data` and `./cache` are mounted into the container. Users and saved routes stay in the `postgres-data` volume; `docker compose down -v` deletes them. Rebuild with `docker compose up --build -d` only after changing the Dockerfile or dependencies.
 
 ### Frontend
 
-The website lives in `frontend/` (Next.js, based on the Green City Dashboard Heilbronn) with three tabs: Overview, Plan a Trip and Highlights. Use yarn, not `npm install`: npm ignores `yarn.lock` and fails with a peer-dependency error.
+The website lives in `frontend/` (Next.js) with the tabs: Overview, Plan a Trip and Highlights.
 
-First time only (and again whenever `frontend/package.json` changes):
+For development, first time only (and again whenever `frontend/package.json` changes):
 
 ```bash
 cd frontend
@@ -74,9 +74,7 @@ cd frontend
 npx yarn@1.22.22 dev
 ```
 
-Then open http://localhost:3000 (`/overview`, `/plan-trip`, `/highlights`). Saved component changes show up within a second; after editing `messages/*.json`, refresh the page. Stop the server with `Ctrl+C`.
-
-Without a database (`DATABASE_URL`) the site still runs and falls back to German texts. For route search, also start the backend; the frontend calls `NEXT_PUBLIC_GREENEST_API_URL` (default `http://127.0.0.1:8001`).
+Then open http://localhost:3000. Saved component changes show up within a second.
 
 To run the production build with Docker Compose instead (start the backend first):
 
@@ -85,7 +83,7 @@ cd frontend
 docker compose up --build -d
 ```
 
-It serves on http://localhost:3000. There is no hot reload, so use `yarn dev` for frontend work and this build as a final check (it also runs lint and the type check). Both use port 3000: stop the container with `docker compose stop` in `frontend/` before `yarn dev`.
+It serves on http://localhost:3000. There is no hot reload, so use `yarn dev` for frontend work and this build as a final check. 
 
 The Overview map reads small files from `frontend/public/map-data/`. After downloading new data, rebuild them with:
 
