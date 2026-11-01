@@ -254,6 +254,6 @@ def test_suggested_tours_are_simple_lines_through_their_stops(client):
         pieces = [frozenset(piece) for piece in zip(line, line[1:])]
         assert len(pieces) == len(set(pieces)), f["properties"]["id"]
         for stop in f["properties"]["stops"]:
-            metres = min(((x - stop["lon"]) * 65600) ** 2 + ((y - stop["lat"]) * 111200) ** 2 for x, y in line) ** 0.5
+            metres = min(((x - stop["lon"]) * 72800) ** 2 + ((y - stop["lat"]) * 111200) ** 2 for x, y in line) ** 0.5
             assert metres < 20, (f["properties"]["id"], stop["name"])
         assert (line[0] == line[-1]) == f["properties"]["loop"]

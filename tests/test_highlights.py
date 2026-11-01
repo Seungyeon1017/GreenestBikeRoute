@@ -8,7 +8,7 @@ from routing import tours
 from routing.graph import attach_shade
 from routing.highlights import MIN_RIDDEN_M, greenest_streets, ridden
 
-# Four nodes on a line in Heilbronn, ~110 m apart; each street is one two-way edge.
+# Five nodes on a line in Heilbronn, ~110 m apart; each street is one two-way edge (200 m long, for round numbers).
 NODES = {1: (49.1400, 9.2100), 2: (49.1410, 9.2100), 3: (49.1420, 9.2100), 4: (49.1430, 9.2100), 5: (49.1440, 9.2100)}
 
 

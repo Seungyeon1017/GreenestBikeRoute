@@ -94,7 +94,7 @@ def test_stop_penalty_detours_around_stop_and_go_streets(toy_graph):
         d["roughness"] = 0.0
     attach_stop_go(toy_graph, {11: 0.9, 12: 0.1, 13: 0.1, 14: 0.1})
     assert find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 0, 0)["features"][0]["properties"]["length_m"] == 100
-    f = find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 0, 2)["features"][0]  # 100 x 2.8 > 140 x 1.2
+    f = find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 0, 2)["features"][0]  # 100 x 1.96 > 140 x 1
     assert (f["properties"]["length_m"], f["properties"]["mean_stop_go"]) == (140, 0.1)
     assert (f["properties"]["stop_penalty"], f["properties"]["stop_measured_share"]) == (2, 1.0)
 
@@ -143,7 +143,7 @@ def test_compare_routes_reports_extra_time(toy_graph):
 
 
 ON_AB = (9.2101, 49.14045)  # the bend of A->B, (lon, lat)
-NEAR_CB = (9.21041, 49.14065)  # ~3 m off the middle of C->B
+NEAR_CB = (9.21041, 49.14065)  # ~0.5 m off the middle of C->B
 FAR = (9.25, 49.2)
 
 
@@ -220,7 +220,7 @@ def test_attach_danger_covers_both_directions_of_a_street(toy_graph):
 
 
 def test_attach_danger_starts_streets_along_a_hotspot_road_above_typical(toy_graph):
-    along_cb = [(9.2108, 49.14042), (9.2100, 49.14092)]  # 3 m beside C->B
+    along_cb = [(9.2108, 49.14042), (9.2100, 49.14092)]  # ~2 m beside C->B
     attach_danger(toy_graph, ([], []), ([NEAR_CB], [0.9], ["r1"]), [along_cb])
     ab, cb = toy_graph.edges[A, B, 0], toy_graph.edges[C, B, 0]
     assert ab["pm_prior"] == 0.5 and ab["pm_risk"] is None
@@ -238,7 +238,7 @@ def test_unmeasured_streets_cost_their_prior(toy_graph):
     for d in toy_graph.edges.values():
         d["roughness"] = 0.0
     attach_danger(toy_graph, ([], []), ([], [], []))
-    toy_graph.edges[A, B, 0]["pm_prior"] = 5.0  # unmeasured, but a bad prior: worth a 40 m detour at pm_penalty 1
+    toy_graph.edges[A, B, 0]["pm_prior"] = 0.6  # unmeasured, but a bad prior: 100 m x 1.45 > 140 m at pm_penalty 1
     assert find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 1, 0)["features"][0]["properties"]["length_m"] == 140
 
 

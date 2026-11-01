@@ -61,7 +61,7 @@ def test_grade_pieces_join_up_to_the_route(hilly, bump_penalty):
 def test_same_class_edges_merge_into_one_piece(hilly):
     hilly.nodes[C]["elevation"] = 151.0  # A -> C +1.4 %, C -> B +2.9 %: different classes
     assert len(route_grade(hilly, COORDS[A], COORDS[B], 10)["features"]) == 2
-    hilly.nodes[C]["elevation"] = 151.6  # +2.3 % and +2.0 %: both gentle uphill -> one piece
+    hilly.nodes[C]["elevation"] = 151.5  # +2.1 % and +2.1 %: both gentle uphill -> one piece
     (piece,) = route_grade(hilly, COORDS[A], COORDS[B], 10)["features"]
     assert piece["properties"]["grade_pct"] == pytest.approx(300 / 140, abs=0.05)
     assert piece["geometry"]["coordinates"] == [[9.2100, 49.1400], [9.2108, 49.1404], [9.2100, 49.1409]]
