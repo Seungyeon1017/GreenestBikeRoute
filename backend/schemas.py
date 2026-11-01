@@ -567,6 +567,10 @@ class ScoreProperties(StreetName):
         "default). Air where no sensor passed: the measured streets within 300 m"))
     ridden: bool = Field(description=(
         "Whether ATRAI bikes measured the street. Without, the score rests on OSM, nearby air and estimates only"))
+    why: dict[str, float] = Field(description=(
+        "Why the score is what it is: the factors that move it, worst first, each as how many times its length it makes "
+        "the street feel (1 = no effect). Above 1 costs points (bad), below 1 earns credit. Keys: traffic, roughness, "
+        "air, stop_go, danger, lifts, sun, dark, no_bike_path, unpaved, slower. Only factors of 5 % or more are listed"))
 
 
 class ScoreFeature(BaseModel):
@@ -580,7 +584,7 @@ class ScoreCollection(StreetCollection):
     type: Literal["FeatureCollection"]
     features: list[ScoreFeature]
 
-    model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"score": 72.4, "ridden": True, **NAMED_EXAMPLE}})
+    model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"score": 72.4, "ridden": True, "why": {"traffic": 1.15, "roughness": 1.08}, **NAMED_EXAMPLE}})
 
 
 class VehicleProperties(BaseModel):

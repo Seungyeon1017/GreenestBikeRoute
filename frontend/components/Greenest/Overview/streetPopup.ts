@@ -18,6 +18,42 @@ export type StreetLabels = SegmentLabels & {
   lightsPer100m: string
   /** In place of the name while the backend is still naming the streets. */
   nameLoading: string
+  whyTitle: string
+  whyNone: string
+  /** A factor's name, e.g. "Traffic". */
+  why: (_key: string) => string
+  /** "feels 1.5× longer", or "shorter" for a credit. */
+  whyFactor: (_factor: string, _credit: boolean) => string
+}
+
+/**
+ * The score's factors, worst first, orange when they cost points and blue when
+ * they earn credit, like Plan a trip's flags. MapLibre hands nested properties
+ * over as a JSON string.
+ */
+function whyRows(raw: unknown, labels: StreetLabels): HTMLElement[] {
+  let why: Record<string, number> = {}
+  try {
+    why = typeof raw === 'string' ? JSON.parse(raw) : ((raw as never) ?? {})
+  } catch {
+    return []
+  }
+  const entries = Object.entries(why).sort((a, b) => b[1] - a[1])
+  return [
+    el('strong', 'mt-1 text-leaf-forest', labels.whyTitle),
+    ...(entries.length === 0
+      ? [el('span', 'text-leaf-muted', labels.whyNone)]
+      : entries.map(([key, factor]) =>
+          popupRow(
+            labels.why(key),
+            labels.whyFactor(
+              labels.number(factor < 1 ? 1 / factor : factor, 2),
+              factor < 1,
+            ),
+            factor < 1 ? 'good' : 'bad',
+          ),
+        )),
+  ]
 }
 
 /** The pointed-at street's values on the street layer that is switched on, with Plan a trip's row names. */
@@ -41,6 +77,7 @@ function streetRows(
           known(num('score'), v => `${labels.number(v, 0)} / 100`),
         ),
         popupRow(labels.ridden, p.ridden ? labels.yes : labels.no),
+        ...whyRows(p.why, labels),
       ]
     case 'surface-roughness':
       return [
