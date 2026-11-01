@@ -1,6 +1,7 @@
 'use client'
 
 import { cx } from 'class-variance-authority'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import AvailabilityBadge from '@/components/Greenest/ui/AvailabilityBadge'
 import Card, { CardTitle } from '@/components/Greenest/ui/Card'
@@ -22,6 +23,14 @@ export default function LayerPanel({
   overlays,
 }: LayerPanelProps) {
   const { t } = useTranslation()
+  // Descriptions are a tooltip; clicking the info button also pins them open (touch, keyboard).
+  const [infoOpen, setInfoOpen] = useState<Set<EnvironmentLayerId>>(new Set())
+  const toggleInfo = (id: EnvironmentLayerId) =>
+    setInfoOpen(prev => {
+      const next = new Set(prev)
+      if (!next.delete(id)) next.add(id)
+      return next
+    })
 
   return (
     // On wide screens the title stays put and only the list scrolls, inside the card.
@@ -38,6 +47,7 @@ export default function LayerPanel({
           const available = layer.availability !== 'unavailable'
           const on = available && enabled.has(layer.id)
           const overlay = overlays[layer.id]
+          const description = t(`greenest.layers.${layer.id}.description`)
           return (
             <li
               className={cx(
@@ -60,22 +70,34 @@ export default function LayerPanel({
                 <div className="min-w-0 flex-1 space-y-1.5">
                   {/* Badge under the title: long German names leave no room beside it. */}
                   <div className="flex flex-col items-start gap-1">
-                    <label
-                      className={cx(
-                        'block text-sm font-medium',
-                        available
-                          ? 'cursor-pointer text-leaf-ink'
-                          : 'text-leaf-muted/70',
-                      )}
-                      htmlFor={inputId}
-                    >
-                      {t(`greenest.layers.${layer.id}.label`)}
-                    </label>
+                    <div className="flex items-start gap-1.5">
+                      <label
+                        className={cx(
+                          'block text-sm font-medium',
+                          available
+                            ? 'cursor-pointer text-leaf-ink'
+                            : 'text-leaf-muted/70',
+                        )}
+                        htmlFor={inputId}
+                      >
+                        {t(`greenest.layers.${layer.id}.label`)}
+                      </label>
+                      <button
+                        aria-expanded={infoOpen.has(layer.id)}
+                        aria-label={t('greenest.overview.layerInfo')}
+                        className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-leaf-muted/60 text-[10px] font-semibold leading-none text-leaf-muted hover:bg-leaf-sand/40"
+                        onClick={() => toggleInfo(layer.id)}
+                        title={description}
+                        type="button"
+                      >
+                        i
+                      </button>
+                    </div>
                     <AvailabilityBadge availability={layer.availability} />
                   </div>
-                  <p className="text-xs text-leaf-muted">
-                    {t(`greenest.layers.${layer.id}.description`)}
-                  </p>
+                  {infoOpen.has(layer.id) && (
+                    <p className="text-xs text-leaf-muted">{description}</p>
+                  )}
                   {on && overlay?.status === 'loading' && (
                     <p className="text-[11px] text-leaf-muted" role="status">
                       {t('greenest.overview.loadingLayer')}
