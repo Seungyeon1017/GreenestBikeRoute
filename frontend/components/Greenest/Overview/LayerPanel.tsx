@@ -96,7 +96,7 @@ export default function LayerPanel({
                   )}
                   {on && layer.legend.length > 0 && (
                     <ul className="flex flex-col gap-1 pt-1">
-                      {layer.legend.map(({ color, key, label }) => (
+                      {layer.legend.map(({ color, key, label, opacity }) => (
                         <li
                           className="flex items-center gap-2 text-[11px] text-leaf-muted"
                           key={key ?? label}
@@ -104,7 +104,7 @@ export default function LayerPanel({
                           <span
                             aria-hidden
                             className="h-2 w-4 rounded-sm"
-                            style={{ backgroundColor: color }}
+                            style={{ backgroundColor: color, opacity }}
                           />
                           {key
                             ? t(`greenest.layers.${layer.id}.legend.${key}`)

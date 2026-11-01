@@ -58,7 +58,13 @@ export type EnvironmentLayer = {
   colorsStreets?: boolean
   /** Legend entries from best to worst environmental condition. */
   /** `key`: translated under greenest.layers.<id>.legend; without it `label` (numbers only) is shown as is. */
-  legend: Array<{ color: string; label?: string; key?: string }>
+  legend: Array<{
+    color: string
+    label?: string
+    key?: string
+    /** How opaque the layer is drawn on the map, so the swatch looks the same. */
+    opacity?: number
+  }>
 }
 
 /** One ~500 m grid cell of public/map-data/areas.geojson (see scripts/build-map-data.mjs). */

@@ -12,6 +12,10 @@ import type { EnvironmentLayer, EnvironmentLayerId } from '@/types/greenest'
  * on and never show values.
  */
 
+/** How opaque the air-quality cells and the roughness lines are drawn; their legends' swatches match. */
+export const AIR_OPACITY = 0.4
+const ROUGHNESS_OPACITY = 0.85
+
 // Breaks follow the spread of the Heilbronn cells (roughly quintiles), so the
 // colours show relative differences within the city.
 export const PM_RISK_STEPS = [
@@ -46,6 +50,16 @@ const SCORE_STEPS = [
   { color: LIME, max: 85 },
   { color: GREEN, max: Infinity },
 ]
+
+// Colours that the map and a legend both use.
+const BIKE_PATH = '#0f766e'
+const OVERTAKING = '#7b1fa2'
+const SHADED = '#1e3a8a'
+const HALF_SHADED = '#a3a3a3'
+const SUNNY = '#f59e0b'
+const LIT = '#eab308'
+const UNKNOWN_LIT = '#94a3b8'
+const DARK_STREET = '#334155'
 
 /** Line width that grows when zooming in. */
 const LINE_WIDTH = [
@@ -113,17 +127,17 @@ export const OVERLAY_STYLES: Partial<
         16,
         4,
       ] as never,
-      'line-opacity': 0.85,
+      'line-opacity': ROUGHNESS_OPACITY,
     },
   },
   'bike-friendly': {
     type: 'line',
-    paint: { 'line-color': '#0f766e', 'line-width': LINE_WIDTH },
+    paint: { 'line-color': BIKE_PATH, 'line-width': LINE_WIDTH },
   },
   overtaking: {
     type: 'circle',
     paint: {
-      'circle-color': '#7b1fa2',
+      'circle-color': OVERTAKING,
       'circle-radius': [
         'interpolate',
         ['linear'],
@@ -153,7 +167,7 @@ export const OVERLAY_STYLES: Partial<
   shade: {
     type: 'line',
     paint: {
-      'line-color': ramp('shade', 0, '#f59e0b', 0.5, '#a3a3a3', 1, '#1e3a8a'),
+      'line-color': ramp('shade', 0, SUNNY, 0.5, HALF_SHADED, 1, SHADED),
       'line-width': LINE_WIDTH,
     },
   },
@@ -169,15 +183,17 @@ export const OVERLAY_STYLES: Partial<
           ['<', ['get', 'lights_per_100m'], DIM_LIGHTS_PER_100M],
         ],
         DIM,
-        ramp('lit', 0, '#334155', 0.5, '#94a3b8', 1, '#eab308'),
+        ramp('lit', 0, DARK_STREET, 0.5, UNKNOWN_LIT, 1, LIT),
       ] as never,
       'line-width': LINE_WIDTH,
     },
   },
 }
 
-const legendOf = (steps: Array<{ color: string; label: string }>) =>
-  steps.map(({ color, label }) => ({ color, label }))
+const legendOf = (
+  steps: Array<{ color: string; label: string }>,
+  opacity?: number,
+) => steps.map(({ color, label }) => ({ color, label, opacity }))
 
 export const ENVIRONMENT_LAYERS: EnvironmentLayer[] = [
   {
@@ -199,7 +215,7 @@ export const ENVIRONMENT_LAYERS: EnvironmentLayer[] = [
     id: 'air-quality',
     source: 'ATRAI senseBox:bike (danger_zones_PM)',
     availability: 'measured',
-    legend: legendOf(PM_RISK_STEPS),
+    legend: legendOf(PM_RISK_STEPS, AIR_OPACITY),
   },
   {
     id: 'surface-roughness',
@@ -207,7 +223,7 @@ export const ENVIRONMENT_LAYERS: EnvironmentLayer[] = [
     overlay: 'roughness',
     source: 'ATRAI senseBox:bike (bumpy_roads)',
     availability: 'measured',
-    legend: legendOf(ROUGHNESS_STEPS),
+    legend: legendOf(ROUGHNESS_STEPS, ROUGHNESS_OPACITY),
   },
   {
     id: 'bike-friendly',
@@ -215,14 +231,14 @@ export const ENVIRONMENT_LAYERS: EnvironmentLayer[] = [
     overlay: 'bike-friendly-streets',
     source: 'OpenStreetMap contributors (ODbL)',
     availability: 'mapped',
-    legend: [{ color: '#0f766e', key: 'path' }],
+    legend: [{ color: BIKE_PATH, key: 'path' }],
   },
   {
     id: 'overtaking',
     overlay: 'danger',
     source: 'ATRAI senseBox:bike (danger_zones_raw, overtakes over 25 cm)',
     availability: 'measured',
-    legend: [{ color: '#7b1fa2', key: 'close' }],
+    legend: [{ color: OVERTAKING, key: 'close' }],
   },
   {
     id: 'stop-and-go',
@@ -255,9 +271,9 @@ export const ENVIRONMENT_LAYERS: EnvironmentLayer[] = [
     source: 'LGL BW LoD2, Stadt Heilbronn Baumkataster (dl-de/by-2-0)',
     availability: 'estimated',
     legend: [
-      { color: '#1e3a8a', key: 'shaded' },
-      { color: '#a3a3a3', key: 'half' },
-      { color: '#f59e0b', key: 'sunny' },
+      { color: SHADED, key: 'shaded' },
+      { color: HALF_SHADED, key: 'half' },
+      { color: SUNNY, key: 'sunny' },
     ],
   },
   {
@@ -268,10 +284,10 @@ export const ENVIRONMENT_LAYERS: EnvironmentLayer[] = [
       'OpenStreetMap (ODbL), Mapillary (CC BY-SA 4.0), LGL BW LoD2 (dl-de/by-2-0)',
     availability: 'estimated',
     legend: [
-      { color: '#eab308', key: 'lit' },
+      { color: LIT, key: 'lit' },
       { color: DIM, key: 'dim' },
-      { color: '#94a3b8', key: 'unknown' },
-      { color: '#334155', key: 'dark' },
+      { color: UNKNOWN_LIT, key: 'unknown' },
+      { color: DARK_STREET, key: 'dark' },
     ],
   },
   {

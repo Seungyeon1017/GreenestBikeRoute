@@ -9,7 +9,12 @@ import { segmentLabels } from '@/components/Greenest/PlanTrip/routeSegments'
 import { type OverlayState, SHADE_HOUR } from '@/hooks/useOverlays'
 import type { OverviewData } from '@/services/mapData'
 import type { EnvironmentLayerId } from '@/types/greenest'
-import { OVERLAY_STYLES, PM_RISK_STEPS, stepColor } from './layers'
+import {
+  AIR_OPACITY,
+  OVERLAY_STYLES,
+  PM_RISK_STEPS,
+  stepColor,
+} from './layers'
 import { type StreetLabels, streetPopup } from './streetPopup'
 
 /** What the map picks: a grid cell, or a street of the street layer that is switched on. */
@@ -63,7 +68,7 @@ function addLayers(map: MapLibreMap, data: OverviewData) {
     filter: ['!=', ['get', 'pm_risk'], null],
     paint: {
       'fill-color': stepColor('pm_risk', PM_RISK_STEPS),
-      'fill-opacity': 0.4,
+      'fill-opacity': AIR_OPACITY,
       'fill-outline-color': 'rgba(255,255,255,0.6)',
     },
   })
