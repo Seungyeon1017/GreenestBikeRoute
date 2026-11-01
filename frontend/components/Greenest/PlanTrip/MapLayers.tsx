@@ -98,7 +98,7 @@ export default function MapLayers({
 
   return (
     // Bottom left: MapLibre's attribution takes the bottom right corner.
-    <div className="pointer-events-none absolute inset-x-2.5 bottom-2.5 z-10 flex flex-wrap-reverse items-end gap-2 pr-8">
+    <div className="pointer-events-none absolute inset-x-2.5 bottom-2.5 z-10 flex flex-wrap-reverse items-start gap-2 pr-8">
       <div className="pointer-events-auto relative" ref={ref}>
         {open && (
           <div className="absolute bottom-full left-0 mb-2 flex w-72 flex-col gap-3 rounded-2xl border border-leaf-sand bg-white p-3 shadow-soft">
@@ -141,8 +141,17 @@ export default function MapLayers({
           {t('greenest.planTrip.layers.button')}
         </button>
       </div>
-      {/* Hidden while the panel is open: on phones they wrap above the button, where the panel opens. */}
-      {!open && children}
+      {/*
+        Hidden while the panel is open, as it opens over them. The group sits beside the button;
+        below 14rem of room it takes its own row above the button instead of being squeezed, and
+        its blocks wrap upwards from a common left edge. wrap-reverse flips the cross axis, so
+        items-start lines each row up at its bottom.
+      */}
+      {!open && (
+        <div className="flex min-w-0 flex-[1_1_14rem] flex-wrap-reverse items-start gap-2 [&>*]:max-w-full">
+          {children}
+        </div>
+      )}
     </div>
   )
 }
