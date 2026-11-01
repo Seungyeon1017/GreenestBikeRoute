@@ -230,47 +230,86 @@
     "layers": {
       "air-quality": {
         "label": "Air quality",
-        "description": "Traffic and fine-dust risk index measured on bike rides, averaged per 500 m area."
+        "description": "Traffic and fine-dust risk index measured on bike rides, averaged per 500 m area.",
+        "unit": "risk index 0–1"
       },
       "surface-roughness": {
         "label": "Surface roughness",
-        "description": "How bumpy the road surface is, measured by sensor bikes."
+        "description": "How bumpy the road surface is, measured by sensor bikes.",
+        "unit": "roughness 0–100"
       },
       "noise": {
         "label": "Noise pollution",
-        "description": "No noise dataset connected yet."
+        "description": "No noise dataset connected yet.",
+        "unit": "dB(A)"
       },
       "green-spaces": {
         "label": "Green spaces & trees",
-        "description": "No green-space dataset connected yet."
+        "description": "No green-space dataset connected yet.",
+        "unit": "% green cover"
       },
       "environmental-score": {
         "label": "Overall score",
-        "description": "How good each street feels to ride (0–100, higher is better): traffic (road type, speed limit, bike lanes), smooth surface, safe overtaking, clean air, few stops. Faded streets have no sensor-bike data yet."
+        "description": "How good each street feels to ride (0–100, higher is better): traffic (road type, speed limit, bike lanes), smooth surface, safe overtaking, clean air, few stops. Faded streets have no sensor-bike data yet.",
+        "unit": "score 0–100 (higher = better)",
+        "legend": {
+          "top": "75–100 (calm, smooth)",
+          "faded": "faded: no sensor bike rode it yet"
+        }
       },
       "bike-friendly": {
         "label": "Bike paths & lanes",
-        "description": "Bike paths and lanes, footways and tracks open to bikes, and signposted bike routes from OpenStreetMap."
+        "description": "Bike paths and lanes, footways and tracks open to bikes, and signposted bike routes from OpenStreetMap.",
+        "legend": {
+          "path": "bike path or lane, way open to bikes, or bike route"
+        }
       },
       "overtaking": {
         "label": "Close overtaking",
-        "description": "Spots where cars overtook bikes closely, measured by sensor bikes."
+        "description": "Spots where cars overtook bikes closely, measured by sensor bikes.",
+        "unit": "risk index 0–1",
+        "legend": {
+          "close": "close overtake (darker = riskier)"
+        }
       },
       "stop-and-go": {
         "label": "Stop-and-go",
-        "description": "How often bikes have to slow down or stop, e.g. at traffic lights."
+        "description": "How often bikes have to slow down or stop, e.g. at traffic lights.",
+        "unit": "stop-and-go 0–1",
+        "legend": {
+          "free": "0.4 or less (rolls freely)",
+          "stopping": "0.8 or more (much stopping)"
+        }
       },
       "speed": {
         "label": "Cycling speed",
-        "description": "Average speed bikes were measured at, waits included."
+        "description": "Average speed bikes were measured at, waits included.",
+        "unit": "km/h",
+        "legend": {
+          "fast": "20 km/h or more",
+          "slow": "8 km/h or less"
+        }
       },
       "shade": {
         "label": "Shade",
-        "description": "Share of each street in building or tree shade on a summer afternoon."
+        "description": "Share of each street in building or tree shade on a summer afternoon.",
+        "unit": "share in shade, {{hour}}:00 on 21 July",
+        "legend": {
+          "shaded": "mostly shaded",
+          "half": "half",
+          "sunny": "mostly sunny"
+        }
       },
       "lighting": {
         "label": "Street lighting",
-        "description": "How likely each street is to be lit at night, and where few street lamps were seen."
+        "description": "How likely each street is to be lit at night, and where few street lamps were seen.",
+        "unit": "chance the street is lit 0–1",
+        "legend": {
+          "lit": "probably lit",
+          "dim": "dimly lit (few lamps seen)",
+          "unknown": "unknown",
+          "dark": "probably dark"
+        }
       }
     },
     "overview": {
@@ -309,7 +348,7 @@
       "title": "Find your greenest route",
       "subtitle": "Compare the shortest route with a route planned around what you care about: smooth streets, safe overtaking, clean air and fewer stops.",
       "greenTerm": "greenest",
-      "greenNote":"\"Greenest\" doesn't mean the route with the lowest emissions: every bike ride is emission-free. It means the route you're most comfortable riding, so you'll choose the bike over the car more often, which helps reduce emissions.",
+      "greenNote": "\"Greenest\" doesn't mean the route with the lowest emissions: every bike ride is emission-free. It means the route you're most comfortable riding, so you'll choose the bike over the car more often, which helps reduce emissions.",
       "greenNoteSoon": "Coming soon: an option to route you past the most trees and parks, for a ride that's literally green.",
       "formTitle": "Your trip",
       "clickHint": "Search for a place, or click the map: first the start, then the destination.",
@@ -359,7 +398,7 @@
         "scales": "Roughness 0–100 · fine dust 0.5 = usual, higher = more dust · stop-and-go, shade and lit 0–1 (share of the way) · kcal a rough estimate.",
         "tips": {
           "duration": "Calculated with the speeds cyclists were measured at.",
-        "roughnessRoute":"{{measured}} measured, {{estimated}} estimated, {{unknown}} unknown",
+          "roughnessRoute": "{{measured}} measured, {{estimated}} estimated, {{unknown}} unknown",
           "roughness": "Estimated from nearby measured streets where sensor bikes didn’t ride.",
           "kcalRoute": "includes {{m}} m of climbing",
           "kcalNoHeight": "no height data, climbs not counted",

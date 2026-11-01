@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import AvailabilityBadge from '@/components/Greenest/ui/AvailabilityBadge'
 import Card, { CardTitle } from '@/components/Greenest/ui/Card'
 import InfoTip from '@/components/Greenest/ui/InfoTip'
+import { SHADE_HOUR } from '@/hooks/useOverlays'
 import type { OverlayState } from '@/hooks/useOverlays'
 import type { EnvironmentLayer, EnvironmentLayerId } from '@/types/greenest'
 
@@ -95,24 +96,34 @@ export default function LayerPanel({
                   )}
                   {on && layer.legend.length > 0 && (
                     <ul className="flex flex-col gap-1 pt-1">
-                      {layer.legend.map(({ color, label }) => (
+                      {layer.legend.map(({ color, key, label }) => (
                         <li
                           className="flex items-center gap-2 text-[11px] text-leaf-muted"
-                          key={label}
+                          key={key ?? label}
                         >
                           <span
                             aria-hidden
                             className="h-2 w-4 rounded-sm"
                             style={{ backgroundColor: color }}
                           />
-                          {label}
+                          {key
+                            ? t(`greenest.layers.${layer.id}.legend.${key}`)
+                            : label}
                         </li>
                       ))}
                     </ul>
                   )}
                   {on && (
                     <p className="text-[11px] text-leaf-muted/70">
-                      {[layer.unit, layer.source].filter(Boolean).join(' · ')}
+                      {[
+                        t(`greenest.layers.${layer.id}.unit`, {
+                          hour: SHADE_HOUR,
+                          defaultValue: '',
+                        }),
+                        layer.source,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </p>
                   )}
                 </div>
