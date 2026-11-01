@@ -41,10 +41,9 @@ export default function LayerPanel({
           const overlay = overlays[layer.id]
           const name = t(`greenest.layers.${layer.id}.label`)
           return (
-            // relative: the info panel spans this row.
             <li
               className={cx(
-                'relative rounded-xl border p-3',
+                'rounded-xl border p-3',
                 on
                   ? 'border-leaf-sage/60 bg-leaf-mint/60'
                   : 'border-leaf-sand/70',
@@ -76,6 +75,7 @@ export default function LayerPanel({
                         {name}
                       </label>
                       <InfoTip
+                        anchored
                         label={t('greenest.planTrip.info.about', { name })}
                       >
                         {t(`greenest.layers.${layer.id}.description`)}
