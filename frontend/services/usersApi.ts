@@ -30,6 +30,9 @@ function errorMessage(detail: unknown, status: number): string {
   return `Request failed with status ${status}`
 }
 
+/** Fired on window when the backend rejects a token we sent (expired or invalid). AuthProvider logs out on it. */
+export const SESSION_EXPIRED_EVENT = 'greenest:session-expired'
+
 /** fetch() against the backend, with the login token if there is one. Throws GreenestApiError. */
 export async function request<T>(
   path: string,
@@ -49,6 +52,9 @@ export async function request<T>(
     throw new GreenestApiError(
       `The backend at ${GREENEST_API_URL} is not reachable.`,
     )
+  }
+  if (response.status === 401 && token) {
+    window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))
   }
   if (!response.ok) {
     const body = await response.json().catch(() => null)

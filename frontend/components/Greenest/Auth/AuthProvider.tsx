@@ -12,6 +12,7 @@ import {
   logIn as apiLogIn,
   signUp as apiSignUp,
   fetchMe,
+  SESSION_EXPIRED_EVENT,
 } from '@/services/usersApi'
 import type { User } from '@/types/users'
 
@@ -93,6 +94,13 @@ export default function AuthProvider({
     // Expired or invalid (e.g. after the server's secret changed): just log out.
     acceptToken(stored).catch(logOut)
   }, [acceptToken, logOut])
+
+  // The token is only checked on page load, but it expires (60 min) while the page stays open.
+  // Any later request the backend answers with 401 ends the session here too.
+  useEffect(() => {
+    window.addEventListener(SESSION_EXPIRED_EVENT, logOut)
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, logOut)
+  }, [logOut])
 
   const logIn = useCallback(
     async (email: string, password: string) => {
