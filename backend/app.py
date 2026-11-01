@@ -1,5 +1,6 @@
 """HTTP API for the bike router. From the repo root: uvicorn backend.app:app"""
 import json
+import threading
 from contextlib import asynccontextmanager
 from datetime import datetime
 from functools import cache
@@ -28,7 +29,8 @@ from routing.graph import load_graph
 from routing.highlights import greenest_streets
 from routing.tours import plan_tours
 from routing.footways import Footways
-from routing.route import RouteError, compare_routes, day_routes, edge_coords, find_route, nearest_street, segment_id, set_closures, street_label,     street_name, sky, way_label
+from routing.route import RouteError, compare_routes, day_routes, edge_coords, find_route, nearest_street, segment_id, set_closures, \
+    name_streets, street_lines, street_name, sky, way_label, way_lines
 from routing.score import street_scores
 from routing.sharing_trip import WalkNetwork, load_walk_graph, plan_sharing_trip
 
@@ -39,12 +41,13 @@ class GeoJSONResponse(JSONResponse):
 
 def atrai_streets(G, name, key, value, convert=lambda x: x):
     """The street segments of ATRAI dataset `name` that have property `key`, trimmed to geometry + `value`: convert(it)
-    + the street's name, way and along (routing.route.way_label, from its OSM way)."""
+    + the street's name, way and along (routing.route.way_lines, from its OSM way): one line per name, so a segment
+    merged from ways with different names is several lines with the same value."""
     features = [
-        {"type": "Feature", "geometry": f["geometry"], "properties": {
-            value: convert(p[key]),
-            **way_label(G, p["osmid"], f["geometry"]["coordinates"], p.get("name"))}}
+        {"type": "Feature", "geometry": {"type": "LineString", "coordinates": coords},
+         "properties": {value: convert(p[key]), **label}}
         for f in load_features(name) if (p := f["properties"]).get(key) is not None
+        for coords, label in way_lines(G, p["osmid"], f["geometry"]["coordinates"], p.get("name"))
     ]
     return {"type": "FeatureCollection", "features": features}
 
@@ -125,19 +128,17 @@ def mapping_feature(report):
 def street_collection(G, key, *extra):
     """The graph's streets with a value for edge attribute `key`, each street once (a two-way street is two edges),
     trimmed to geometry + that value (+ the `extra` attributes the edge has a value for) + name, way and along
-    (routing.route.street_label)."""
+    (routing.route.street_lines): one line per name."""
     features, seen = [], set()
     for u, v, d in G.edges(data=True):
         street = (min(u, v), max(u, v), str(d["osmid"]), round(float(d["length"]), 1))
         if d.get(key) is None or street in seen:
             continue
         seen.add(street)
-        coords = [[round(x, 6), round(y, 6)] for x, y in edge_coords(G, u, v, d)]
         value = [round(x, 2) for x in d[key]] if isinstance(d[key], list) else round(d[key], 2)
-        properties = {key: value, **{k: round(d[k], 2) for k in extra if d.get(k) is not None},
-                      **street_label(G, u, v, d)}
-        features.append({"type": "Feature", "geometry": {"type": "LineString", "coordinates": coords},
-                         "properties": properties})
+        values = {key: value, **{k: round(d[k], 2) for k in extra if d.get(k) is not None}}
+        features += [{"type": "Feature", "geometry": {"type": "LineString", "coordinates": coords},
+                      "properties": {**values, **label}} for coords, label in street_lines(G, u, v, d)]
     return {"type": "FeatureCollection", "features": features}
 
 
@@ -365,6 +366,8 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
         app.state.footways = footways if footways is not None else Footways()  # written with the graph, so after it
         if graph is None:  # the live API: no first /route/sharing waits ~2.5 s for the walking graph
             app.state.walk = WalkNetwork(walk_graph if walk_graph is not None else load_walk_graph())
+            # Nor does the first street overlay wait ~15 s for the street names.
+            threading.Thread(target=name_streets, args=(app.state.graph,), daemon=True).start()
         yield
         if live_sharing:
             sharing.stop()

@@ -1,13 +1,17 @@
 from datetime import datetime, timezone
 
+import math
+
 import networkx as nx
 import pytest
+from shapely import LineString
 
 from routing import graph
 from routing.calories import DEFAULT_WEIGHT_KG, ride_kcal, walk_kcal
 from routing.costs import AIR_HOTSPOT_OFFSET, AIR_PRIOR_RIDES
 from routing.graph import AIR_NEAR_M, AIR_NEAR_PRIOR, attach_bike_friendly, attach_bike_lanes, attach_danger, attach_nearby_air, attach_surface, attach_lighting, attach_roughness, attach_shade, attach_speed, attach_stop_go
-from routing.route import WALK_KMH, RouteError, compare_routes, day_routes, find_route, sky, street_label, way_label
+from routing.route import WALK_KMH, RouteError, compare_routes, day_routes, find_route, sky, street_label, street_parts, \
+    way_label, way_lines
 from tests.conftest import COORDS, A, B, C
 
 
@@ -498,17 +502,98 @@ def test_map_lines_are_named_like_route_stretches():
     assert way_label(G, 99, far) == {"name": None, "way": None, "along": False}
 
 
-def test_a_line_merged_from_several_ways_takes_the_name_of_the_way_covering_most_of_it():
-    G, _ = sidewalk_graph()
-    # r1 -> r2 is 146 m: its first 29 m are way 1 "Allee", the rest way 5 "Brücke"; the list's order means nothing.
-    G.graph["named_ways"] = {1: ("Allee", {"highway": "residential"}, [(9.2100, 49.1400), (9.2104, 49.1400)]),
-                             5: ("Brücke", {"highway": "residential"}, [(9.2104, 49.1400), (9.2120, 49.1400)])}
-    for u, v in (("r1", "r2"), ("r2", "r1")):
-        G.edges[u, v, 0].update(osmid=[1, 5], name=["Allee", "Brücke"])
-    assert street_label(G, "r1", "r2", G.edges["r1", "r2", 0])["name"] == "Brücke"
-    road = [(9.2100, 49.1400), (9.2120, 49.1400)]
-    assert way_label(G, "[1, 5]", road, "['Allee', 'Brücke']")["name"] == "Brücke"
-    assert way_label(G, 1, road[:1] + [(9.2104, 49.1400)])["name"] == "Allee"
+def test_a_line_merged_from_several_ways_is_cut_into_one_part_per_name():
+    # A 146 m street: its first 29 m are way 1 "Allee", the rest way 5 "Brücke"; the list's order means nothing.
+    G = ways_graph((1, [(0, 0), (29, 0), (146, 0)], {**ROAD, "name": ["Allee", "Brücke"]}))
+    road = [lonlat(0, 0), lonlat(29, 0), lonlat(146, 0)]
+    G.graph["named_ways"] = {1: ("Allee", ROAD, road[:2]), 5: ("Brücke", ROAD, road[1:])}
+    for u, v in ((10, 11), (11, 10)):
+        G.edges[u, v, 0].update(osmid=[1, 5], danger_points=2)
+    d = G.edges[10, 11, 0]
+    assert [(a, b, label["name"]) for a, b, label in street_parts(G, 10, 11, d)] == [(0, 1, "Allee"), (1, 2, "Brücke")]
+    assert street_label(G, 10, 11, d)["name"] == "Brücke"  # the longer part names the street as a whole
+    assert [label["name"] for _, label in way_lines(G, "[5, 1]", road, "['Brücke', 'Allee']")] == ["Allee", "Brücke"]
+    # A route over it has a stretch of each, with the street's close-overtaking spots counted once.
+    start, end = lonlat(0, 0)[::-1], lonlat(146, 0)[::-1]
+    stretches = find_route(G, start, end, 0)["features"][0]["properties"]["segments"]
+    assert [(s["name"], round(s["length_m"])) for s in stretches] == [("Allee", 29), ("Brücke", 117)]
+    assert sum(s["danger_points"] for s in stretches) == 2
+
+
+def lonlat(x, y):
+    """(lon, lat) of the point x m east and y m north of (9.21, 49.14)."""
+    return 9.21 + x / (111_320 * math.cos(math.radians(49.14))), 49.14 + y / 111_320
+
+
+def ways_graph(*ways):
+    """A graph of ways (osmid, [(x, y) in metres, see lonlat], tags), each one edge in both directions."""
+    G = nx.MultiDiGraph(crs="epsg:4326")
+    for osmid, pts, tags in ways:
+        line = LineString([lonlat(*p) for p in pts])
+        a, b = 10 * osmid, 10 * osmid + 1
+        for n, (x, y) in ((a, line.coords[0]), (b, line.coords[-1])):
+            G.add_node(n, x=x, y=y)
+        length = sum(math.dist(p, q) for p, q in zip(pts[:-1], pts[1:]))
+        G.add_edge(a, b, osmid=osmid, length=length, roughness=None, geometry=line, **tags)
+        G.add_edge(b, a, osmid=osmid, length=length, roughness=None, geometry=LineString(line.coords[::-1]), **tags)
+    return G
+
+
+def label_of(G, osmid):
+    return street_label(G, 10 * osmid, 10 * osmid + 1, G.edges[10 * osmid, 10 * osmid + 1, 0])
+
+
+ROAD, PATH = {"highway": "residential"}, {"highway": "path"}
+
+
+def test_a_path_takes_the_road_it_runs_beside_for_most_of_its_length():
+    # Allee runs beside all of the path, 15 m away; Brückenweg, 5 m away, only beside its last half.
+    G = ways_graph((1, [(-50, 0), (150, 0)], {**ROAD, "name": "Allee"}),
+                   (2, [(60, 20), (150, 20)], {**ROAD, "name": "Brückenweg"}),
+                   (3, [(0, 15), (100, 15)], PATH))
+    assert label_of(G, 3) == {"name": "Allee", "way": "path", "along": True}
+
+
+def test_a_path_mostly_away_from_the_road_is_not_named_after_it():
+    G = ways_graph((1, [(75, 0), (200, 0)], {**ROAD, "name": "Allee"}),  # beside the last ~40% of the path only
+                   (2, [(0, 10), (100, 10)], PATH),
+                   (3, [(0, -10), (100, -10)], {"highway": "service"}))
+    assert label_of(G, 2)["name"] is None
+    assert label_of(G, 3)["name"] == "Allee"  # an access road may turn off the road it serves
+
+
+def test_a_park_path_behind_the_sidewalk_is_not_named_after_the_road():
+    G = ways_graph((1, [(0, 0), (100, 0)], {**ROAD, "name": "Allee"}),
+                   (2, [(0, 6), (100, 6)], {"highway": "footway", "footway": "sidewalk"}),
+                   (3, [(0, 15), (100, 15)], PATH))
+    assert label_of(G, 2)["name"] == "Allee"
+    assert label_of(G, 3)["name"] is None
+
+
+def test_sidewalks_of_main_roads_may_run_further_from_its_centre_line():
+    G = ways_graph((1, [(0, 0), (100, 0)], {"highway": "primary", "name": "Neckartalstraße"}),
+                   (2, [(0, 25), (100, 25)], PATH),
+                   (3, [(0, 500), (100, 500)], {**ROAD, "name": "Allee"}),
+                   (4, [(0, 525), (100, 525)], PATH))
+    assert label_of(G, 2)["name"] == "Neckartalstraße"
+    assert label_of(G, 4)["name"] is None  # 25 m from a residential street
+
+
+def test_an_unnamed_road_beside_a_named_one_is_shown_as_a_slip_road_or_carriageway():
+    G = ways_graph((1, [(0, 0), (100, 0)], {"highway": "primary", "name": "Saarlandstraße"}),
+                   (2, [(0, 8), (100, 8)], {"highway": "primary_link"}),
+                   (3, [(0, -8), (100, -8)], {"highway": "primary"}))
+    assert label_of(G, 2) == {"name": "Saarlandstraße", "way": "link", "along": True}
+    assert label_of(G, 3) == {"name": "Saarlandstraße", "way": "road", "along": True}
+
+
+def test_a_short_piece_between_two_roads_alike_is_named_after_both():
+    G = ways_graph((1, [(0, 0), (100, 0)], {**ROAD, "name": "Moltkestraße"}),
+                   (2, [(0, 16), (100, 16)], {**ROAD, "name": "Allee"}),
+                   (3, [(40, 8), (50, 8)], PATH),
+                   (4, [(20, 8), (80, 8)], PATH))
+    assert label_of(G, 3)["name"] == "Allee / Moltkestraße"
+    assert label_of(G, 4)["name"] == "Allee"  # longer: one of them
 
 
 def test_a_sidewalk_takes_the_name_of_a_road_bikes_may_not_ride():

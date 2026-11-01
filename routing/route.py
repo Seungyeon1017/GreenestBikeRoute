@@ -330,13 +330,31 @@ def route_duration(G, edges, scooter=False):
 ROAD_HIGHWAYS = {"motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential",
                  "living_street", "service", "motorway_link", "trunk_link", "primary_link", "secondary_link",
                  "tertiary_link"}
-# An unnamed way runs beside a named road when at least 2 of 3 points along it are this close to the road and head the
-# same way (either direction) to within this angle; a crossing takes the road it crosses within CROSSING_M.
+# Main roads are wide (several lanes, tram tracks, parking), so their sidewalks run further from OSM's centre line.
+MAIN_ROADS = {"motorway", "trunk", "primary", "secondary", "tertiary", "motorway_link", "trunk_link", "primary_link",
+              "secondary_link", "tertiary_link"}
+# An unnamed way runs beside a named road where it is within ALONG_M of it (MAIN_ALONG_M of a main road) and heads the
+# same way (either direction) to within ALONG_DEG, checked every ALONG_STEP_M (at most ALONG_POINTS times, spread
+# evenly). It takes the name of the road it runs beside for most of its length, if that is at least MIN_ALONG_SHARE of
+# it (MIN_ALONG_SHARE_ACCESS for an access road or farm track, which may turn off it). A crossing takes the road it
+# crosses within CROSSING_M.
 ALONG_M = 20
+MAIN_ALONG_M = 30
 ALONG_DEG = 25
+ALONG_STEP_M = 2
+ALONG_POINTS = 25
+MIN_ALONG_SHARE = 0.5
+MIN_ALONG_SHARE_ACCESS = 1 / 3
 CROSSING_M = 3
-# The kind of way a stretch is on, from its OSM tags, in this order; null for an ordinary road.
+# A way shorter than CORNER_M beside two roads for about as much of it (to within CORNER_MARGIN of its length), e.g.
+# a sidewalk round a corner, is named after both: "A / B".
+CORNER_M = 15
+CORNER_MARGIN = 0.1
+# The kind of way a stretch is on, from its OSM tags, in this order; "link" for a slip road (highway=*_link), "road"
+# for an unnamed road named after the one beside it (see _label); null for an ordinary road.
 WAY_KINDS = ("crossing", "sidewalk", "cycleway", "footway", "path", "track", "service", "pedestrian")
+# Ways that are a sidewalk or path: not named after a road when another of them runs between it and the road.
+PATH_KINDS = {"sidewalk", "footway", "path", "cycleway"}
 
 
 def _tags(d, key):
@@ -345,46 +363,94 @@ def _tags(d, key):
 
 
 def way_kind(d):
-    """What kind of way the edge is (WAY_KINDS), from highway=* and footway=*; None for an ordinary road."""
+    """What kind of way the edge is (WAY_KINDS, or "link" for a slip road), from highway=* and footway=*; None for an
+    ordinary road."""
     tags = _tags(d, "highway") | _tags(d, "footway")
-    return next((kind for kind in WAY_KINDS if kind in tags), None)
+    kind = next((kind for kind in WAY_KINDS if kind in tags), None)
+    return "link" if kind is None and any(t.endswith("_link") for t in _tags(d, "highway")) else kind
 
 
 class _NamedRoads:
     """The named roads (ROAD_HIGHWAYS) as lines in metres around the graph's mean latitude, in an STRtree: the graph's
     with one name (one merged from several ways may run beside a path under either), plus every OSM road of
     G.graph["named_ways"] (routing.named_roads) with its own name, also those bikes may not ride that the graph
-    leaves out."""
+    leaves out. And the graph's sidewalks and paths (PATH_KINDS), to see whether one runs between a way and a road."""
 
     def __init__(self, G):
         self.plane = _Plane(sum(y for _, y in G.nodes(data="y")) / G.number_of_nodes())
-        roads = [(d["name"], _edge_line(G, u, v, d)) for u, v, d in G.edges(data=True)
+        roads = [(d["name"], _tags(d, "highway"), _edge_line(G, u, v, d)) for u, v, d in G.edges(data=True)
                  if isinstance(d.get("name"), str) and d["name"] and _tags(d, "highway") & ROAD_HIGHWAYS]
-        roads += [(name, LineString(coords)) for name, tags, coords in G.graph.get("named_ways", {}).values()
+        roads += [(name, _tags(tags, "highway"), LineString(coords))
+                  for name, tags, coords in G.graph.get("named_ways", {}).values()
                   if _tags(tags, "highway") & ROAD_HIGHWAYS]
-        self.names = [name for name, _ in roads]
-        self.lines = [self.plane.to_m(line) for _, line in roads]
+        self.names = [name for name, *_ in roads]
+        self.wide = [bool(highways & MAIN_ROADS) for _, highways, _ in roads]
+        self.lines = [self.plane.to_m(line) for *_, line in roads]
         self.tree = STRtree(self.lines)
+        paths = {(min(u, v), max(u, v), str(d["osmid"])): _edge_line(G, u, v, d) for u, v, d in G.edges(data=True)
+                 if not isinstance(u, str) and not isinstance(v, str) and way_kind(d) in PATH_KINDS}
+        self.paths = [self.plane.to_m(line) for line in paths.values()]
+        self.path_tree = STRtree(self.paths)
 
-    def along(self, line, crossing=False):
-        """Name of the road the line (lon, lat) runs beside, or for a crossing the road it crosses; None if none."""
+    def along(self, line, way=None):
+        """Name of the road a way of kind `way` (way_kind) runs beside, line (lon, lat), or for a crossing the road it
+        crosses; "A / B" for a short piece beside two roads alike; None if none."""
         line = self.plane.to_m(line)
-        found = self.tree.query(line, predicate="dwithin", distance=CROSSING_M if crossing else ALONG_M)
-        if crossing or not len(found):
+        if way == "crossing":
+            found = self.tree.query(line, predicate="dwithin", distance=CROSSING_M)
             return min(((line.distance(self.lines[i]), self.names[i]) for i in found), default=(0, None))[1]
-        samples = [line.interpolate(f, normalized=True) for f in (0.2, 0.5, 0.8)]
-        headings = [_heading(line, p) for p in samples]
-        best = {}
-        for i in found:
-            road, matched, metres = self.lines[i], 0, 0.0
-            for p, heading in zip(samples, headings):
-                dist = road.distance(p)
+        found = self.tree.query(line, predicate="dwithin", distance=MAIN_ALONG_M)
+        if not len(found):
+            return None
+        n = min(max(round(line.length / ALONG_STEP_M), 2), ALONG_POINTS)
+        points = [line.interpolate(k / n, normalized=True) for k in range(n + 1)]
+        beside, metres = {}, {}
+        for p in points:
+            heading, near = _heading(line, p), {}
+            for i in found:
+                road, dist = self.lines[i], self.lines[i].distance(p)
+                if dist > (MAIN_ALONG_M if self.wide[i] else ALONG_M):
+                    continue
                 turn = abs(heading - _heading(road, p)) % 180
-                if dist <= ALONG_M and min(turn, 180 - turn) <= ALONG_DEG:
-                    matched, metres = matched + 1, metres + dist
-            if matched >= 2:
-                best[self.names[i]] = max(best.get(self.names[i], (0, 0.0)), (matched, -metres))
-        return max(best, key=best.get, default=None)
+                if min(turn, 180 - turn) <= ALONG_DEG:
+                    near[self.names[i]] = min(near.get(self.names[i], dist), dist)
+            for name, dist in near.items():
+                beside[name] = beside.get(name, 0) + 1
+                metres[name] = metres.get(name, 0.0) + dist
+        ranked = sorted(beside, key=lambda name: (-beside[name], metres[name], name))
+        if not ranked:
+            return None
+        name = ranked[0]
+        if beside[name] < len(points) * (MIN_ALONG_SHARE_ACCESS if way in ("service", "track") else MIN_ALONG_SHARE):
+            return None
+        if way in PATH_KINDS and self._path_between(line, [self.lines[i] for i in found if self.names[i] == name]):
+            return None
+        if line.length < CORNER_M and len(ranked) > 1 and beside[ranked[1]] >= beside[name] - CORNER_MARGIN * len(points):
+            return f"{name} / {ranked[1]}"
+        return name
+
+    def _path_between(self, line, roads):
+        """Whether another sidewalk or path (heading the road's way) runs between `line` and the nearest of `roads`
+        (all in metres) at each of the points checked along it, and at least two: then it is a path of its own."""
+        hits = checks = 0
+        for f in (0.25, 0.5, 0.75):
+            p = line.interpolate(f, normalized=True)
+            road = min(roads, key=lambda r: r.distance(p))
+            q = road.interpolate(road.project(p))
+            if p.distance(q) < 4:
+                continue  # no room for a path between
+            checks += 1
+            gap = LineString([p, q])
+            for j in self.path_tree.query(gap, predicate="intersects"):
+                crossing = self.paths[j].intersection(gap)
+                at = crossing if crossing.geom_type == "Point" else crossing.representative_point()
+                if at.distance(p) < 1.5:
+                    continue  # the way itself, or a path joining it there
+                turn = abs(_heading(self.paths[j], at) - _heading(road, q)) % 180
+                if min(turn, 180 - turn) <= ALONG_DEG:
+                    hits += 1
+                    break
+        return checks >= 2 and hits == checks
 
 
 def _heading(line, point):
@@ -417,71 +483,125 @@ def street_name(G, u, v, d):
 
 
 def _label(G, name, way, line):
-    beside = None if name else _named_roads(G).along(line, crossing=way == "crossing")
+    """How the map names a line (lon, lat) with its own `name` and kind `way`: a way without a name takes the road's it
+    runs beside (`along`); an ordinary road then counts as "road", so the map doesn't show it as that road itself."""
+    beside = None if name else _named_roads(G).along(line, way)
+    if beside is not None and way is None:
+        way = "road"
     return {"name": name or beside, "way": way, "along": beside is not None}
 
 
-# How far (m) from a line one of its OSM ways may run and still count as covering it, for _main_way.
-COVER_M = 3
-
-
-def _main_way(G, ids, coords):
-    """Of OSM ways `ids` that a line [(lon, lat)] was merged from, the one covering most of it, from the ways'
-    own geometry (G.graph["named_ways"], routing.named_roads); the first if there is only one, or none is known."""
-    known = G.graph.get("named_ways", {})
-    if len(ids) < 2 or not any(i in known for i in ids):
-        return ids[0]
-    plane = _named_roads(G).plane
-    line = plane.to_m(LineString(coords))
-    return max(ids, key=lambda i: line.intersection(plane.to_m(LineString(known[i][2])).buffer(COVER_M)).length
-               if i in known else -1.0)
-
-
-def _own_name(G, d, ids, coords):
-    """The name of a line from OSM ways `ids` with tags `d`: a line merged from ways with different names (a list,
-    in no particular order) takes the name of the way covering most of it."""
+def _names(d):
+    """An edge's OSM names: one merged from several ways has a list (in ATRAI data its "['a', 'b']")."""
     name = d.get("name")
     if isinstance(name, str) and name.startswith("["):
         name = ast.literal_eval(name)
-    if not isinstance(name, list):
-        return name or None
-    main = G.graph.get("named_ways", {}).get(_main_way(G, ids, coords))
-    return main[0] if main else name[0]
+    return [n for n in (name if isinstance(name, list) else [name]) if n]
 
 
-# street_label per graph and street, for the overlays (and every /score) that name all ~22,000 streets: ~6 s once.
-_LABELS = weakref.WeakKeyDictionary()
+# How far (m) a line's vertices may lie from the OSM way they come from: the same points, rounded. A step of a line
+# whose vertices aren't OSM's (ATRAI cuts its own) takes the nearest of its ways within NEAR_WAY_M of its middle.
+ON_WAY_M = 1
+NEAR_WAY_M = 5
 
 
-def _edge_label(G, u, v, d):
-    coords = list(_edge_line(G, u, v, d).coords)
-    return _label(G, _own_name(G, d, osm_way_ids(d["osmid"]), coords), way_kind(d), LineString(coords))
+def _way_runs(G, ids, coords):
+    """A line [(lon, lat)] merged from OSM ways `ids`, cut where one way ends and the next begins (a vertex of the
+    line): [(first vertex, last vertex, name, way kind)], name None on a way without one (not in G.graph["named_ways"],
+    routing.named_roads). None if none of the ways is known."""
+    known = G.graph.get("named_ways", {})
+    plane = _named_roads(G).plane
+    ways = [(known[i][0], way_kind(known[i][1]), plane.to_m(LineString(known[i][2]))) for i in ids if i in known]
+    if not ways:
+        return None
+    points = [Point(plane.to_m_point(*c)) for c in coords]
+    runs = []
+    for k, (a, b) in enumerate(zip(points[:-1], points[1:])):
+        mid = Point((a.x + b.x) / 2, (a.y + b.y) / 2)
+        on = [(line.distance(mid), name, kind) for name, kind, line in ways
+              if max(line.distance(a), line.distance(b), line.distance(mid)) <= ON_WAY_M]
+        if not on:  # a dataset that cut the line elsewhere (ATRAI): the nearest of its ways, if that close
+            on = [(line.distance(mid), name, kind) for name, kind, line in ways if line.distance(mid) <= NEAR_WAY_M]
+        name, kind = min(on, key=lambda o: o[0])[1:] if on else (None, None)
+        if runs and runs[-1][2:] == [name, kind]:
+            runs[-1][1] = k + 1
+        else:
+            runs.append([k, k + 1, name, kind])
+    return [tuple(run) for run in runs]
+
+
+def _parts(G, d, ids, coords):
+    """street_parts of a line [(lon, lat)] with tags `d` from OSM ways `ids`."""
+    names = _names(d)
+    if len(set(names)) > 1:
+        runs = _way_runs(G, ids, coords)
+        if runs:
+            return [(a, b, _label(G, name, kind or way_kind(d), LineString(coords[a:b + 1]))) for a, b, name, kind in runs]
+    return [(0, len(coords) - 1, _label(G, names[0] if names else None, way_kind(d), LineString(coords)))]
+
+
+# street_parts per graph and edge, for the overlays (and every /score) that name all ~22,000 streets: ~10 s once.
+_PARTS = weakref.WeakKeyDictionary()
+
+
+def street_parts(G, u, v, d):
+    """How the map names edge (u, v), as route stretches: [(first vertex, last vertex, label)] of edge_coords, one
+    part per name. A label has `name`, its OSM name; `way`, its kind (way_kind); and `along`: a way without a name (a
+    sidewalk, a bike path) takes the name of the road it runs beside or, for a crossing, crosses. An edge merged from
+    ways with different names is cut where one ends. Kept per edge, except for the pieces of a street split at a
+    route's start or end."""
+    coords = edge_coords(G, u, v, d)
+    if isinstance(u, str) or isinstance(v, str):
+        return _parts(G, d, osm_way_ids(d["osmid"]), coords)
+    cache = _PARTS.setdefault(G, {})
+    # Once per street, from its lower node to its higher one (a two-way street is two edges, the same line reversed);
+    # with the tags it is named from, so a renamed street isn't served its old name.
+    street = (min(u, v), max(u, v), str(d["osmid"]), round(float(d["length"]), 1),
+              *(str(d.get(k)) for k in ("name", "highway", "footway")))
+    forward = u < v
+    if street not in cache:
+        cache[street] = _parts(G, d, osm_way_ids(d["osmid"]), coords if forward else coords[::-1])
+    if forward:
+        return cache[street]
+    last = len(coords) - 1
+    return [(last - b, last - a, label) for a, b, label in reversed(cache[street])]
+
+
+def name_streets(G):
+    """street_parts of every street, ahead of the overlays and routes that ask for them (~15 s on Heilbronn): e.g. in a
+    background thread at startup. The edges are listed under the graph lock, as routes add and remove their ends."""
+    with _GRAPH_LOCK:
+        edges = [(u, v, d) for u, v, d in G.edges(data=True) if not isinstance(u, str) and not isinstance(v, str)]
+    for u, v, d in edges:
+        street_parts(G, u, v, d)
+
+
+def _longest(G, coords, parts):
+    plane = _named_roads(G).plane
+    return max(parts, key=lambda part: plane.to_m(LineString(coords[part[0]:part[1] + 1])).length)[2]
 
 
 def street_label(G, u, v, d):
-    """How the map names edge (u, v), as a route stretch: `name`, its OSM name (of the way covering most of it, if
-    merged from several); a way without one (a sidewalk, a bike path) takes the name of the road it runs beside or,
-    for a crossing, crosses, and then `along` is true. `way` is its kind (way_kind). Kept per street, except for the
-    pieces of a street split at a route's start or end."""
-    if isinstance(u, str) or isinstance(v, str):
-        return _edge_label(G, u, v, d)
-    labels = _LABELS.setdefault(G, {})
-    # With the tags it is named from, so a renamed street isn't served its old name.
-    street = (min(u, v), max(u, v), str(d["osmid"]), round(float(d["length"]), 1),
-              *(str(d.get(k)) for k in ("name", "highway", "footway")))
-    if street not in labels:
-        labels[street] = _edge_label(G, u, v, d)
-    return labels[street]
+    """The label (see street_parts) of the longest part of edge (u, v): for what names the edge as a whole."""
+    parts = street_parts(G, u, v, d)
+    return parts[0][2] if len(parts) == 1 else _longest(G, edge_coords(G, u, v, d), parts)
 
 
-# The first graph edge of each OSM way, per graph, for way_label.
+def street_lines(G, u, v, d):
+    """Edge (u, v) as map lines, one per name: [(coordinates [[lon, lat]] rounded to 6 places, label)]."""
+    coords = [[round(x, 6), round(y, 6)] for x, y in edge_coords(G, u, v, d)]
+    return [(coords[a:b + 1], label) for a, b, label in street_parts(G, u, v, d)]
+
+
+# The first graph edge of each OSM way, per graph, for way_parts.
 _WAYS = weakref.WeakKeyDictionary()
 
 
-def way_label(G, osmid, coords, name=None):
-    """street_label for a line of another OSM-based dataset (an ATRAI segment, an Overpass way): OSM way `osmid` (an
-    id, or ATRAI's "[id, id]" string, then the way covering most of the line) at `coords` [(lon, lat)]. Kind and name
-    come from that way, else the dataset's own `name` (also "['a', 'b']")."""
+def way_parts(G, osmid, coords, name=None):
+    """street_parts for a line of another OSM-based dataset (an ATRAI segment, an Overpass way): OSM way `osmid` (an
+    id, or ATRAI's "[id, id]" string) at `coords` [(lon, lat)]. Name and kind come from that way (G.graph["named_ways"]
+    and the graph's edges of it), else the dataset's own `name` (also "['a', 'b']"); a line merged from several ways
+    with different names is cut where one ends."""
     ways = _WAYS.get(G)
     if ways is None:
         ways = _WAYS[G] = {}
@@ -489,26 +609,46 @@ def way_label(G, osmid, coords, name=None):
             for i in osm_way_ids(d["osmid"]):
                 ways.setdefault(i, d)
     ids = osm_way_ids(osmid)
-    main = _main_way(G, ids, coords)
-    named = G.graph.get("named_ways", {}).get(main)
-    d = ways.get(main) or next((ways[i] for i in ids if i in ways), None)
-    if named:
-        own, tags = named[0], named[1]
+    kind = next((way_kind(ways[i]) for i in ids if i in ways), None)
+    if len(ids) > 1:
+        runs = _way_runs(G, ids, coords)
+        if runs and len({run[2] for run in runs}) > 1:
+            return [(a, b, _label(G, n, k or kind, LineString(coords[a:b + 1]))) for a, b, n, k in runs]
+    named = G.graph.get("named_ways", {})
+    known = next((named[i] for i in ids if i in named), None)
+    d = next((ways[i] for i in ids if i in ways), None)
+    if known:
+        own, kind = known[0], way_kind(known[1])
     elif d is not None:
-        own, tags = _own_name(G, d, osm_way_ids(d["osmid"]), coords), d
+        # A graph edge merged from several ways: its name is this way's too if they all have the same one; else this
+        # may be an unnamed one among them.
+        names = set(_names(d))
+        own = names.pop() if len(names) == 1 else None
     else:
-        own, tags = _own_name(G, {"name": name}, ids, coords), {}
-    return _label(G, own, way_kind(tags), LineString(coords))
+        own = (_names({"name": name}) or [None])[0]
+    return [(0, len(coords) - 1, _label(G, own, kind, LineString(coords)))]
 
 
-def _edge_facts(G, u, v, d, slot, dark, scooter):
-    """What a stretch shows for one edge: street name, kind of way (street_label), the measured values (None where
-    unknown) and `flags`, the bad or good things it counts towards (the route's bumpy_m, danger_points, ... with the
-    same thresholds)."""
+def way_label(G, osmid, coords, name=None):
+    """The label (see street_parts) of the longest part of way_parts: for what names the line as a whole."""
+    parts = way_parts(G, osmid, coords, name)
+    return parts[0][2] if len(parts) == 1 else _longest(G, coords, parts)
+
+
+def way_lines(G, osmid, coords, name=None):
+    """way_parts as map lines: [(coordinates, label)], one per name."""
+    return [(coords[a:b + 1], label) for a, b, label in way_parts(G, osmid, coords, name)]
+
+
+def _edge_facts(G, u, v, d, slot, dark, scooter, label=None, danger_points=True):
+    """What a stretch shows for one edge (or one part of it, named `label`, see street_parts): street name, kind of
+    way, the measured values (None where unknown) and `flags`, the bad or good things it counts towards (the route's
+    bumpy_m, danger_points, ... with the same thresholds). Without `danger_points` the edge's close-overtaking spots
+    are left out, for its parts after the first: where along it they are isn't known."""
     facts = {
-        **street_label(G, u, v, d),
+        **(label or street_label(G, u, v, d)),
         "roughness": d["roughness"],
-        "danger_points": int(d.get("danger_points", 0)),
+        "danger_points": int(d.get("danger_points", 0)) if danger_points else 0,
         "pm_risk": d.get("pm_risk"),
         "stop_go": d.get("stop_go"),
         "speed_kmh": d.get("speed_kmh"),
@@ -599,8 +739,14 @@ def _route_feature(G, a, b, penalties, weight_kg=DEFAULT_WEIGHT_KG, e_bike=False
         first = max(len(coords) - 1, 0)
         coords.extend(pts if not coords else pts[1:])
         edge_len = float(d["length"])  # numpy float when loaded from GraphML
-        pieces.append((first, len(coords) - 1, edge_len, _edge_facts(G, u, v, d, slot, dark, scooter),
-                       d.get("segment") or segment_id(u, v)))
+        # One piece per name: an edge merged from ways with different names makes a stretch of each.
+        parts = street_parts(G, u, v, d)
+        part_m = [_named_roads(G).plane.to_m(LineString(pts[a:b + 1])).length for a, b, _ in parts] \
+            if len(parts) > 1 else [1.0]
+        for k, ((a, b, label), metres) in enumerate(zip(parts, part_m)):
+            pieces.append((first + a, first + b, edge_len * metres / sum(part_m),
+                           _edge_facts(G, u, v, d, slot, dark, scooter, label, danger_points=k == 0),
+                           d.get("segment") or segment_id(u, v)))
         length += edge_len
         if d.get("roughness_source") == "estimated":
             estimated_len += edge_len

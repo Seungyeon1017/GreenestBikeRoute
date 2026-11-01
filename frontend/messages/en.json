@@ -649,7 +649,9 @@
           "path": "Path",
           "track": "Farm track",
           "service": "Access road",
-          "pedestrian": "Pedestrian street"
+          "pedestrian": "Pedestrian street",
+          "link": "Slip road",
+          "road": "Carriageway"
         },
         "length": "{{m}} m",
         "notMeasured": "not measured",

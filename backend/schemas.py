@@ -80,18 +80,21 @@ def collection_example(feature):
     return {"json_schema_extra": {"example": {"type": "FeatureCollection", "features": [feature]}}}
 
 
-WayKind = Literal["crossing", "sidewalk", "cycleway", "footway", "path", "track", "service", "pedestrian"]
+WayKind = Literal["crossing", "sidewalk", "cycleway", "footway", "path", "track", "service", "pedestrian", "link",
+                  "road"]
 
 
 class StreetName(BaseModel):
     """How a street line is named on the map, as a route stretch (routing.route.street_label / way_label)."""
     name: Optional[str] = Field(description=(
-        "Its OSM street name; a line merged from several OSM ways takes the name of the way covering most of it. A way "
-        "without one (a sidewalk, a bike path) takes the name of the road it runs beside or, for a crossing, crosses "
-        "(then `along` is true), also a road bikes may not ride. Null if there is neither (a park path, a farm track)"))
+        "Its OSM street name; a street merged from several OSM ways with different names is one line per name. A way "
+        "without one (a sidewalk, a bike path) takes the name of the road it runs beside for most of its length (within "
+        "20 m, 30 m of a main road, heading the same way), also a road bikes may not ride, or for a crossing the road it "
+        "crosses; then `along` is true. Not when another sidewalk or path runs between it and the road. \"A / B\" for a "
+        "piece under 15 m beside two roads alike, e.g. round a corner. Null if there is none (a park path, a farm track)"))
     way: Optional[WayKind] = Field(description=(
-        "The kind of way, from highway=* and footway=* in OSM: service is an access road or car park; null for an "
-        "ordinary road"))
+        "The kind of way, from highway=* and footway=* in OSM: service is an access road or car park; "
+        "link is a slip road (highway=*_link); road an unnamed road named after the one beside it (`along`), e.g. one carriageway of a dual road; null for an ordinary road"))
     along: bool = Field(description="True if `name` is that of the road the way runs beside or crosses, not its own")
 
 
@@ -130,8 +133,9 @@ class RouteSegment(BaseModel):
         "Street name from OpenStreetMap. A way without a name takes the name of the road it runs beside (along), e.g. "
         "a sidewalk or bike path, or for a crossing the road it crosses; null if there is none (a park path, a farm track)"))
     way: Optional[WayKind] = Field(
-        description=("The kind of way, from highway=* and footway=* in OSM: service is an access road or car park; null "
-                     "for an ordinary road, or for a stretch that is partly road and partly the sidewalk beside it"))
+        description=("The kind of way, from highway=* and footway=* in OSM: service is an access road or car park; "
+                     "link is a slip road (highway=*_link); road an unnamed road named after the one beside it (`along`), e.g. one carriageway of a dual road; null for an ordinary road, or for a stretch that is partly road and partly the "
+                     "sidewalk beside it"))
     along: bool = Field(description="True if `name` is that of the road the way runs beside or crosses, not its own")
     flags: list[Flag] = Field(description=(
         "What the stretch counts towards, named after the route totals: bumpy_m, bad_air_m and stop_go_m by the same "

@@ -164,6 +164,10 @@ export type WayKind =
   | 'track'
   | 'service'
   | 'pedestrian'
+  /** A slip road (highway=*_link). */
+  | 'link'
+  /** An unnamed road named after the one beside it, e.g. one carriageway of a dual road. */
+  | 'road'
 
 /** A stretch of a route: consecutive streets with the same name and flags (see backend/schemas.py). */
 export type RouteSegment = {
