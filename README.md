@@ -53,7 +53,7 @@ docker compose logs -f backend
 docker compose down
 ```
 
-The backend is again at http://127.0.0.1:8001 (host port `8001` maps to Uvicorn's `8000` in the container). `./data` and `./cache` are mounted into the container, so datasets and the street graph persist. Users and saved routes stay in the `postgres-data` volume; `docker compose down -v` deletes them. Rebuild with `docker compose up --build -d` after changing the Dockerfile, dependencies or code.
+The backend is again at http://127.0.0.1:8001 (host port `8001` maps to Uvicorn's `8000` in the container). `./data` and `./cache` are mounted into the container, so datasets and the street graph persist. Users and saved routes stay in the `postgres-data` volume; `docker compose down -v` deletes them. `compose.override.yml` (merged in automatically) mounts `backend/` and `routing/` and runs Uvicorn with `--reload`, so code edits go live in a few seconds. Rebuild with `docker compose up --build -d` only after changing the Dockerfile or dependencies.
 
 ### Frontend
 
@@ -74,7 +74,7 @@ cd frontend
 npx yarn@1.22.22 dev
 ```
 
-Then open http://localhost:3000 (`/overview`, `/plan-trip`, `/highlights`). Stop the server with `Ctrl+C`.
+Then open http://localhost:3000 (`/overview`, `/plan-trip`, `/highlights`). Saved component changes show up within a second; after editing `messages/*.json`, refresh the page. Stop the server with `Ctrl+C`.
 
 Without a database (`DATABASE_URL`) the site still runs and falls back to German texts. For route search, also start the backend; the frontend calls `NEXT_PUBLIC_GREENEST_API_URL` (default `http://127.0.0.1:8001`).
 
@@ -85,7 +85,7 @@ cd frontend
 docker compose up --build -d
 ```
 
-It serves on http://localhost:3000. There is no hot reload, so rebuild after changes; for frontend work, use `yarn dev`.
+It serves on http://localhost:3000. There is no hot reload, so use `yarn dev` for frontend work and this build as a final check (it also runs lint and the type check). Both use port 3000: stop the container with `docker compose stop` in `frontend/` before `yarn dev`.
 
 The Overview map reads small files from `frontend/public/map-data/`. After downloading new data, rebuild them with:
 

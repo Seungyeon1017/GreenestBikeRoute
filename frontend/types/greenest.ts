@@ -45,7 +45,6 @@ export type DataAvailability =
 
 export type EnvironmentLayer = {
   id: EnvironmentLayerId
-  unit?: string
   /** Planned or connected data source, shown next to the values. */
   source?: string
   availability: DataAvailability
@@ -57,7 +56,8 @@ export type EnvironmentLayer = {
    */
   colorsStreets?: boolean
   /** Legend entries from best to worst environmental condition. */
-  legend: Array<{ color: string; label: string }>
+  /** `key`: translated under greenest.layers.<id>.legend; without it `label` (numbers only) is shown as is. */
+  legend: Array<{ color: string; label?: string; key?: string }>
 }
 
 /** One ~500 m grid cell of public/map-data/areas.geojson (see scripts/build-map-data.mjs). */

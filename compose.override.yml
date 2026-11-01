@@ -1,0 +1,15 @@
+# Development settings, merged into compose.yml automatically by `docker compose up`.
+# The backend reads the code from your checkout and restarts when a .py file
+# changes, so edits go live without rebuilding. Rebuild only after changing
+# the Dockerfile or dependencies (pyproject.toml / uv.lock).
+services:
+  backend:
+    command: sh -c "alembic -c backend/users/alembic.ini upgrade head && uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload --reload-dir backend --reload-dir routing"
+    volumes:
+      - ./backend:/app/backend
+      - ./routing:/app/routing
+    environment:
+      # Docker Desktop on Windows doesn't pass file-change events into the
+      # container. Uvicorn's default reloader already polls; this makes it
+      # poll too if the watchfiles package ever gets installed.
+      WATCHFILES_FORCE_POLLING: "true"

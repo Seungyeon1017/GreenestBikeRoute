@@ -230,54 +230,92 @@
     "layers": {
       "air-quality": {
         "label": "Luftqualität",
-        "description": "Verkehrs- und Feinstaub-Risikoindex aus Radfahrten, gemittelt pro 500-m-Gebiet."
+        "description": "Verkehrs- und Feinstaub-Risikoindex aus Radfahrten, gemittelt pro 500-m-Gebiet.",
+        "unit": "Risikoindex 0–1"
       },
       "surface-roughness": {
         "label": "Oberflächenrauheit",
-        "description": "Wie holprig der Straßenbelag ist, gemessen mit Sensor-Rädern."
+        "description": "Wie holprig der Straßenbelag ist, gemessen mit Sensor-Rädern.",
+        "unit": "Rauheit 0–100"
       },
       "noise": {
         "label": "Lärmbelastung",
-        "description": "Noch kein Lärmdatensatz angebunden."
+        "description": "Noch kein Lärmdatensatz angebunden.",
+        "unit": "dB(A)"
       },
       "green-spaces": {
         "label": "Grünflächen & Bäume",
-        "description": "Noch kein Grünflächendatensatz angebunden."
+        "description": "Noch kein Grünflächendatensatz angebunden.",
+        "unit": "% Grünanteil"
       },
       "environmental-score": {
         "label": "Gesamtwert",
-        "description": "Wie gut sich jede Straße fahren lässt (0–100, höher ist besser): Verkehr (Straßentyp, Tempolimit, Radwege), glatter Belag, sicheres Überholen, saubere Luft, wenig Stopps. Blasse Straßen hat noch kein Sensor-Rad befahren."
+        "description": "Wie gut sich jede Straße fahren lässt (0–100, höher ist besser): Verkehr (Straßentyp, Tempolimit, Radwege), glatter Belag, sicheres Überholen, saubere Luft, wenig Stopps. Blasse Straßen hat noch kein Sensor-Rad befahren.",
+        "unit": "Wert 0–100 (höher = besser)",
+        "legend": {
+          "top": "75–100 (ruhig, glatt)",
+          "faded": "blass: noch kein Sensor-Rad hier gefahren"
+        }
       },
       "bike-friendly": {
         "label": "Radwege & Radspuren",
-        "description": "Radwege und Radspuren, für Räder freigegebene Fuß- und Feldwege sowie ausgeschilderte Radrouten aus OpenStreetMap."
+        "description": "Radwege und Radspuren, für Räder freigegebene Fuß- und Feldwege sowie ausgeschilderte Radrouten aus OpenStreetMap.",
+        "legend": {
+          "path": "Radweg oder Radspur, für Räder freigegebener Weg oder Radroute"
+        }
       },
       "overtaking": {
         "label": "Enges Überholen",
-        "description": "Stellen, an denen Autos Räder eng überholt haben, gemessen mit Sensor-Rädern."
+        "description": "Stellen, an denen Autos Räder eng überholt haben, gemessen mit Sensor-Rädern.",
+        "unit": "Risikoindex 0–1",
+        "legend": {
+          "close": "enges Überholen (dunkler = riskanter)"
+        }
       },
       "stop-and-go": {
         "label": "Stop-and-go",
-        "description": "Wie oft Räder bremsen oder anhalten müssen, z. B. an Ampeln."
+        "description": "Wie oft Räder bremsen oder anhalten müssen, z. B. an Ampeln.",
+        "unit": "Stop-and-go 0–1",
+        "legend": {
+          "free": "0,4 oder weniger (rollt frei)",
+          "stopping": "0,8 oder mehr (viel Anhalten)"
+        }
       },
       "speed": {
         "label": "Radgeschwindigkeit",
-        "description": "Gemessene Durchschnittsgeschwindigkeit von Rädern, Wartezeiten eingerechnet."
+        "description": "Gemessene Durchschnittsgeschwindigkeit von Rädern, Wartezeiten eingerechnet.",
+        "unit": "km/h",
+        "legend": {
+          "fast": "20 km/h oder mehr",
+          "slow": "8 km/h oder weniger"
+        }
       },
       "shade": {
         "label": "Schatten",
-        "description": "Anteil jeder Straße im Schatten von Gebäuden oder Bäumen an einem Sommernachmittag."
+        "description": "Anteil jeder Straße im Schatten von Gebäuden oder Bäumen an einem Sommernachmittag.",
+        "unit": "Schattenanteil, {{hour}}:00 Uhr am 21. Juli",
+        "legend": {
+          "shaded": "überwiegend schattig",
+          "half": "halb",
+          "sunny": "überwiegend sonnig"
+        }
       },
       "lighting": {
         "label": "Straßenbeleuchtung",
-        "description": "Wie wahrscheinlich jede Straße nachts beleuchtet ist, und wo nur wenige Laternen gesehen wurden."
+        "description": "Wie wahrscheinlich jede Straße nachts beleuchtet ist, und wo nur wenige Laternen gesehen wurden.",
+        "unit": "Wahrscheinlichkeit, dass die Straße beleuchtet ist, 0–1",
+        "legend": {
+          "lit": "wahrscheinlich beleuchtet",
+          "dim": "schwach beleuchtet (wenige Laternen gesehen)",
+          "unknown": "unbekannt",
+          "dark": "wahrscheinlich dunkel"
+        }
       }
     },
     "overview": {
       "title": "Entdecke die Umwelt deiner Stadt",
       "subtitle": "Was beim Radfahren zählt: Luft, Belag, Verkehr, Schatten und Licht. Ebenen ein- und ausblenden und ein Gebiet für Details anklicken.",
       "layersTitle": "Umweltebenen",
-      "layerInfo": "Infos zu dieser Ebene",
       "streetLayersHint": "Ebenen, die Straßen einfärben, werden einzeln gezeigt.",
       "detailsTitle": "Gebietsdetails",
       "detailsEmpty": "Klicke ein Gebiet auf der Karte an, um gemessene Indikatoren, Datenquelle und Einheit zu sehen.",
@@ -310,7 +348,7 @@
       "title": "Finde deine grünste Route",
       "subtitle": "Vergleiche die kürzeste Route mit einer Route nach deinen Wünschen: glatte Straßen, sicheres Überholen, saubere Luft und weniger Stopps.",
       "greenTerm": "grünste",
-      "greenNote":"„Grünste“ heißt nicht die Route mit den wenigsten Emissionen – jede Radfahrt ist emissionsfrei. Gemeint ist die Route, auf der du dich am wohlsten fühlst. So nimmst du öfter das Rad statt das Auto, was hilft, Emissionen zu reduzieren.",
+      "greenNote": "„Grünste“ heißt nicht die Route mit den wenigsten Emissionen – jede Radfahrt ist emissionsfrei. Gemeint ist die Route, auf der du dich am wohlsten fühlst. So nimmst du öfter das Rad statt das Auto, was hilft, Emissionen zu reduzieren.",
       "greenNoteSoon": "Bald verfügbar: eine Option, die dich an möglichst vielen Bäumen und Parks vorbeiführt – für eine Fahrt, die auch wörtlich grün ist.",
       "formTitle": "Deine Fahrt",
       "clickHint": "Suche einen Ort oder klicke auf die Karte: zuerst den Start, dann das Ziel.",
@@ -360,7 +398,7 @@
         "scales": "Unebenheit 0–100 · Feinstaub 0,5 = üblich, höher = mehr Feinstaub · Stop-and-go, Schatten und Beleuchtet 0–1 (Anteil der Strecke) · kcal grob geschätzt.",
         "tips": {
           "duration": "Berechnet mit den gemessenen Geschwindigkeiten von Radfahrenden.",
-        "roughnessRoute":"{{measured}} gemessen, {{estimated}} geschätzt, {{unknown}} unbekannt",
+          "roughnessRoute": "{{measured}} gemessen, {{estimated}} geschätzt, {{unknown}} unbekannt",
           "roughness": "Geschätzt aus gemessenen Straßen in der Nähe, wo keine Sensorräder gefahren sind.",
           "kcalRoute": "inklusive {{m}} m Anstieg",
           "kcalNoHeight": "keine Höhendaten, Anstiege nicht mitgezählt",

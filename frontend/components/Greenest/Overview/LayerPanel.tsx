@@ -1,10 +1,11 @@
 'use client'
 
 import { cx } from 'class-variance-authority'
-import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import AvailabilityBadge from '@/components/Greenest/ui/AvailabilityBadge'
 import Card, { CardTitle } from '@/components/Greenest/ui/Card'
+import InfoTip from '@/components/Greenest/ui/InfoTip'
+import { SHADE_HOUR } from '@/hooks/useOverlays'
 import type { OverlayState } from '@/hooks/useOverlays'
 import type { EnvironmentLayer, EnvironmentLayerId } from '@/types/greenest'
 
@@ -23,14 +24,6 @@ export default function LayerPanel({
   overlays,
 }: LayerPanelProps) {
   const { t } = useTranslation()
-  // Descriptions are a tooltip; clicking the info button also pins them open (touch, keyboard).
-  const [infoOpen, setInfoOpen] = useState<Set<EnvironmentLayerId>>(new Set())
-  const toggleInfo = (id: EnvironmentLayerId) =>
-    setInfoOpen(prev => {
-      const next = new Set(prev)
-      if (!next.delete(id)) next.add(id)
-      return next
-    })
 
   return (
     // On wide screens the title stays put and only the list scrolls, inside the card.
@@ -47,7 +40,7 @@ export default function LayerPanel({
           const available = layer.availability !== 'unavailable'
           const on = available && enabled.has(layer.id)
           const overlay = overlays[layer.id]
-          const description = t(`greenest.layers.${layer.id}.description`)
+          const name = t(`greenest.layers.${layer.id}.label`)
           return (
             <li
               className={cx(
@@ -70,7 +63,7 @@ export default function LayerPanel({
                 <div className="min-w-0 flex-1 space-y-1.5">
                   {/* Badge under the title: long German names leave no room beside it. */}
                   <div className="flex flex-col items-start gap-1">
-                    <div className="flex items-start gap-1.5">
+                    <div className="flex items-center gap-1.5">
                       <label
                         className={cx(
                           'block text-sm font-medium',
@@ -80,24 +73,17 @@ export default function LayerPanel({
                         )}
                         htmlFor={inputId}
                       >
-                        {t(`greenest.layers.${layer.id}.label`)}
+                        {name}
                       </label>
-                      <button
-                        aria-expanded={infoOpen.has(layer.id)}
-                        aria-label={t('greenest.overview.layerInfo')}
-                        className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-leaf-muted/60 text-[10px] font-semibold leading-none text-leaf-muted hover:bg-leaf-sand/40"
-                        onClick={() => toggleInfo(layer.id)}
-                        title={description}
-                        type="button"
+                      <InfoTip
+                        anchored
+                        label={t('greenest.planTrip.info.about', { name })}
                       >
-                        i
-                      </button>
+                        {t(`greenest.layers.${layer.id}.description`)}
+                      </InfoTip>
                     </div>
                     <AvailabilityBadge availability={layer.availability} />
                   </div>
-                  {infoOpen.has(layer.id) && (
-                    <p className="text-xs text-leaf-muted">{description}</p>
-                  )}
                   {on && overlay?.status === 'loading' && (
                     <p className="text-[11px] text-leaf-muted" role="status">
                       {t('greenest.overview.loadingLayer')}
@@ -110,24 +96,34 @@ export default function LayerPanel({
                   )}
                   {on && layer.legend.length > 0 && (
                     <ul className="flex flex-col gap-1 pt-1">
-                      {layer.legend.map(({ color, label }) => (
+                      {layer.legend.map(({ color, key, label }) => (
                         <li
                           className="flex items-center gap-2 text-[11px] text-leaf-muted"
-                          key={label}
+                          key={key ?? label}
                         >
                           <span
                             aria-hidden
                             className="h-2 w-4 rounded-sm"
                             style={{ backgroundColor: color }}
                           />
-                          {label}
+                          {key
+                            ? t(`greenest.layers.${layer.id}.legend.${key}`)
+                            : label}
                         </li>
                       ))}
                     </ul>
                   )}
                   {on && (
                     <p className="text-[11px] text-leaf-muted/70">
-                      {[layer.unit, layer.source].filter(Boolean).join(' · ')}
+                      {[
+                        t(`greenest.layers.${layer.id}.unit`, {
+                          hour: SHADE_HOUR,
+                          defaultValue: '',
+                        }),
+                        layer.source,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </p>
                   )}
                 </div>
