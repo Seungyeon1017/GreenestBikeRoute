@@ -197,6 +197,8 @@ export type SegmentLabels = {
   way: (_kind: WayKind) => string
   /** "Sidewalk beside the road" */
   beside: (_way: string) => string
+  /** "Bike path across the road" */
+  across: (_way: string) => string
   /** "Footpath on a bridge", for a way without a name */
   onStructure: (_way: string, _structure: 'bridge' | 'tunnel') => string
   length: (_m: number) => string
@@ -216,6 +218,7 @@ export function segmentLabels(t: TFunction, language: string): SegmentLabels {
     unnamed: g('unnamed'),
     way: kind => g(`ways.${kind}`),
     beside: way => g('beside', { way }),
+    across: way => g('across', { way }),
     onStructure: (way, structure) => g(`on_${structure}`, { way }),
     length: m => g('length', { m }),
     row: key => g(`rows.${key}`),
@@ -324,7 +327,7 @@ function segmentRows(
 }
 
 /** What a popup title names: a route stretch, or a street line on the Overview map. */
-export type StreetPlace = Pick<RouteSegment, 'name' | 'way' | 'along'> & {
+export type StreetPlace = Pick<RouteSegment, 'name' | 'way' | 'along' | 'across'> & {
   /** Set on a bridge or tunnel; names an unnamed way. */
   structure?: 'bridge' | 'tunnel' | null
 }
@@ -361,11 +364,12 @@ export function streetTitle(
         (place.structure ? labels.onStructure(kind, place.structure) : kind),
     ),
   )
-  // Under a street name, what kind of way it is: "Sidewalk beside the road", or "Crossing" for the road it crosses.
+  // Under a street name, what kind of way it is: "Sidewalk beside the road", "Bike path across the road", or
+  // "Crossing" for the road it crosses.
   const way =
     place.name && place.way
       ? place.along && place.way !== 'crossing'
-        ? labels.beside(labels.way(place.way))
+        ? (place.across ? labels.across : labels.beside)(labels.way(place.way))
         : labels.way(place.way)
       : null
   const line = [way, ...details].filter(Boolean).join(' · ')
