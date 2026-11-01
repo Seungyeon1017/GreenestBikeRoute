@@ -37,6 +37,16 @@ const YELLOW = '#f2c94c'
 const LIME = '#84cc16'
 const GREEN = '#16a34a'
 
+// Overall score classes, worst first as stepColor wants them; the legend shows
+// them best first. Real scores fall between about 30 and 100.
+const SCORE_STEPS = [
+  { color: RED, max: 30 },
+  { color: ORANGE, max: 45 },
+  { color: YELLOW, max: 65 },
+  { color: LIME, max: 85 },
+  { color: GREEN, max: Infinity },
+]
+
 /** Line width that grows when zooming in. */
 const LINE_WIDTH = [
   'interpolate',
@@ -84,19 +94,7 @@ export const OVERLAY_STYLES: Partial<
   'environmental-score': {
     type: 'line',
     paint: {
-      'line-color': ramp(
-        'score',
-        30,
-        RED,
-        45,
-        ORANGE,
-        65,
-        YELLOW,
-        85,
-        LIME,
-        100,
-        GREEN,
-      ),
+      'line-color': stepColor('score', SCORE_STEPS),
       'line-width': LINE_WIDTH,
       // Streets no sensor bike rode: scored from OpenStreetMap and nearby air only.
       'line-opacity': ['case', ['get', 'ridden'], 1, 0.4] as never,
@@ -192,7 +190,8 @@ export const ENVIRONMENT_LAYERS: EnvironmentLayer[] = [
       { color: GREEN, key: 'top' },
       { color: LIME, label: '65–85' },
       { color: YELLOW, label: '45–65' },
-      { color: RED, label: '0–45' },
+      { color: ORANGE, label: '30–45' },
+      { color: RED, label: '< 30' },
       { color: `${GREEN}66`, key: 'faded' },
     ],
   },
