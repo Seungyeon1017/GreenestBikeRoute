@@ -6,6 +6,7 @@ Its own formula, apart from routing's cost (routing.costs.edge_cost), so the map
   a typical street that bikes measured looks worse than one no bike rode (where everything counts as typical).
 - air of nearby measured streets (routing.graph.attach_nearby_air) where no sensor passed.
 """
+import math
 import re
 
 from routing.costs import BAD_AIR_RISK, BUMPY_ROUGHNESS, DARK_EXPONENT, DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, \
@@ -92,28 +93,55 @@ def _air(d):
     return d["pm_near"] if d.get("pm_near") is not None else d.get("pm_prior", DEFAULT_PM_RISK)
 
 
-def feel_factor(d, bump_penalty=DEFAULT_BUMP_PENALTY, danger_penalty=DEFAULT_DANGER_PENALTY,
-                pm_penalty=DEFAULT_PM_PENALTY, stop_penalty=DEFAULT_STOP_PENALTY, prefer_time=False,
-                shade_penalty=DEFAULT_SHADE_PENALTY, dark_penalty=DEFAULT_DARK_PENALTY,
-                prefer_bike_friendly=DEFAULT_PREFER_BIKE_FRIENDLY, unpaved_penalty=DEFAULT_UNPAVED_PENALTY, slot=None,
-                dark=False):
-    """How many times its length the edge feels to ride: 1 on a calm, typical street. Traffic stress times signed
-    factors for roughness, air and stop-and-go, plus overtaking risk per metre (danger_penalty metres each, as
-    routing), plus by day sun and after dark unlit streets, like routing; prefer_time, prefer_bike_friendly and the
-    surface (unpaved_penalty, routing.surface) as routing too. Below 1 where a calm street measures better than typical."""
+def feel_factors(d, bump_penalty=DEFAULT_BUMP_PENALTY, danger_penalty=DEFAULT_DANGER_PENALTY,
+                 pm_penalty=DEFAULT_PM_PENALTY, stop_penalty=DEFAULT_STOP_PENALTY, prefer_time=False,
+                 shade_penalty=DEFAULT_SHADE_PENALTY, dark_penalty=DEFAULT_DARK_PENALTY,
+                 prefer_bike_friendly=DEFAULT_PREFER_BIKE_FRIENDLY, unpaved_penalty=DEFAULT_UNPAVED_PENALTY, slot=None,
+                 dark=False):
+    """What the edge feels like to ride, factor by factor: how many times its length each makes it (1 = no effect,
+    below 1 = credit), by `traffic`, `roughness`, `air`, `stop_go`, `danger` (overtaking risk per metre, danger_penalty
+    metres each, as routing), `lifts` (the wait at a lift, as a share of the rest), `sun` (by day) and `dark` (unlit,
+    after dark), like routing; `slower` (prefer_time), `no_bike_path` (prefer_bike_friendly) and `unpaved`
+    (unpaved_penalty, routing.surface) as routing too."""
     length = max(float(d["length"]), 1.0)
-    factor = (STRESS_FACTOR[traffic_stress(d)]
-              * signed_factor(bump_penalty, _roughness(d), DEFAULT_ROUGHNESS, BUMPY_ROUGHNESS)
-              * signed_factor(pm_penalty, _air(d), DEFAULT_PM_RISK, BAD_AIR_RISK)
-              * signed_factor(stop_penalty, _stop_go(d), DEFAULT_STOP_GO, STOP_GO_HEAVY)
-              * (1 + shade_penalty * POINT * (0.0 if slot is None else 1 - _shade(d, slot)))
-              * (1 + dark_penalty * POINT * (_dark(d) ** DARK_EXPONENT if dark else 0.0))
-              * (1 + (0 if d.get("bike_friendly", False) else prefer_bike_friendly * POINT))
-              * (1 + unpaved_penalty * POINT * d.get("unpaved", 0.0))
-              * (MEDIAN_SPEED_KMH / _speed_kmh(d) if prefer_time else 1))
+    factors = {
+        "traffic": STRESS_FACTOR[traffic_stress(d)],
+        "roughness": signed_factor(bump_penalty, _roughness(d), DEFAULT_ROUGHNESS, BUMPY_ROUGHNESS),
+        "air": signed_factor(pm_penalty, _air(d), DEFAULT_PM_RISK, BAD_AIR_RISK),
+        "stop_go": signed_factor(stop_penalty, _stop_go(d), DEFAULT_STOP_GO, STOP_GO_HEAVY),
+        "sun": 1 + shade_penalty * POINT * (0.0 if slot is None else 1 - _shade(d, slot)),
+        "dark": 1 + dark_penalty * POINT * (_dark(d) ** DARK_EXPONENT if dark else 0.0),
+        "no_bike_path": 1 + (0 if d.get("bike_friendly", False) else prefer_bike_friendly * POINT),
+        "unpaved": 1 + unpaved_penalty * POINT * d.get("unpaved", 0.0),
+        "slower": MEDIAN_SPEED_KMH / _speed_kmh(d) if prefer_time else 1.0,
+    }
+    base = 1.0
+    for f in factors.values():
+        base *= f
     lifts = d.get("lift_start", False) + d.get("lift_end", False)
-    return (factor * (1 + danger_penalty * d.get("danger", 0.0) / max(length, DANGER_MIN_M))
-            + stop_penalty * POINT * LIFT_WAIT_M * lifts / 2 / length)
+    factors["danger"] = 1 + danger_penalty * d.get("danger", 0.0) / max(length, DANGER_MIN_M)
+    factors["lifts"] = 1 + stop_penalty * POINT * LIFT_WAIT_M * lifts / 2 / length / (base * factors["danger"])
+    return factors
+
+
+def feel_factor(d, *args, **kwargs):
+    """How many times its length the edge feels to ride: 1 on a calm, typical street, the product of feel_factors.
+    Below 1 where a calm street measures better than typical."""
+    result = 1.0
+    for f in feel_factors(d, *args, **kwargs).values():
+        result *= f
+    return result
+
+
+# A factor shows in a street's `why` once it moves the feel by this much, up (a cost) or down (a credit).
+WHY_MIN = 0.05
+
+
+def why(factors):
+    """The factors that matter for the street, worst first: {name: factor rounded to 2 places}, those of at least
+    1 + WHY_MIN costs and, as credit, those of at most 1 / (1 + WHY_MIN)."""
+    shown = {k: round(f, 2) for k, f in factors.items() if f >= 1 + WHY_MIN or f <= 1 / (1 + WHY_MIN)}
+    return dict(sorted(shown.items(), key=lambda kv: -kv[1]))
 
 
 def street_scores(G, bump_penalty=DEFAULT_BUMP_PENALTY, danger_penalty=DEFAULT_DANGER_PENALTY,
@@ -127,20 +155,22 @@ def street_scores(G, bump_penalty=DEFAULT_BUMP_PENALTY, danger_penalty=DEFAULT_D
     because others are better. `ridden` says whether ATRAI bikes measured it (routing.highlights.ridden); without,
     the score comes from OSM (traffic stress), nearby air and estimates only. `name`, `way` and `along` as
     routing.route.street_lines: one line per name, so a street merged from ways with different names is several lines
-    with the same score; not `named`, one line per street without them."""
+    with the same score; not `named`, one line per street without them. `why`: the factors behind the score
+    (feel_factors, see why())."""
     slot, dark = sky(G, depart_time)
     weights = (bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty,
                prefer_bike_friendly, unpaved_penalty, slot, dark)
     streets = {}
     for u, v, d in G.edges(data=True):
         street = (min(u, v), max(u, v), str(d["osmid"]), round(float(d["length"]), 1))
-        f = feel_factor(d, *weights)
+        factors = feel_factors(d, *weights)
+        f = math.prod(factors.values())
         if street not in streets or f < streets[street][0]:
-            streets[street] = (f, u, v, d)
+            streets[street] = (f, u, v, d, factors)
     features = [
         {"type": "Feature", "geometry": {"type": "LineString", "coordinates": coords},
-         "properties": {"score": round(min(100.0, 100 / f), 1), "ridden": ridden(d), **label}}
-        for f, u, v, d in sorted(streets.values(), key=lambda s: s[0])
+         "properties": {"score": round(min(100.0, 100 / f), 1), "ridden": ridden(d), "why": why(factors), **label}}
+        for f, u, v, d, factors in sorted(streets.values(), key=lambda s: s[0])
         for coords, label in street_lines(G, u, v, d, named)
     ]
     return {"type": "FeatureCollection", "features": features}

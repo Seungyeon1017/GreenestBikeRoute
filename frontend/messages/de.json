@@ -354,7 +354,24 @@
       "street": {
         "ridden": "Von Sensorrädern gemessen",
         "lightsPer100m": "Straßenlampen pro 100 m",
-        "nameLoading": "Straßenname wird geladen…"
+        "nameLoading": "Straßenname wird geladen…",
+        "whyTitle": "Warum diese Bewertung",
+        "whyNone": "Nichts bremst diese Straße.",
+        "why": {
+          "traffic": "Verkehr",
+          "roughness": "Holpriger Belag",
+          "air": "Feinstaub",
+          "stop_go": "Stop-and-go",
+          "danger": "Enges Überholen",
+          "lifts": "Aufzug zum Rad-Tragen",
+          "sun": "Wenig Schatten",
+          "dark": "Unbeleuchtet",
+          "no_bike_path": "Kein Radweg",
+          "unpaved": "Unbefestigter Belag",
+          "slower": "Langsame Straße"
+        },
+        "whyFactor": "fühlt sich {{factor}}× länger an",
+        "whyCredit": "fühlt sich {{factor}}× kürzer an"
       }
     },
     "planTrip": {

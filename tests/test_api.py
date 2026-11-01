@@ -127,7 +127,7 @@ def test_street_overlays_come_without_names_until_they_are_ready(client):
     r = client.get("/roughness")
     assert r.json()["named"] is False
     assert set(r.json()["features"][0]["properties"]) == {"roughness"}
-    assert set(client.get("/score").json()["features"][0]["properties"]) == {"score", "ridden"}
+    assert set(client.get("/score").json()["features"][0]["properties"]) == {"score", "ridden", "why"}
     RoughnessCollection.model_validate(r.json())
 
     client.app.state.named.set()
