@@ -199,7 +199,8 @@
       "cmdScroll": "⌘ + Scrollen zum Zoomen der Karte",
       "twoFingers": "Karte mit zwei Fingern verschieben",
       "recenter": "Zurück nach Heilbronn",
-      "recenterHint": "Ebene in Heilbronn ansehen"
+      "recenterHint": "Ebene in Heilbronn ansehen",
+      "showAll": "Ganz Heilbronn anzeigen"
     },
     "nav": {
       "label": "Hauptnavigation",

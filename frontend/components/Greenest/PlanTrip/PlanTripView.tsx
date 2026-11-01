@@ -1491,6 +1491,9 @@ export default function PlanTripView() {
               fadeRoutes(map, Boolean(tripRef.current))
               setMapReady(true)
             }}
+            // On phones, above the "Layers" button in the bottom-left corner.
+            recenterBottom="bottom-24 sm:bottom-10"
+            showRecenter
           />
           <ReportProblem
             draft={draft}

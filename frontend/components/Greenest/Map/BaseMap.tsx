@@ -1,7 +1,7 @@
 'use client'
 
 import { cx } from 'class-variance-authority'
-import { LocateFixed } from 'lucide-react'
+import { LocateFixed, ZoomOut } from 'lucide-react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { useEffect, useRef, useState } from 'react'
@@ -22,10 +22,29 @@ const MAX_BOUNDS: maplibregl.LngLatBoundsLike = [
   [-10, 40],
   [30, 60],
 ]
-// Below this zoom, or with Heilbronn's centre off-screen, the map counts as
-// "away" and offers the recenter button.
-const AWAY_ZOOM = 10
+// Rough outline of the city of Heilbronn, [west, south, east, north].
+const HEILBRONN_BOUNDS = [9.1, 49.08, 9.32, 49.22] as const
+// Below this zoom, or with none of Heilbronn on screen, the view is "far" and
+// the button offers to go back to Heilbronn. Inside Heilbronn but with its
+// centre off-screen (zoomed in on one part), it offers to show the whole city.
+const FAR_ZOOM = 10
 const HINT_MS = 4000
+
+type ViewState = 'home' | 'zoomed-in' | 'far'
+
+function viewState(map: maplibregl.Map): ViewState {
+  const view = map.getBounds()
+  const [west, south, east, north] = HEILBRONN_BOUNDS
+  const seesHeilbronn =
+    view.getWest() < east &&
+    view.getEast() > west &&
+    view.getSouth() < north &&
+    view.getNorth() > south
+  if (map.getZoom() < FAR_ZOOM || !seesHeilbronn) {
+    return 'far'
+  }
+  return view.contains(HEILBRONN_CENTER) ? 'home' : 'zoomed-in'
+}
 // Same basemap as the existing dashboard maps (see components/Tiles/Climate/PM/PMMap.tsx).
 const MAP_STYLE =
   'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json'
@@ -57,15 +76,21 @@ export type BaseMapProps = {
   /** Called with [longitude, latitude] when the user clicks the map. */
   onClick?: (_point: LngLat) => void
   /**
-   * Show a "Back to Heilbronn" button while the view is far from Heilbronn;
-   * it flies back to the initial center and zoom.
+   * Show a button that flies back to the initial center and zoom: "Back to
+   * Heilbronn" while the view is far away, "Show all of Heilbronn" while it is
+   * zoomed in on one part of the city.
    */
   showRecenter?: boolean
   /**
    * Change this value (e.g. a counter) to highlight the recenter button for a
-   * few seconds, if the view is away from Heilbronn at that moment.
+   * few seconds, if the view is far from Heilbronn at that moment.
    */
   recenterHint?: unknown
+  /**
+   * Bottom offset classes for the recenter button (default `bottom-10`, just
+   * above the attribution), to keep it clear of other controls on the map.
+   */
+  recenterBottom?: string
 }
 
 /** MapLibre map centred on Heilbronn. Rendering and click events only, no data fetching. */
@@ -78,14 +103,15 @@ export default function BaseMap({
   onClick,
   showRecenter = false,
   recenterHint,
+  recenterBottom = 'bottom-10',
 }: BaseMapProps) {
   const { t } = useTranslation()
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
-  const [away, setAway] = useState(false)
+  const [view, setView] = useState<ViewState>('home')
   const [hinting, setHinting] = useState(false)
-  const awayRef = useRef(away)
-  awayRef.current = away
+  const viewRef = useRef(view)
+  viewRef.current = view
 
   // Store the latest callbacks in refs. The map is created once, so its event
   // handlers would otherwise keep calling the callbacks from the first render.
@@ -127,12 +153,7 @@ export default function BaseMap({
       onClickRef.current?.([e.lngLat.lng, e.lngLat.lat])
     })
 
-    map.on('moveend', () => {
-      setAway(
-        map.getZoom() < AWAY_ZOOM ||
-          !map.getBounds().contains(HEILBRONN_CENTER),
-      )
-    })
+    map.on('moveend', () => setView(viewState(map)))
 
     map.once('error', () => {
       if (!map.isStyleLoaded()) {
@@ -149,15 +170,16 @@ export default function BaseMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Highlight the button when the caller signals it, but only while away.
-  // The first render isn't a signal.
+  // Highlight the button when the caller signals it, but only while far away:
+  // zoomed in on Heilbronn, the new layer is already in view. The first render
+  // isn't a signal.
   const firstHint = useRef(true)
   useEffect(() => {
     if (firstHint.current) {
       firstHint.current = false
       return
     }
-    if (!awayRef.current) {
+    if (viewRef.current !== 'far') {
       return
     }
     setHinting(true)
@@ -166,10 +188,10 @@ export default function BaseMap({
   }, [recenterHint])
 
   useEffect(() => {
-    if (!away) {
+    if (view !== 'far') {
       setHinting(false)
     }
-  }, [away])
+  }, [view])
 
   const recenter = () => {
     mapRef.current?.flyTo({ center, zoom, essential: true })
@@ -183,20 +205,28 @@ export default function BaseMap({
         ref={containerRef}
         role="region"
       />
-      {showRecenter && away && (
+      {showRecenter && view !== 'home' && (
         <button
           className={cx(
-            // Above the attribution line, which spans the bottom of narrow maps.
-            'absolute bottom-10 left-1/2 flex w-max max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-2 rounded-full border px-4 py-2 text-center text-sm font-medium shadow-soft transition focus:outline-none focus-visible:ring-2 focus-visible:ring-leaf-moss',
+            'absolute left-1/2 z-10 flex w-max max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-2 rounded-full border px-4 py-2 text-center text-sm font-medium shadow-soft transition focus:outline-none focus-visible:ring-2 focus-visible:ring-leaf-moss',
             hinting
               ? 'border-leaf-forest bg-leaf-forest text-white ring-4 ring-leaf-mint'
               : 'border-leaf-sand bg-white text-leaf-forest hover:bg-leaf-cream',
+            recenterBottom,
           )}
           onClick={recenter}
           type="button"
         >
-          <LocateFixed aria-hidden className="h-4 w-4" />
-          {hinting ? t('greenest.map.recenterHint') : t('greenest.map.recenter')}
+          {view === 'far' ? (
+            <LocateFixed aria-hidden className="h-4 w-4" />
+          ) : (
+            <ZoomOut aria-hidden className="h-4 w-4" />
+          )}
+          {hinting
+            ? t('greenest.map.recenterHint')
+            : view === 'far'
+              ? t('greenest.map.recenter')
+              : t('greenest.map.showAll')}
         </button>
       )}
     </div>
