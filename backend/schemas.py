@@ -91,12 +91,16 @@ class StreetName(BaseModel):
         "sidewalk, footway, path or bike path without one takes the name of the road it runs beside for most of its "
         "length (within 20 m, 30 m of a main road, heading the same way), also a road bikes may not ride, and a "
         "crossing the road it crosses; then `along` is true. Not when another sidewalk or path runs between it and the "
-        "road. \"A / B\" for a piece under 15 m beside two roads alike, e.g. round a corner. Null if there is none "
-        "(a park path, a farm track, an unnamed access road or slip road)"))
+        "road. \"A / B\" for a piece under 15 m beside two roads alike, e.g. round a corner. A path whose OSM way passes "
+        "through a road, and that heads across it within 20 m (30 m of a main road) for most of its length, takes that road's name "
+        "when it runs beside no other road (`across`). Null if there is none (a park path, a farm track, an unnamed "
+        "access road or slip road)"))
     way: Optional[WayKind] = Field(None, description=(
         "The kind of way, from highway=* and footway=* in OSM: service is an access road or car park; "
         "link is a slip road (highway=*_link); null for an ordinary road"))
     along: bool = Field(False, description="True if `name` is that of the road the way runs beside or crosses, not its own")
+    across: bool = Field(False, description=(
+        "True if the way crosses the road it is named after (a bike path over it), not beside it. Left out when false"))
     structure: Optional[Literal["bridge", "tunnel"]] = Field(None, description=(
         "Present on a bridge or tunnel (OSM bridge=*, tunnel=*), so the map can tell an unnamed path on one apart. A "
         "path on another level than a road (a footbridge over it) doesn't take that road's name"))
@@ -157,6 +161,7 @@ class RouteSegment(BaseModel):
                      "link is a slip road (highway=*_link); null for an ordinary road, or for a stretch that is partly "
                      "road and partly the sidewalk beside it"))
     along: bool = Field(description="True if `name` is that of the road the way runs beside or crosses, not its own")
+    across: bool = Field(False, description="True if the whole stretch crosses the road it is named after, not beside it")
     flags: list[Flag] = Field(description=(
         "What the stretch counts towards, named after the route totals: bumpy_m, bad_air_m and stop_go_m by the same "
         "thresholds, danger_points if it has a close-overtaking spot, sunny_m less than half in shade at shade_slot (by "

@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 import networkx as nx
 import shapely
-from shapely import LineString, Point, STRtree
+from shapely import LineString, MultiLineString, Point, STRtree, line_merge
 from shapely.ops import substring
 
 from routing.calories import DEFAULT_WEIGHT_KG, ride_kcal, route_climb, walk_kcal
@@ -339,7 +339,9 @@ MAIN_ROADS = {"motorway", "trunk", "primary", "secondary", "tertiary", "motorway
 # is within ALONG_M of it (MAIN_ALONG_M of a main road) and heads the same way (either direction) to within ALONG_DEG,
 # checked every ALONG_STEP_M (at most ALONG_POINTS times, spread evenly). It takes the name of the road it runs beside
 # for most of its length, if that is at least MIN_ALONG_SHARE of it. A crossing takes the road it crosses within
-# CROSSING_M.
+# CROSSING_M. A path whose OSM way passes through a named road, and that heads across it as near for as much of its
+# length, is `across` that road: when it runs beside no road, or only beside that one (the bike path over Mannheimer
+# Straße west of Schaeuffelenstraße, beside a slip road of it).
 ALONG_M = 20
 MAIN_ALONG_M = 30
 ALONG_DEG = 25
@@ -418,6 +420,12 @@ class _NamedRoads:
                  if not isinstance(u, str) and not isinstance(v, str) and way_kind(d) in PATH_KINDS}
         self.paths = [self.plane.to_m(line) for line in paths.values()]
         self.path_tree = STRtree(self.paths)
+        # Each path's OSM way as a whole (the graph's edges of it), to see whether it passes through a road.
+        pieces = {}
+        for (_, _, osmid), line in zip(paths, self.paths):
+            for i in osm_way_ids(osmid):
+                pieces.setdefault(i, []).append(line)
+        self.ways = {osmid: line_merge(MultiLineString(lines)) for osmid, lines in pieces.items()}
 
     def along(self, line, way=None, levels=None):
         """Name of the road a way of kind `way` (way_kind) on `levels` (_levels) runs beside, line (lon, lat), or for a
@@ -458,6 +466,30 @@ class _NamedRoads:
         if line.length < CORNER_M and len(ranked) > 1 and beside[ranked[1]] >= beside[name] - CORNER_MARGIN * len(points):
             return f"{name} / {ranked[1]}"
         return name
+
+    def across(self, line, ids, levels=None):
+        """Name of the road a path, line (lon, lat) of OSM ways `ids` on `levels`, crosses: its way passes through the
+        road, and at least MIN_ALONG_SHARE of the line is within ALONG_M of it (MAIN_ALONG_M of a main road) heading
+        across it (more than ALONG_DEG off its way). None if none; the nearest if several."""
+        ways = [self.ways[i] for i in ids if i in self.ways]
+        if not ways:
+            return None
+        line = self.plane.to_m(line)
+        n = min(max(round(line.length / ALONG_STEP_M), 2), ALONG_POINTS)
+        points = [line.interpolate(k / n, normalized=True) for k in range(n + 1)]
+        crossed = []
+        for i in {i for way in ways for i in self.tree.query(way, predicate="crosses")}:
+            if levels is not None and not levels & self.levels[i]:
+                continue
+            road, limit, hits, metres = self.lines[i], MAIN_ALONG_M if self.wide[i] else ALONG_M, 0, 0.0
+            for p in points:
+                turn = abs(_heading(line, p) - _heading(road, p)) % 180
+                dist = road.distance(p)
+                if dist <= limit and min(turn, 180 - turn) > ALONG_DEG:
+                    hits, metres = hits + 1, metres + dist
+            if hits >= len(points) * MIN_ALONG_SHARE:
+                crossed.append((metres / hits, self.names[i]))
+        return min(crossed, default=(0, None))[1]
 
     def _path_between(self, line, roads):
         """Whether another sidewalk or path (heading the road's way) runs between `line` and the nearest of `roads`
@@ -512,14 +544,20 @@ def street_name(G, u, v, d):
     return street_label(G, u, v, d)["name"]
 
 
-def _label(G, name, way, line, tags=None):
-    """How the map names a line (lon, lat) with its own `name` and kind `way`, from OSM tags `tags` (None: unknown): a
-    sidewalk or path (PATH_KINDS) without a name takes the road's it runs beside, on its level (_levels), a crossing the
-    road's it crosses (`along`); other ways keep none. `structure` ("bridge" or "tunnel") only on one that is."""
+def _label(G, name, way, line, tags=None, ids=()):
+    """How the map names a line (lon, lat) of OSM ways `ids` with its own `name` and kind `way`, from OSM tags `tags`
+    (None: unknown): a sidewalk or path (PATH_KINDS) without a name takes the road's it runs beside, on its level
+    (_levels), a crossing the road's it crosses (`along`); a path across a road (_NamedRoads.across) beside no other
+    takes that road's (`along` and `across`); other ways keep none. `structure` ("bridge" or "tunnel") only on one that
+    is."""
     levels = None if tags is None else _levels(tags)
     beside = None if name or (way not in PATH_KINDS and way != "crossing") else _named_roads(G).along(line, way, levels)
+    across = None if name or way not in PATH_KINDS else _named_roads(G).across(line, ids, levels)
+    if across and beside not in (None, across):
+        across = None
     structure = None if tags is None else _structure(tags)
-    return {"name": name or beside, "way": way, "along": beside is not None, **({"structure": structure} if structure else {})}
+    return {"name": name or across or beside, "way": way, "along": bool(beside or across),
+            **({"across": True} if across else {}), **({"structure": structure} if structure else {})}
 
 
 def _names(d):
@@ -567,9 +605,9 @@ def _parts(G, d, ids, coords):
     if len(set(names)) > 1:
         runs = _way_runs(G, ids, coords)
         if runs:
-            return [(a, b, _label(G, name, kind or way_kind(d), LineString(coords[a:b + 1]), d))
+            return [(a, b, _label(G, name, kind or way_kind(d), LineString(coords[a:b + 1]), d, ids))
                     for a, b, name, kind in runs]
-    return [(0, len(coords) - 1, _label(G, names[0] if names else None, way_kind(d), LineString(coords), d))]
+    return [(0, len(coords) - 1, _label(G, names[0] if names else None, way_kind(d), LineString(coords), d, ids))]
 
 
 # street_parts per graph and edge, for the overlays (and every /score) that name all ~22,000 streets: ~10 s once.
@@ -649,7 +687,7 @@ def way_parts(G, osmid, coords, name=None):
         runs = _way_runs(G, ids, coords)
         if runs and len({run[2] for run in runs}) > 1:
             first = next((ways[i] for i in ids if i in ways), None)
-            return [(a, b, _label(G, n, k or kind, LineString(coords[a:b + 1]), first)) for a, b, n, k in runs]
+            return [(a, b, _label(G, n, k or kind, LineString(coords[a:b + 1]), first, ids)) for a, b, n, k in runs]
     named = G.graph.get("named_ways", {})
     known = next((named[i] for i in ids if i in named), None)
     d = next((ways[i] for i in ids if i in ways), None)
@@ -663,7 +701,7 @@ def way_parts(G, osmid, coords, name=None):
         own = names.pop() if len(names) == 1 else None
     else:
         own = (_names({"name": name}) or [None])[0]
-    return [(0, len(coords) - 1, _label(G, own, kind, LineString(coords), tags))]
+    return [(0, len(coords) - 1, _label(G, own, kind, LineString(coords), tags, ids))]
 
 
 def way_label(G, osmid, coords, name=None, named=True):
@@ -727,13 +765,15 @@ def _stretches(pieces):
         key = (facts["name"] or facts["way"], facts["flags"], facts["pushed"])
         if prev is None or (prev["name"] or prev["way"], prev["flags"], prev["pushed"]) != key:
             prev = {"from_index": first, "start_m": start_m, "length_m": 0.0, "name": facts["name"], "way": facts["way"],
-                    "along": facts["along"], "danger_points": 0, "bike_friendly": facts["bike_friendly"],
+                    "along": facts["along"], "across": facts.get("across", False), "danger_points": 0,
+                    "bike_friendly": facts["bike_friendly"],
                     "pushed": facts["pushed"], "flags": facts["flags"], "segments": [],
                     "_sums": {k: [0.0, 0.0] for k in _STRETCH_MEANS}}
             out.append(prev)
         elif prev["way"] != facts["way"]:
             prev["way"] = None
         prev["along"] = prev["along"] and facts["along"]
+        prev["across"] = prev["across"] and facts.get("across", False)
         prev["to_index"] = last
         prev["length_m"] += length
         if segment not in prev["segments"]:
@@ -747,6 +787,7 @@ def _stretches(pieces):
     means = [{k: round(total / known, 3) if known else None for k, (total, known) in s.pop("_sums").items()} for s in out]
     return [{"from_index": s["from_index"], "to_index": s["to_index"], "start_m": round(s["start_m"], 1),
              "length_m": round(s["length_m"], 1), "name": s["name"], "way": s["way"], "along": s["along"],
+             "across": s["across"],
              "flags": s["flags"], "roughness": m["roughness"],
              "danger_points": s["danger_points"], "pm_risk": m["pm_risk"], "stop_go": m["stop_go"],
              "speed_kmh": m["speed_kmh"], "shade": m["shade"], "lit": m["lit"], "bike_friendly": s["bike_friendly"],

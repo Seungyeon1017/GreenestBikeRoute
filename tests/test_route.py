@@ -624,6 +624,26 @@ def test_a_short_piece_between_two_roads_alike_is_named_after_both():
     assert label_of(G, 4)["name"] == "Allee"  # longer: one of them
 
 
+def test_a_bike_path_over_a_road_is_across_it_also_beside_a_slip_road_of_it():
+    # Mannheimer Straße's two carriageways and its slip road 22 m off, which runs the bike path's way.
+    G = ways_graph((1, [(-100, 0), (100, 0)], {"highway": "primary", "name": "Mannheimer Straße"}),
+                   (2, [(-100, 15), (100, 15)], {"highway": "primary", "name": "Mannheimer Straße"}),
+                   (3, [(-22, -20), (-22, 40)], {"highway": "primary_link", "name": "Mannheimer Straße"}),
+                   (4, [(0, -25), (0, 25)], {"highway": "cycleway"}))
+    assert label_of(G, 4) == {"name": "Mannheimer Straße", "way": "cycleway", "along": True, "across": True}
+    # A piece of it between the carriageways (an ATRAI segment) too: the way as a whole passes through them.
+    assert way_label(G, 4, [lonlat(0, 0), lonlat(0, 15)]) == label_of(G, 4)
+
+
+def test_a_path_that_only_ends_at_a_road_or_runs_beside_another_is_not_across():
+    G = ways_graph((1, [(-100, 0), (100, 0)], {**ROAD, "name": "Allee"}),
+                   (2, [(50, 0), (50, 60)], PATH),  # leads away from Allee
+                   (3, [(0, -100), (0, 100)], {**ROAD, "name": "Moltkestraße"}),
+                   (4, [(-8, -60), (-8, 60)], PATH))  # the sidewalk of Moltkestraße, over Allee
+    assert label_of(G, 2) == {"name": None, "way": "path", "along": False}
+    assert label_of(G, 4) == {"name": "Moltkestraße", "way": "path", "along": True}
+
+
 def test_a_sidewalk_takes_the_name_of_a_road_bikes_may_not_ride():
     G, _ = sidewalk_graph()
     G.remove_edges_from([("r1", "r2"), ("r2", "r1")])  # the bike graph leaves the road out

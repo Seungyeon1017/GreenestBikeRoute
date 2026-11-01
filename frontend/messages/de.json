@@ -643,6 +643,7 @@
       },
       "segment": {
         "unnamed": "Straße ohne Namen",
+        "across": "{{way}} über die Straße",
         "beside": "{{way}} neben der Straße",
         "on_bridge": "{{way}} auf einer Brücke",
         "on_tunnel": "{{way}} im Tunnel",

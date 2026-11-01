@@ -185,6 +185,8 @@ export type RouteSegment = {
   /** Kind of way from OSM; null for an ordinary road (or road and sidewalk together). */
   way: WayKind | null
   along: boolean
+  /** The way crosses the road it is named after (a bike path over it) rather than running beside it. */
+  across?: boolean
   /** The factors this stretch counts towards, by the backend's thresholds. */
   flags: RouteFlag[]
   roughness: number | null

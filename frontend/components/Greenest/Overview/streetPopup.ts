@@ -167,6 +167,7 @@ export function streetPopup(
     name: typeof properties.name === 'string' ? properties.name : null,
     way: (properties.way as StreetPlace['way']) ?? null,
     along: properties.along === true,
+    across: properties.across === true,
     structure: (properties.structure as StreetPlace['structure']) ?? null,
   }
   const box = popupBox()
