@@ -305,11 +305,11 @@
         "description": "Wie wahrscheinlich jede Straße nachts beleuchtet ist (aus OSM-Daten) und wie viele Straßenlaternen dort zu sehen sind (aus Mapillary-Daten). Beleuchtete Straßen mit wenigen gesehenen Laternen werden als schwach beleuchtet dargestellt.",
         "unit": "Wahrscheinlichkeit, dass die Straße beleuchtet ist, 0–1",
         "legend": {
-          "lit": "beleuchtet",
-          "dim": "schwach beleuchtet (wenige Laternen gesehen)",
+          "lit": "beleuchtet (0,8+ Laternen pro 100 m)",
+          "dim": "schwach beleuchtet (<0,3 Laternen pro 100 m)",
           "unknown": "unbekannt",
           "dark": "wahrscheinlich dunkel",
-          "fewer": "beleuchtet, aber weniger Laternen gesehen",
+          "fewer": "beleuchtet, weniger Laternen (0,3–0,8 pro 100 m)",
           "unlikely": "wahrscheinlich nicht beleuchtet"
         }
       }
@@ -408,7 +408,7 @@
         "airQuality": "Feinstaub",
         "stopGo": "Stop-and-go",
         "shade": "Schatten",
-        "lit": "Beleuchtet",
+        "lit": "Chance beleuchtet",
         "kcal": "kcal",
         "scales": "Unebenheit 0–100 · Feinstaub 0,5 = üblich, höher = mehr Feinstaub · Stop-and-go, Schatten und Beleuchtet 0–1 (Anteil der Strecke) · kcal grob geschätzt.",
         "tips": {
@@ -667,7 +667,7 @@
           "surface": "Belag",
           "speed": "Übliches Radtempo",
           "shade": "Im Schatten",
-          "lit": "Nachts beleuchtet",
+          "lit": "Nachts beleuchtet (Chance)",
           "bikePath": "Radweg oder Radspur",
           "surfaces": {
             "paved": "befestigt",

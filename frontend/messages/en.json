@@ -305,11 +305,11 @@
         "description": "How each street is likely to be lit at night (from OSM data) and how many street lamps are seen on it (from Mapillary data). Lit streets with few lamps seen are shown as dimly lit.",
         "unit": "chance the street is lit 0–1",
         "legend": {
-          "lit": "lit",
-          "dim": "dimly lit (few lamps seen)",
+          "lit": "lit (0.8+ lamps per 100 m)",
+          "dim": "dimly lit (<0.3 lamps per 100 m)",
           "unknown": "unknown",
           "dark": "probably dark",
-          "fewer": "lit, but fewer lamps seen",
+          "fewer": "lit, fewer lamps (0.3–0.8 per 100 m)",
           "unlikely": "probably not lit"
         }
       }
@@ -408,7 +408,7 @@
         "airQuality": "Fine dust",
         "stopGo": "Stop-and-go",
         "shade": "Shade",
-        "lit": "Lit",
+        "lit": "Chance lit",
         "kcal": "kcal",
         "scales": "Roughness 0–100 · fine dust 0.5 = usual, higher = more dust · stop-and-go, shade and lit 0–1 (share of the way) · kcal a rough estimate.",
         "tips": {
@@ -667,7 +667,7 @@
           "surface": "Surface",
           "speed": "Usual bike speed",
           "shade": "In shade",
-          "lit": "Lit at night",
+          "lit": "Chance lit at night",
           "bikePath": "Bike path or lane",
           "surfaces": {
             "paved": "paved",
