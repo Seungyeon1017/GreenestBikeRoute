@@ -70,8 +70,6 @@ FOOTWAY_TYPES = {"footway", "path"}
 CUT_FILTER = ('["highway"~"^(trunk|primary|secondary|tertiary|unclassified|residential|living_street|service|road)(_link)?$"]'
               '["bicycle"~"^(no|use_sidepath|dismount)$"]["access"!~"private"]')
 STUB_M = 50  # longest dead end that drop_orphan_stubs removes
-# Service roads that lead to a property: a dead end of these is the point, not a leftover.
-PROPERTY_ACCESS = {"driveway", "parking_aisle", "drive-through"}
 # link_sidepaths: a road that ends at a use_sidepath road links to a bike path vertex this near.
 SIDEPATH_LINK_M = 20
 SIDEPATH_TYPES = {"cycleway", "footway", "path", "pedestrian", "bridleway"}
@@ -166,8 +164,8 @@ def drop_orphan_stubs(G, cut_nodes):
     A stub runs at most STUB_M metres from a free end (a node with one neighbour) that lies on one of `cut_nodes`, the
     roads bikes may not use (CUT_FILTER), to the junction where it meets the rest of the graph: a service road between a
     bike path and Mannheimer Strasse. It leads nowhere now, but a trip starting next to it would snap onto it. Dead ends
-    that end in OSM itself stay, as a road to a building doesn't end on a cut road. So do roads that lead to a property
-    (service=driveway|parking_aisle|drive-through).
+    that end in OSM itself stay, as a road to a building doesn't end on a cut road. That holds for driveways and parking
+    aisles too: one that only joins a bike path to a cut road is a leftover, whatever its service tag.
 
     Returns the removed edges as routing.footways.footway_collection, to check what was removed.
     """
@@ -175,7 +173,7 @@ def drop_orphan_stubs(G, cut_nodes):
     removed = []
     for end in [n for n in U if n in cut_nodes and U.degree(n) == 1]:
         stub = _stub(G, U, end)
-        if stub and not any(set(_tags(G.edges[e].get("service"))) & PROPERTY_ACCESS for e in stub[1]):
+        if stub:
             removed += stub[1]
     collection = footway_collection(G, removed)
     G.remove_edges_from(removed)

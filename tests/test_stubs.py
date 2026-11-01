@@ -31,10 +31,10 @@ def test_dead_ends_that_are_not_left_over_from_a_cut_road_stay():
         (1, 1, 2, 60.0, {"highway": "residential"}),
         (2, 2, 3, 60.0, {"highway": "residential"}),
         (3, 2, 4, 12.0, {}),  # a dead end in OSM itself, e.g. to a building: 4 isn't on a cut road
-        (4, 3, 5, 20.0, {"service": "driveway"}),  # a property's entrance onto the cut road
+        (4, 3, 5, 20.0, {"service": "driveway"}),  # a driveway to a building: 5 isn't on a cut road
         (5, 3, 6, 200.0, {}),  # too long to be a leftover
     )
-    removed = drop_orphan_stubs(G, cut_nodes={5, 6})
+    removed = drop_orphan_stubs(G, cut_nodes={6})
     assert G.number_of_edges() == 10
     assert removed["features"] == []
 
@@ -50,3 +50,15 @@ def test_the_whole_stub_goes_and_the_junction_stays():
     removed = drop_orphan_stubs(G, cut_nodes={5, 6})
     assert set(G) == {1, 2, 3}
     assert sorted(f["properties"]["osm_way_id"] for f in removed["features"]) == [3, 4, 5]
+
+
+def test_a_driveway_or_parking_aisle_joining_a_bike_path_to_a_cut_road_is_removed():
+    G = street_graph(
+        (1, 1, 2, 60.0, {"highway": "path", "bicycle": "designated"}),
+        (2, 2, 3, 60.0, {"highway": "path", "bicycle": "designated"}),
+        (3, 2, 4, 7.0, {"service": "driveway"}),
+        (4, 2, 5, 8.0, {"service": "parking_aisle"}),
+    )
+    removed = drop_orphan_stubs(G, cut_nodes={4, 5})
+    assert set(G) == {1, 2, 3}
+    assert sorted(f["properties"]["osm_way_id"] for f in removed["features"]) == [3, 4]
