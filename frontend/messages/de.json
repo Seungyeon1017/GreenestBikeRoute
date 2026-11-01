@@ -353,7 +353,8 @@
       },
       "street": {
         "ridden": "Von Sensorrädern gemessen",
-        "lightsPer100m": "Straßenlampen pro 100 m"
+        "lightsPer100m": "Straßenlampen pro 100 m",
+        "nameLoading": "Straßenname wird geladen…"
       }
     },
     "planTrip": {

@@ -33,7 +33,7 @@ export default function OverviewView() {
   const [enabled, setEnabled] = useState<Set<EnvironmentLayerId>>(
     () => new Set<EnvironmentLayerId>(['air-quality', 'surface-roughness']),
   )
-  // Backend layers, each downloaded the first time it's switched on.
+  // Backend layers: all downloaded right away, the ones switched on first.
   const overlays = useOverlays(ENVIRONMENT_LAYERS, enabled)
   const [detailsOpen, setDetailsOpen] = useState(true)
   const [selectedCell, setSelectedCell] = useState<string | null>(null)

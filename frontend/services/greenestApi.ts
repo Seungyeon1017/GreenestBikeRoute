@@ -181,6 +181,13 @@ export function fetchOverlay(
   return getJson<FeatureCollection>(`/${name}`, signal)
 }
 
+/** GET /street-names: whether the street overlays come with street names yet (not in the backend's first ~30 s). */
+export function fetchStreetNames(
+  signal?: AbortSignal,
+): Promise<{ ready: boolean }> {
+  return getJson('/street-names', signal)
+}
+
 /** GET /roughness: measured street roughness (0-100) for a map overlay. */
 export function fetchRoughness(
   signal?: AbortSignal,

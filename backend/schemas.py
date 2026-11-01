@@ -85,20 +85,32 @@ WayKind = Literal["crossing", "sidewalk", "cycleway", "footway", "path", "track"
 
 
 class StreetName(BaseModel):
-    """How a street line is named on the map, as a route stretch (routing.route.street_label / way_label)."""
-    name: Optional[str] = Field(description=(
+    """How a street line is named on the map, as a route stretch (routing.route.street_label / way_label). Left out
+    while the collection isn't `named` yet."""
+    name: Optional[str] = Field(None, description=(
         "Its OSM street name; a street merged from several OSM ways with different names is one line per name. A way "
         "without one (a sidewalk, a bike path) takes the name of the road it runs beside for most of its length (within "
         "20 m, 30 m of a main road, heading the same way), also a road bikes may not ride, or for a crossing the road it "
         "crosses; then `along` is true. Not when another sidewalk or path runs between it and the road. \"A / B\" for a "
         "piece under 15 m beside two roads alike, e.g. round a corner. Null if there is none (a park path, a farm track)"))
-    way: Optional[WayKind] = Field(description=(
+    way: Optional[WayKind] = Field(None, description=(
         "The kind of way, from highway=* and footway=* in OSM: service is an access road or car park; "
         "link is a slip road (highway=*_link); road an unnamed road named after the one beside it (`along`), e.g. one carriageway of a dual road; null for an ordinary road"))
-    along: bool = Field(description="True if `name` is that of the road the way runs beside or crosses, not its own")
+    along: bool = Field(False, description="True if `name` is that of the road the way runs beside or crosses, not its own")
 
 
 NAMED_EXAMPLE = {"name": "Schaeuffelenstraße", "way": None, "along": False}
+
+
+class StreetCollection(BaseModel):
+    """A street overlay: its lines are named (StreetName) once the server has named the streets."""
+    named: bool = Field(description=(
+        "False for ~30 s after the server starts: the lines come without `name`, `way` and `along`, one per street "
+        "(not one per name). Fetch again once /street-names is ready"))
+
+
+class StreetNames(BaseModel):
+    ready: bool = Field(description="True once the street overlays come with street names (`named`)")
 
 
 class LineString(BaseModel):
@@ -313,7 +325,7 @@ class RoughnessFeature(BaseModel):
     properties: RoughnessProperties
 
 
-class RoughnessCollection(BaseModel):
+class RoughnessCollection(StreetCollection):
     """Measured streets from bumpy_roads (~9,600 lines, ~2 MB)."""
     type: Literal["FeatureCollection"]
     features: list[RoughnessFeature]
@@ -367,7 +379,7 @@ class FlowFeature(BaseModel):
     properties: FlowProperties
 
 
-class FlowCollection(BaseModel):
+class FlowCollection(StreetCollection):
     """Measured street segments from traffic_flow (~7,000 lines, ~1.5 MB)."""
     type: Literal["FeatureCollection"]
     features: list[FlowFeature]
@@ -387,7 +399,7 @@ class SpeedFeature(BaseModel):
     properties: SpeedProperties
 
 
-class SpeedCollection(BaseModel):
+class SpeedCollection(StreetCollection):
     """Measured street segments from speed_map (~7,400 lines, ~1.6 MB)."""
     type: Literal["FeatureCollection"]
     features: list[SpeedFeature]
@@ -410,7 +422,7 @@ class ShadeFeature(BaseModel):
     properties: ShadeProperties
 
 
-class ShadeCollection(BaseModel):
+class ShadeCollection(StreetCollection):
     """Bike graph streets with shade from LoD2 buildings and street trees, computed for a few hours of 21 July
     (routing.shadow). Sources: LGL BW LoD2 and Stadt Heilbronn Baumkataster, dl-de/by-2-0."""
     type: Literal["FeatureCollection"]
@@ -437,7 +449,7 @@ class LightingFeature(BaseModel):
     properties: LightingProperties
 
 
-class LightingCollection(BaseModel):
+class LightingCollection(StreetCollection):
     """Bike graph streets with street lighting (routing.lighting). Sources: OpenStreetMap contributors (ODbL),
     Mapillary (CC BY-SA 4.0), LGL BW LoD2 (dl-de/by-2-0)."""
     type: Literal["FeatureCollection"]
@@ -456,7 +468,7 @@ class BikeFriendlyFeature(BaseModel):
     properties: BikeFriendlyProperties
 
 
-class BikeFriendlyCollection(BaseModel):
+class BikeFriendlyCollection(StreetCollection):
     """Bike paths, bike lanes, bike roads and signed bike routes in Heilbronn (OSM via Overpass,
     data/custom/bike_friendly_streets_heilbronn.overpassql): the streets prefer_bike_friendly favours.
     Source: OpenStreetMap contributors (ODbL)."""
@@ -563,7 +575,7 @@ class ScoreFeature(BaseModel):
     properties: ScoreProperties
 
 
-class ScoreCollection(BaseModel):
+class ScoreCollection(StreetCollection):
     """Every bike graph street once, with its overall score."""
     type: Literal["FeatureCollection"]
     features: list[ScoreFeature]

@@ -16,6 +16,8 @@ export type StreetLabels = SegmentLabels & {
   shadeNote: string
   ridden: string
   lightsPer100m: string
+  /** In place of the name while the backend is still naming the streets. */
+  nameLoading: string
 }
 
 /** The pointed-at street's values on the street layer that is switched on, with Plan a trip's row names. */
@@ -85,12 +87,14 @@ function streetRows(
 /**
  * Popup content for a pointed-at street, like a stretch on Plan a trip: its
  * name (a sidewalk takes the road's beside it) and kind of way, then the
- * layer's values.
+ * layer's values. Not `named` yet (the backend just started): "Loading
+ * street name…" in place of the name, the values already.
  */
 export function streetPopup(
   id: EnvironmentLayerId,
   properties: Record<string, unknown>,
   labels: StreetLabels,
+  named = true,
 ): HTMLElement {
   const place: StreetPlace = {
     name: typeof properties.name === 'string' ? properties.name : null,
@@ -99,7 +103,15 @@ export function streetPopup(
   }
   const box = popupBox()
   box.append(
-    ...streetTitle(place, labels),
+    ...(named
+      ? streetTitle(place, labels)
+      : [
+          el(
+            'span',
+            'animate-pulse pr-4 text-sm italic text-leaf-muted',
+            labels.nameLoading,
+          ),
+        ]),
     ...streetRows(id, properties, labels),
   )
   return box

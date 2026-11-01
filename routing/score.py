@@ -120,14 +120,14 @@ def street_scores(G, bump_penalty=DEFAULT_BUMP_PENALTY, danger_penalty=DEFAULT_D
                   pm_penalty=DEFAULT_PM_PENALTY, stop_penalty=DEFAULT_STOP_PENALTY, prefer_time=False,
                   shade_penalty=DEFAULT_SHADE_PENALTY, dark_penalty=DEFAULT_DARK_PENALTY,
                   prefer_bike_friendly=DEFAULT_PREFER_BIKE_FRIENDLY, unpaved_penalty=DEFAULT_UNPAVED_PENALTY,
-                  depart_time=None):
+                  depart_time=None, named=True):
     """Each street once (a two-way street is two edges) as a GeoJSON LineString with `score` 0-100:
     100 / feel_factor, at most 100. 100 = rides like a calm, typical street (or better), 50 = feels twice its length,
     25 = four times. The same in every city and for every street, not a rank: a good street doesn't lose points
     because others are better. `ridden` says whether ATRAI bikes measured it (routing.highlights.ridden); without,
     the score comes from OSM (traffic stress), nearby air and estimates only. `name`, `way` and `along` as
     routing.route.street_lines: one line per name, so a street merged from ways with different names is several lines
-    with the same score."""
+    with the same score; not `named`, one line per street without them."""
     slot, dark = sky(G, depart_time)
     weights = (bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty,
                prefer_bike_friendly, unpaved_penalty, slot, dark)
@@ -141,6 +141,6 @@ def street_scores(G, bump_penalty=DEFAULT_BUMP_PENALTY, danger_penalty=DEFAULT_D
         {"type": "Feature", "geometry": {"type": "LineString", "coordinates": coords},
          "properties": {"score": round(min(100.0, 100 / f), 1), "ridden": ridden(d), **label}}
         for f, u, v, d in sorted(streets.values(), key=lambda s: s[0])
-        for coords, label in street_lines(G, u, v, d)
+        for coords, label in street_lines(G, u, v, d, named)
     ]
     return {"type": "FeatureCollection", "features": features}

@@ -131,6 +131,7 @@ export default function OverviewMap({
     shadeNote: t('greenest.layers.shade.unit', { hour: SHADE_HOUR }),
     ridden: t('greenest.overview.street.ridden'),
     lightsPer100m: t('greenest.overview.street.lightsPer100m'),
+    nameLoading: t('greenest.overview.street.nameLoading'),
   }
   const labelsRef = useRef(labels)
   labelsRef.current = labels
@@ -141,6 +142,13 @@ export default function OverviewMap({
     layer: EnvironmentLayerId
     key: string
   } | null>(null)
+
+  // Opens the popup again at a point, for the same street in new data (set with the map's handlers).
+  const reshowStreetRef = useRef<
+    ((_at: maplibregl.LngLat, _pinned: boolean) => void) | null
+  >(null)
+  // The data each overlay's source has, to replace it when the named one arrives.
+  const sourceData = useRef(new Map<EnvironmentLayerId, FeatureCollection>())
 
   function closeStreet(target: MapLibreMap) {
     streetRef.current?.popup.remove()
@@ -191,7 +199,14 @@ export default function OverviewMap({
         overlay?.status === 'ready'
           ? overlay.data.features[Number(hit.id)]
           : undefined
-      return feature ? { layer, key: `${layer}:${hit.id}`, feature } : null
+      return feature && overlay?.status === 'ready'
+        ? {
+            layer,
+            key: `${layer}:${hit.id}`,
+            feature,
+            named: overlay.named,
+          }
+        : null
     }
 
     /** Shows the street's values: on hover until the mouse leaves it, or (pinned) after a click until closed. */
@@ -223,6 +238,7 @@ export default function OverviewMap({
             hit.layer,
             hit.feature.properties ?? {},
             labelsRef.current,
+            hit.named,
           ),
         )
         .addTo(map)
@@ -265,6 +281,12 @@ export default function OverviewMap({
         closeStreet(map)
       }
     })
+    reshowStreetRef.current = (at, pinned) => {
+      const hit = streetAt(map.project(at))
+      if (hit) {
+        showStreet(hit, at, pinned)
+      }
+    }
     setLayersAdded(true)
   }, [map, data, layersAdded, onSelectCell])
 
@@ -306,7 +328,19 @@ export default function OverviewMap({
         if (style.type === 'line') {
           addStreetHit(map, id, id)
         }
+      } else if (sourceData.current.get(id) !== overlay.data) {
+        // The street names arrived: the lines are cut per name now, so the
+        // open popup's index points elsewhere. Open it again on the new data.
+        ;(map.getSource(id) as maplibregl.GeoJSONSource).setData(overlay.data)
+        const open = streetRef.current
+        if (open?.layer === id) {
+          const at = open.popup.getLngLat()
+          const { pinned } = open
+          closeStreet(map)
+          map.once('idle', () => reshowStreetRef.current?.(at, pinned))
+        }
       }
+      sourceData.current.set(id, overlay.data)
       map.setLayoutProperty(
         id,
         'visibility',

@@ -587,9 +587,12 @@ def street_label(G, u, v, d):
     return parts[0][2] if len(parts) == 1 else _longest(G, edge_coords(G, u, v, d), parts)
 
 
-def street_lines(G, u, v, d):
-    """Edge (u, v) as map lines, one per name: [(coordinates [[lon, lat]] rounded to 6 places, label)]."""
+def street_lines(G, u, v, d, named=True):
+    """Edge (u, v) as map lines, one per name: [(coordinates [[lon, lat]] rounded to 6 places, label)]. Not `named`:
+    the whole edge as one line with an empty label, without naming it (name_streets may not have yet)."""
     coords = [[round(x, 6), round(y, 6)] for x, y in edge_coords(G, u, v, d)]
+    if not named:
+        return [(coords, {})]
     return [(coords[a:b + 1], label) for a, b, label in street_parts(G, u, v, d)]
 
 
@@ -629,14 +632,19 @@ def way_parts(G, osmid, coords, name=None):
     return [(0, len(coords) - 1, _label(G, own, kind, LineString(coords)))]
 
 
-def way_label(G, osmid, coords, name=None):
-    """The label (see street_parts) of the longest part of way_parts: for what names the line as a whole."""
+def way_label(G, osmid, coords, name=None, named=True):
+    """The label (see street_parts) of the longest part of way_parts: for what names the line as a whole. Not `named`:
+    an empty one, without naming it."""
+    if not named:
+        return {}
     parts = way_parts(G, osmid, coords, name)
     return parts[0][2] if len(parts) == 1 else _longest(G, coords, parts)
 
 
-def way_lines(G, osmid, coords, name=None):
-    """way_parts as map lines: [(coordinates, label)], one per name."""
+def way_lines(G, osmid, coords, name=None, named=True):
+    """way_parts as map lines: [(coordinates, label)], one per name. Not `named`: the whole line with an empty label."""
+    if not named:
+        return [(coords, {})]
     return [(coords[a:b + 1], label) for a, b, label in way_parts(G, osmid, coords, name)]
 
 

@@ -121,6 +121,27 @@ def test_roughness_overlay(client):
     RoughnessCollection.model_validate(r.json())
 
 
+def test_street_overlays_come_without_names_until_they_are_ready(client):
+    client.app.state.named.clear()  # as in the live API's first ~30 s
+    assert client.get("/street-names").json() == {"ready": False}
+    r = client.get("/roughness")
+    assert r.json()["named"] is False
+    assert set(r.json()["features"][0]["properties"]) == {"roughness"}
+    assert set(client.get("/score").json()["features"][0]["properties"]) == {"score", "ridden"}
+    RoughnessCollection.model_validate(r.json())
+
+    client.app.state.named.set()
+    assert client.get("/street-names").json() == {"ready": True}
+    r = client.get("/roughness")
+    assert r.json()["named"] is True
+    assert set(r.json()["features"][0]["properties"]) == {"roughness", "name", "way", "along"}
+
+
+def test_overlays_are_compressed(client):
+    r = client.get("/roughness", headers={"Accept-Encoding": "gzip"})
+    assert r.headers["content-encoding"] == "gzip"
+
+
 def test_flow_overlay(client):
     r = client.get("/flow")
     assert r.status_code == 200
