@@ -2,6 +2,8 @@
 street lighting on every edge."""
 import json
 import math
+import sys
+from datetime import date
 from pathlib import Path
 
 import networkx as nx
@@ -21,7 +23,11 @@ from routing.shadow import load_shadow
 from routing.surface import load_surface
 
 CACHE_DIR = Path(__file__).resolve().parent.parent / "cache"
-# Renamed when the filter below changes, so an old cached graph isn't reused.
+# Raise when the filters or the changes to the graph below change, so every machine builds the graph again by itself.
+GRAPH_VERSION = 1
+# A cached graph this old is built again from the current OSM data.
+GRAPH_MAX_AGE_DAYS = 30
+# Written by load_graph, with the date and GRAPH_VERSION it was built with.
 GRAPH_PATH = CACHE_DIR / "heilbronn_bike_rideable.graphml"
 # Written next to it: the dead ends drop_orphan_stubs removed, to check them on a map.
 DROPPED_STUBS_PATH = CACHE_DIR / "heilbronn_dropped_stubs.geojson"
@@ -267,14 +273,52 @@ def link_sidepaths(G, sidepath_nodes, node_ids):
     return footway_collection(G, links)
 
 
+def build_graph(rideable, refresh=False):
+    """Download the bike graph from OSM and apply the changes above. `refresh` ignores OSMnx's cached responses, to get
+    the current OSM data.
+
+    Returns the graph and the footways, links and dead ends (as routing.footways.footway_collection) left out or added,
+    for the caller to write once the build worked: a failing one leaves the old files in place.
+    """
+    ox.settings.cache_folder = CACHE_DIR
+    ox.settings.use_cache = not refresh
+    ox.settings.useful_tags_way = sorted({*ox.settings.useful_tags_way, "bicycle", "footway", "service"})  # keep_rideable_footways and drop_orphan_stubs need them
+    G = ox.graph_from_place(PLACE, network_type="bike", custom_filter=[BIKE_FILTER, CROSSING_FILTER, NO_BIKE_FOOTWAY_FILTER], simplify=False)
+    node_ids = {(d["x"], d["y"]): n for n, d in G.nodes(data=True)}  # link_sidepaths makes some of them nodes again
+    # Elevator nodes must survive simplification, as the footways only count as rideable near them.
+    G = ox.simplify_graph(G, node_attrs_include=["highway"])
+    footways = keep_rideable_footways(G)
+    cut = ox.graph_from_place(PLACE, custom_filter=CUT_FILTER, retain_all=True, simplify=False)
+    sidepath_nodes = {n for u, v, d in cut.edges(data=True) if "use_sidepath" in _tags(d.get("bicycle")) for n in (u, v)}
+    # Links first: a bike path that starts on the cut road is a dead end until a road end links to it.
+    links = link_sidepaths(G, sidepath_nodes, node_ids)
+    stubs = drop_orphan_stubs(G, set(cut))
+    G.graph.update(rideable_ways=rideable, version=GRAPH_VERSION, built=date.today().isoformat())
+    return G, footways, links, stubs
+
+
+def _warn_loudly(*lines):
+    bar = "!" * 100
+    print(*["", bar, *(f"!!! {line}" for line in lines), bar, ""], sep="\n", file=sys.stderr, flush=True)
+
+
+def _age_days(G, path):
+    """Days since the graph was built from OSM; for one cached before the date was recorded, since its file changed."""
+    try:
+        built = date.fromisoformat(G.graph["built"])
+    except (KeyError, ValueError):
+        built = date.fromtimestamp(path.stat().st_mtime)
+    return (date.today() - built).days
+
+
 def load_graph(path=GRAPH_PATH, footways_path=DROPPED_FOOTWAYS_PATH, stubs_path=DROPPED_STUBS_PATH,
                links_path=SIDEPATH_LINKS_PATH):
     """Load the bike graph from cache/, downloading it from OSM the first time (~2 min).
 
-    Delete the .graphml file to pick up newer OSM data. It is built again by itself when RIDEABLE_WAYS changed
-    (e.g. an approved user report), as that decides which footways stay, and when the footways it left out
-    (`footways_path`, see routing.footways), the dead ends it removed (`stubs_path`) or the links it added to bike paths
-    (`links_path`) are missing.
+    It is built again by itself when GRAPH_VERSION or RIDEABLE_WAYS (e.g. an approved user report) changed, as they decide
+    what the graph holds, and when the footways it left out (`footways_path`, see routing.footways), the dead ends it
+    removed (`stubs_path`) or the links it added to bike paths (`links_path`) are missing. Once it is GRAPH_MAX_AGE_DAYS
+    old it is built again from the current OSM data; if that fails (Overpass down), the old graph stays in use.
     """
     path, footways_path, stubs_path, links_path = Path(path), Path(footways_path), Path(stubs_path), Path(links_path)
     rideable = ",".join(map(str, sorted(RIDEABLE_WAYS)))
@@ -283,22 +327,25 @@ def load_graph(path=GRAPH_PATH, footways_path=DROPPED_FOOTWAYS_PATH, stubs_path=
         # Cached before the list was recorded, when it held only the hand-picked ways: record it.
         G.graph["rideable_ways"] = rideable
         ox.save_graphml(G, path)
-    if (G is None or G.graph["rideable_ways"] != rideable or not footways_path.exists() or not stubs_path.exists()
-            or not links_path.exists()):
-        ox.settings.cache_folder = CACHE_DIR
-        ox.settings.useful_tags_way = sorted({*ox.settings.useful_tags_way, "bicycle", "footway", "service"})  # keep_rideable_footways and drop_orphan_stubs need them
-        G = ox.graph_from_place(PLACE, network_type="bike", custom_filter=[BIKE_FILTER, CROSSING_FILTER, NO_BIKE_FOOTWAY_FILTER], simplify=False)
-        node_ids = {(d["x"], d["y"]): n for n, d in G.nodes(data=True)}  # link_sidepaths makes some of them nodes again
-        # Elevator nodes must survive simplification, as the footways only count as rideable near them.
-        G = ox.simplify_graph(G, node_attrs_include=["highway"])
-        save_footways(keep_rideable_footways(G), footways_path)
-        cut = ox.graph_from_place(PLACE, custom_filter=CUT_FILTER, retain_all=True, simplify=False)
-        sidepath_nodes = {n for u, v, d in cut.edges(data=True) if "use_sidepath" in _tags(d.get("bicycle")) for n in (u, v)}
-        # Links first: a bike path that starts on the cut road is a dead end until a road end links to it.
-        save_footways(link_sidepaths(G, sidepath_nodes, node_ids), links_path)
-        save_footways(drop_orphan_stubs(G, set(cut)), stubs_path)
-        G.graph["rideable_ways"] = rideable
-        ox.save_graphml(G, path)
+    outdated = (G is None or G.graph["rideable_ways"] != rideable or G.graph.get("version") != str(GRAPH_VERSION)
+                or not footways_path.exists() or not stubs_path.exists() or not links_path.exists())
+    if outdated and G is not None:
+        _warn_loudly("The graph logic changed (GRAPH_VERSION, the hand-picked ways or a check file): rebuilding the graph.",
+                     "This reuses the OSM responses cached in cache/*.json, so it does NOT pick up newer OSM data.",
+                     "Consider a fresh rebuild: delete cache/*.json and cache/heilbronn_bike_rideable.graphml.")
+    if outdated or _age_days(G, path) >= GRAPH_MAX_AGE_DAYS:
+        try:
+            built, footways, links, stubs = build_graph(rideable, refresh=not outdated)
+        except Exception as e:
+            if outdated:
+                raise
+            print(f"Could not refresh the graph from OSM, keeping the one from {G.graph.get('built', 'earlier')}: {e}")
+        else:
+            G = built
+            save_footways(footways, footways_path)
+            save_footways(links, links_path)
+            save_footways(stubs, stubs_path)
+            ox.save_graphml(G, path)
     attach_lifts(G)
     attach_roughness(G, way_roughness(load_features("bumpy_roads_heilbronn")), load_estimates())
     attach_stop_go(G, way_stop_go(load_features("traffic_flow_heilbronn")))
