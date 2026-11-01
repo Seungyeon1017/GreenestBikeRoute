@@ -1,7 +1,7 @@
 'use client'
 
 import type { Map as MapLibreMap } from 'maplibre-gl'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import BaseMap from '@/components/Greenest/Map'
 import type { OverlayState } from '@/hooks/useOverlays'
 import type { OverviewData } from '@/services/mapData'
@@ -155,5 +155,24 @@ export default function OverviewMap({
     }
   }, [map, layersAdded, selectedCell])
 
-  return <BaseMap ariaLabel={ariaLabel} onLoad={setMap} zoom={12.5} />
+  // Count layers switched on, so the recenter button can point out that the
+  // new layer is drawn in Heilbronn when the view is elsewhere.
+  const [layersSwitchedOn, setLayersSwitchedOn] = useState(0)
+  const previousEnabled = useRef(enabled)
+  useEffect(() => {
+    if (Array.from(enabled).some(id => !previousEnabled.current.has(id))) {
+      setLayersSwitchedOn(count => count + 1)
+    }
+    previousEnabled.current = enabled
+  }, [enabled])
+
+  return (
+    <BaseMap
+      ariaLabel={ariaLabel}
+      onLoad={setMap}
+      recenterHint={layersSwitchedOn}
+      showRecenter
+      zoom={12.5}
+    />
+  )
 }
