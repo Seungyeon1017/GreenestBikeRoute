@@ -556,10 +556,8 @@ def test_a_path_takes_the_road_it_runs_beside_for_most_of_its_length():
 
 def test_a_path_mostly_away_from_the_road_is_not_named_after_it():
     G = ways_graph((1, [(75, 0), (200, 0)], {**ROAD, "name": "Allee"}),  # beside the last ~40% of the path only
-                   (2, [(0, 10), (100, 10)], PATH),
-                   (3, [(0, -10), (100, -10)], {"highway": "service"}))
+                   (2, [(0, 10), (100, 10)], PATH))
     assert label_of(G, 2)["name"] is None
-    assert label_of(G, 3)["name"] == "Allee"  # an access road may turn off the road it serves
 
 
 def test_a_park_path_behind_the_sidewalk_is_not_named_after_the_road():
@@ -579,12 +577,18 @@ def test_sidewalks_of_main_roads_may_run_further_from_its_centre_line():
     assert label_of(G, 4)["name"] is None  # 25 m from a residential street
 
 
-def test_an_unnamed_road_beside_a_named_one_is_shown_as_a_slip_road_or_carriageway():
-    G = ways_graph((1, [(0, 0), (100, 0)], {"highway": "primary", "name": "Saarlandstraße"}),
+def test_only_sidewalks_and_paths_take_the_name_of_the_road_beside_them():
+    G = ways_graph((1, [(0, 0), (100, 0)], {"highway": "primary", "name": "Neckartalstraße"}),
                    (2, [(0, 8), (100, 8)], {"highway": "primary_link"}),
-                   (3, [(0, -8), (100, -8)], {"highway": "primary"}))
-    assert label_of(G, 2) == {"name": "Saarlandstraße", "way": "link", "along": True}
-    assert label_of(G, 3) == {"name": "Saarlandstraße", "way": "road", "along": True}
+                   (3, [(0, -8), (100, -8)], {"highway": "primary"}),
+                   (4, [(0, 14), (100, 14)], {"highway": "track"}),
+                   (5, [(0, -14), (100, -14)], {"highway": "service"}),
+                   (6, [(0, 20), (100, 20)], {"highway": "cycleway"}))
+    assert label_of(G, 2) == {"name": None, "way": "link", "along": False}  # a slip road, a carriageway,
+    assert label_of(G, 3) == {"name": None, "way": None, "along": False}
+    assert label_of(G, 4) == {"name": None, "way": "track", "along": False}  # a farm track and an access road
+    assert label_of(G, 5) == {"name": None, "way": "service", "along": False}  # aren't part of the road
+    assert label_of(G, 6) == {"name": "Neckartalstraße", "way": "cycleway", "along": True}
 
 
 def test_a_short_piece_between_two_roads_alike_is_named_after_both():
