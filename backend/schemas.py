@@ -76,8 +76,8 @@ GRADE_EXAMPLE = {
 }
 
 
-def collection_example(feature):
-    return {"json_schema_extra": {"example": {"type": "FeatureCollection", "features": [feature]}}}
+def collection_example(feature, **extra):
+    return {"json_schema_extra": {"example": {"type": "FeatureCollection", "features": [feature], **extra}}}
 
 
 WayKind = Literal["crossing", "sidewalk", "cycleway", "footway", "path", "track", "service", "pedestrian", "link",
@@ -102,15 +102,19 @@ class StreetName(BaseModel):
 NAMED_EXAMPLE = {"name": "Schaeuffelenstraße", "way": None, "along": False}
 
 
-class StreetCollection(BaseModel):
-    """A street overlay: its lines are named (StreetName) once the server has named the streets."""
-    named: bool = Field(description=(
+def named_field():
+    """The `named` member of a street overlay: its lines are named (StreetName) once the server has named the streets."""
+    return Field(description=(
         "False for ~30 s after the server starts: the lines come without `name`, `way` and `along`, one per street "
-        "(not one per name). Fetch again once /street-names is ready"))
+        "(not one per name). Fetch the overlay again once /street-names is `ready`"))
 
 
 class StreetNames(BaseModel):
-    ready: bool = Field(description="True once the street overlays come with street names (`named`)")
+    """Whether the street overlays (/roughness, /flow, /speed, /shade, /lighting, /bike-friendly-streets, /score) come
+    with street names yet."""
+    ready: bool = Field(description="True once they do (`named` true); false for ~30 s after the server starts")
+
+    model_config = {"json_schema_extra": {"example": {"ready": True}}}
 
 
 class LineString(BaseModel):
@@ -325,13 +329,14 @@ class RoughnessFeature(BaseModel):
     properties: RoughnessProperties
 
 
-class RoughnessCollection(StreetCollection):
+class RoughnessCollection(BaseModel):
     """Measured streets from bumpy_roads (~9,600 lines, ~2 MB)."""
     type: Literal["FeatureCollection"]
     features: list[RoughnessFeature]
+    named: bool = named_field()
 
     model_config = collection_example({"type": "Feature", "geometry": {"type": "LineString", "coordinates": [
-        [9.2213487, 49.1495941], [9.2212358, 49.1495259]]}, "properties": {"roughness": 22.14, **NAMED_EXAMPLE}})
+        [9.2213487, 49.1495941], [9.2212358, 49.1495259]]}, "properties": {"roughness": 22.14, **NAMED_EXAMPLE}}, named=True)
 
 
 class DangerFeature(BaseModel):
@@ -379,13 +384,14 @@ class FlowFeature(BaseModel):
     properties: FlowProperties
 
 
-class FlowCollection(StreetCollection):
+class FlowCollection(BaseModel):
     """Measured street segments from traffic_flow (~7,000 lines, ~1.5 MB)."""
     type: Literal["FeatureCollection"]
     features: list[FlowFeature]
+    named: bool = named_field()
 
     model_config = collection_example({"type": "Feature", "geometry": {"type": "LineString", "coordinates": [
-        [9.2213487, 49.1495941], [9.2212358, 49.1495259]]}, "properties": {"stop_go": 0.662, **NAMED_EXAMPLE}})
+        [9.2213487, 49.1495941], [9.2212358, 49.1495259]]}, "properties": {"stop_go": 0.662, **NAMED_EXAMPLE}}, named=True)
 
 
 class SpeedProperties(StreetName):
@@ -399,13 +405,14 @@ class SpeedFeature(BaseModel):
     properties: SpeedProperties
 
 
-class SpeedCollection(StreetCollection):
+class SpeedCollection(BaseModel):
     """Measured street segments from speed_map (~7,400 lines, ~1.6 MB)."""
     type: Literal["FeatureCollection"]
     features: list[SpeedFeature]
+    named: bool = named_field()
 
     model_config = collection_example({"type": "Feature", "geometry": {"type": "LineString", "coordinates": [
-        [9.2213487, 49.1495941], [9.2212358, 49.1495259]]}, "properties": {"speed_kmh": 12.8, **NAMED_EXAMPLE}})
+        [9.2213487, 49.1495941], [9.2212358, 49.1495259]]}, "properties": {"speed_kmh": 12.8, **NAMED_EXAMPLE}}, named=True)
 
 
 LINE_EXAMPLE = {"type": "LineString", "coordinates": [[9.2213487, 49.1495941], [9.2212358, 49.1495259]]}
@@ -422,17 +429,19 @@ class ShadeFeature(BaseModel):
     properties: ShadeProperties
 
 
-class ShadeCollection(StreetCollection):
+class ShadeCollection(BaseModel):
     """Bike graph streets with shade from LoD2 buildings and street trees, computed for a few hours of 21 July
     (routing.shadow). Sources: LGL BW LoD2 and Stadt Heilbronn Baumkataster, dl-de/by-2-0."""
     type: Literal["FeatureCollection"]
     slots: list[str] = Field(description="The time of each shade value, ISO 8601 local time, e.g. 2026-07-21T15:00+02:00")
     features: list[ShadeFeature]
+    named: bool = named_field()
 
     model_config = {"json_schema_extra": {"example": {
         "type": "FeatureCollection",
         "slots": ["2026-07-21T09:00+02:00", "2026-07-21T12:00+02:00", "2026-07-21T15:00+02:00", "2026-07-21T18:00+02:00"],
-        "features": [{"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"shade": [0.42, 0.1, 0.05, 0.31], **NAMED_EXAMPLE}}]}}}
+        "features": [{"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"shade": [0.42, 0.1, 0.05, 0.31], **NAMED_EXAMPLE}}],
+        "named": True}}}
 
 
 class LightingProperties(StreetName):
@@ -449,13 +458,14 @@ class LightingFeature(BaseModel):
     properties: LightingProperties
 
 
-class LightingCollection(StreetCollection):
+class LightingCollection(BaseModel):
     """Bike graph streets with street lighting (routing.lighting). Sources: OpenStreetMap contributors (ODbL),
     Mapillary (CC BY-SA 4.0), LGL BW LoD2 (dl-de/by-2-0)."""
     type: Literal["FeatureCollection"]
     features: list[LightingFeature]
+    named: bool = named_field()
 
-    model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"lit": 0.96, "lights_per_100m": 2.4, **NAMED_EXAMPLE}})
+    model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"lit": 0.96, "lights_per_100m": 2.4, **NAMED_EXAMPLE}}, named=True)
 
 
 class BikeFriendlyProperties(StreetName):
@@ -468,14 +478,15 @@ class BikeFriendlyFeature(BaseModel):
     properties: BikeFriendlyProperties
 
 
-class BikeFriendlyCollection(StreetCollection):
+class BikeFriendlyCollection(BaseModel):
     """Bike paths, bike lanes, bike roads and signed bike routes in Heilbronn (OSM via Overpass,
     data/custom/bike_friendly_streets_heilbronn.overpassql): the streets prefer_bike_friendly favours.
     Source: OpenStreetMap contributors (ODbL)."""
     type: Literal["FeatureCollection"]
     features: list[BikeFriendlyFeature]
+    named: bool = named_field()
 
-    model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"osm_id": 4087087, **NAMED_EXAMPLE}})
+    model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"osm_id": 4087087, **NAMED_EXAMPLE}}, named=True)
 
 
 class GreenStreetProperties(BaseModel):
@@ -575,12 +586,13 @@ class ScoreFeature(BaseModel):
     properties: ScoreProperties
 
 
-class ScoreCollection(StreetCollection):
+class ScoreCollection(BaseModel):
     """Every bike graph street once, with its overall score."""
     type: Literal["FeatureCollection"]
     features: list[ScoreFeature]
+    named: bool = named_field()
 
-    model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"score": 72.4, "ridden": True, **NAMED_EXAMPLE}})
+    model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"score": 72.4, "ridden": True, **NAMED_EXAMPLE}}, named=True)
 
 
 class VehicleProperties(BaseModel):

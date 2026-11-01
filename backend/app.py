@@ -337,7 +337,8 @@ TAGS_METADATA = [
                                        "or show its grade."},
     {"name": PLACES, "description": "Find a landmark, address or street in Heilbronn, to route to its coordinates "
                                      "(OpenStreetMap via Nominatim)."},
-    {"name": OVERLAYS, "description": "Static GeoJSON layers of the measured data, to draw on a map."},
+    {"name": OVERLAYS, "description": "Static GeoJSON layers of the measured data, to draw on a map, and whether "
+                                        "the street layers have their street names yet (`/street-names`)."},
     {"name": HIGHLIGHTS, "description": "Rankings for the app's Highlights tab, e.g. the greenest streets bikes have ridden and suggested tours."},
     {"name": SHARING, "description": "Shared e-bikes and e-scooters free to rent right now and their parking zones, "
                                        "live from MobiData BW (Heilbronn: Dott). Each vehicle links to the provider's app. "
@@ -573,10 +574,11 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
         return GeoJSONResponse(scored(penalties, app.state.named.is_set()))
 
     @app.get("/street-names", tags=[OVERLAYS], summary="Whether the street overlays come with street names yet",
-             response_model=StreetNames)
+             response_model=StreetNames, response_description="`ready`: true once the street overlays are `named`")
     def street_names():
-        """False for ~30 s after the server starts, while it names the streets: until then the street overlays come
-        without names (`named` false). Ask every few seconds, then fetch the overlays again for the names."""
+        """False for ~30 s after the server starts, while it names the streets: until then /roughness, /flow,
+        /speed, /shade, /lighting, /bike-friendly-streets and /score come at once, but without names (`named` false).
+        Ask every few seconds while one you show isn't `named`, then fetch it again for the names."""
         return {"ready": app.state.named.is_set()}
 
     @app.get("/highlights/greenest-streets", tags=[HIGHLIGHTS],
