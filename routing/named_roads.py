@@ -20,18 +20,20 @@ OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
 
 def to_geojson(overpass):
-    """Overpass `out geom` JSON as GeoJSON LineStrings with the way's `name`, `highway` and `footway` tags."""
+    """Overpass `out geom` JSON as GeoJSON LineStrings with the way's `name`, `highway`, `footway`, `bridge`, `tunnel`
+    and `layer` tags."""
     features = [
         {"type": "Feature", "id": f"way/{w['id']}",
          "geometry": {"type": "LineString", "coordinates": [[round(p["lon"], 6), round(p["lat"], 6)] for p in w["geometry"]]},
-         "properties": {k: w["tags"][k] for k in ("name", "highway", "footway") if k in w["tags"]}}
+         "properties": {k: w["tags"][k] for k in ("name", "highway", "footway", "bridge", "tunnel", "layer") if k in w["tags"]}}
         for w in overpass["elements"] if w["type"] == "way" and len(w.get("geometry", [])) >= 2
     ]
     return {"type": "FeatureCollection", "features": features}
 
 
 def load_named_ways(path=OUT):
-    """{OSM way id: (name, tags {highway, footway}, [(lon, lat), ...])}, or {} if the file is missing."""
+    """{OSM way id: (name, tags {highway, footway, bridge, tunnel, layer}, [(lon, lat), ...])}, or {} if the file is
+    missing."""
     path = Path(path)
     if not path.exists():
         return {}

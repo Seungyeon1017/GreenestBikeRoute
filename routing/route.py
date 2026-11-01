@@ -334,7 +334,8 @@ ROAD_HIGHWAYS = {"motorway", "trunk", "primary", "secondary", "tertiary", "uncla
 MAIN_ROADS = {"motorway", "trunk", "primary", "secondary", "tertiary", "motorway_link", "trunk_link", "primary_link",
               "secondary_link", "tertiary_link"}
 # Only sidewalks and paths without a name (PATH_KINDS) take the name of a road, and crossings that of the road they
-# cross: a farm track, access road or slip road along a road isn't part of it. A path runs beside a named road where it
+# cross: a farm track, access road or slip road along a road isn't part of it. A way on another level than the road (a
+# footbridge over it, a tunnel under it; _levels) isn't beside it. A path runs beside a named road where it
 # is within ALONG_M of it (MAIN_ALONG_M of a main road) and heads the same way (either direction) to within ALONG_DEG,
 # checked every ALONG_STEP_M (at most ALONG_POINTS times, spread evenly). It takes the name of the road it runs beside
 # for most of its length, if that is at least MIN_ALONG_SHARE of it. A crossing takes the road it crosses within
@@ -362,6 +363,23 @@ def _tags(d, key):
     return {str(v) for v in (value if isinstance(value, list) else [value])}
 
 
+def _levels(d):
+    """The levels above the ground a way is on, from its OSM layer, bridge and tunnel tags (one merged from several ways
+    may be on several): a bridge is 1 and a tunnel -1 without a layer, any other way 0."""
+    levels = set()
+    for layer in _tags(d, "layer"):
+        try:
+            levels.add(int(layer))
+        except ValueError:
+            pass
+    if not levels:
+        if _tags(d, "bridge") - {"None", "no"}:
+            levels.add(1)
+        if _tags(d, "tunnel") - {"None", "no"}:
+            levels.add(-1)
+    return levels or {0}
+
+
 def way_kind(d):
     """What kind of way the edge is (WAY_KINDS, or "link" for a slip road), from highway=* and footway=*; None for an
     ordinary road."""
@@ -378,13 +396,14 @@ class _NamedRoads:
 
     def __init__(self, G):
         self.plane = _Plane(sum(y for _, y in G.nodes(data="y")) / G.number_of_nodes())
-        roads = [(d["name"], _tags(d, "highway"), _edge_line(G, u, v, d)) for u, v, d in G.edges(data=True)
+        roads = [(d["name"], _tags(d, "highway"), _levels(d), _edge_line(G, u, v, d)) for u, v, d in G.edges(data=True)
                  if isinstance(d.get("name"), str) and d["name"] and _tags(d, "highway") & ROAD_HIGHWAYS]
-        roads += [(name, _tags(tags, "highway"), LineString(coords))
+        roads += [(name, _tags(tags, "highway"), _levels(tags), LineString(coords))
                   for name, tags, coords in G.graph.get("named_ways", {}).values()
                   if _tags(tags, "highway") & ROAD_HIGHWAYS]
         self.names = [name for name, *_ in roads]
-        self.wide = [bool(highways & MAIN_ROADS) for _, highways, _ in roads]
+        self.wide = [bool(highways & MAIN_ROADS) for _, highways, *_ in roads]
+        self.levels = [levels for _, _, levels, _ in roads]
         self.lines = [self.plane.to_m(line) for *_, line in roads]
         self.tree = STRtree(self.lines)
         paths = {(min(u, v), max(u, v), str(d["osmid"])): _edge_line(G, u, v, d) for u, v, d in G.edges(data=True)
@@ -392,14 +411,17 @@ class _NamedRoads:
         self.paths = [self.plane.to_m(line) for line in paths.values()]
         self.path_tree = STRtree(self.paths)
 
-    def along(self, line, way=None):
-        """Name of the road a way of kind `way` (way_kind) runs beside, line (lon, lat), or for a crossing the road it
-        crosses; "A / B" for a short piece beside two roads alike; None if none."""
+    def along(self, line, way=None, levels=None):
+        """Name of the road a way of kind `way` (way_kind) on `levels` (_levels) runs beside, line (lon, lat), or for a
+        crossing the road it crosses; "A / B" for a short piece beside two roads alike; None if none. A way on another
+        level than a road (a footbridge over it, a tunnel under it) isn't beside it."""
         line = self.plane.to_m(line)
         if way == "crossing":
             found = self.tree.query(line, predicate="dwithin", distance=CROSSING_M)
             return min(((line.distance(self.lines[i]), self.names[i]) for i in found), default=(0, None))[1]
         found = self.tree.query(line, predicate="dwithin", distance=MAIN_ALONG_M)
+        if levels is not None:
+            found = [i for i in found if levels & self.levels[i]]
         if not len(found):
             return None
         n = min(max(round(line.length / ALONG_STEP_M), 2), ALONG_POINTS)
@@ -482,10 +504,11 @@ def street_name(G, u, v, d):
     return street_label(G, u, v, d)["name"]
 
 
-def _label(G, name, way, line):
-    """How the map names a line (lon, lat) with its own `name` and kind `way`: a sidewalk or path (PATH_KINDS) without
-    a name takes the road's it runs beside, a crossing the road's it crosses (`along`); other ways keep none."""
-    beside = None if name or (way not in PATH_KINDS and way != "crossing") else _named_roads(G).along(line, way)
+def _label(G, name, way, line, levels=None):
+    """How the map names a line (lon, lat) with its own `name` and kind `way` on `levels` (_levels): a sidewalk or path
+    (PATH_KINDS) without a name takes the road's it runs beside, a crossing the road's it crosses (`along`); other ways
+    keep none."""
+    beside = None if name or (way not in PATH_KINDS and way != "crossing") else _named_roads(G).along(line, way, levels)
     return {"name": name or beside, "way": way, "along": beside is not None}
 
 
@@ -534,8 +557,9 @@ def _parts(G, d, ids, coords):
     if len(set(names)) > 1:
         runs = _way_runs(G, ids, coords)
         if runs:
-            return [(a, b, _label(G, name, kind or way_kind(d), LineString(coords[a:b + 1]))) for a, b, name, kind in runs]
-    return [(0, len(coords) - 1, _label(G, names[0] if names else None, way_kind(d), LineString(coords)))]
+            return [(a, b, _label(G, name, kind or way_kind(d), LineString(coords[a:b + 1]), _levels(d)))
+                    for a, b, name, kind in runs]
+    return [(0, len(coords) - 1, _label(G, names[0] if names else None, way_kind(d), LineString(coords), _levels(d)))]
 
 
 # street_parts per graph and edge, for the overlays (and every /score) that name all ~22,000 streets: ~10 s once.
@@ -555,7 +579,7 @@ def street_parts(G, u, v, d):
     # Once per street, from its lower node to its higher one (a two-way street is two edges, the same line reversed);
     # with the tags it is named from, so a renamed street isn't served its old name.
     street = (min(u, v), max(u, v), str(d["osmid"]), round(float(d["length"]), 1),
-              *(str(d.get(k)) for k in ("name", "highway", "footway")))
+              *(str(d.get(k)) for k in ("name", "highway", "footway", "bridge", "tunnel", "layer")))
     forward = u < v
     if street not in cache:
         cache[street] = _parts(G, d, osm_way_ids(d["osmid"]), coords if forward else coords[::-1])
@@ -614,10 +638,13 @@ def way_parts(G, osmid, coords, name=None):
     if len(ids) > 1:
         runs = _way_runs(G, ids, coords)
         if runs and len({run[2] for run in runs}) > 1:
-            return [(a, b, _label(G, n, k or kind, LineString(coords[a:b + 1]))) for a, b, n, k in runs]
+            first = next((ways[i] for i in ids if i in ways), None)
+            levels = None if first is None else _levels(first)
+            return [(a, b, _label(G, n, k or kind, LineString(coords[a:b + 1]), levels)) for a, b, n, k in runs]
     named = G.graph.get("named_ways", {})
     known = next((named[i] for i in ids if i in named), None)
     d = next((ways[i] for i in ids if i in ways), None)
+    levels = None if known is None and d is None else _levels(known[1] if known else d)
     if known:
         own, kind = known[0], way_kind(known[1])
     elif d is not None:
@@ -627,7 +654,7 @@ def way_parts(G, osmid, coords, name=None):
         own = names.pop() if len(names) == 1 else None
     else:
         own = (_names({"name": name}) or [None])[0]
-    return [(0, len(coords) - 1, _label(G, own, kind, LineString(coords)))]
+    return [(0, len(coords) - 1, _label(G, own, kind, LineString(coords), levels))]
 
 
 def way_label(G, osmid, coords, name=None, named=True):

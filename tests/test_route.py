@@ -488,6 +488,18 @@ def test_a_sidewalk_without_a_name_is_named_after_the_road_beside_it():
     assert segments("s1", "p1") == [("Allee", "sidewalk", True), (None, "path", False)]
 
 
+def test_a_footbridge_over_the_road_is_not_beside_it():
+    G, _ = sidewalk_graph()
+    sidewalk = G.edges["s1", "s2", 0]
+    sidewalk.update(bridge="yes", layer="1")
+    assert street_label(G, "s1", "s2", sidewalk) == {"name": None, "way": "sidewalk", "along": False}
+    # On the road's own bridge, it is its sidewalk.
+    G, _ = sidewalk_graph()
+    G.edges["r1", "r2", 0].update(bridge="yes")
+    G.edges["s1", "s2", 0].update(bridge="yes")
+    assert street_label(G, "s1", "s2", G.edges["s1", "s2", 0]) == {"name": "Allee", "way": "sidewalk", "along": True}
+
+
 def test_map_lines_are_named_like_route_stretches():
     G, _ = sidewalk_graph()
     G.edges["r1", "r2", 0]["name"] = ["Allee", "Brücke"]  # merged from two ways: the first name
