@@ -4,6 +4,7 @@ import json
 import math
 from pathlib import Path
 
+import networkx as nx
 import numpy as np
 import osmnx as ox
 import pandas as pd
@@ -22,6 +23,8 @@ from routing.surface import load_surface
 CACHE_DIR = Path(__file__).resolve().parent.parent / "cache"
 # Renamed when the filter below changes, so an old cached graph isn't reused.
 GRAPH_PATH = CACHE_DIR / "heilbronn_bike_rideable.graphml"
+# Written next to it: the dead ends drop_orphan_stubs removed, to check them on a map.
+DROPPED_STUBS_PATH = CACHE_DIR / "heilbronn_dropped_stubs.geojson"
 # Written by estimation/estimate_roughness.py: roughness of unmeasured OSM ways close to measured streets.
 ESTIMATED_ROUGHNESS_PATH = CACHE_DIR.parent / "data" / "custom" / "roughness_estimates_heilbronn.json"
 # Written by routing/air_hotspots.py: the car roads of the clean-air plan's NO2 hotspot sections. A bike street with at
@@ -60,6 +63,13 @@ NO_BIKE_FOOTWAY_FILTER = '["highway"~"^(footway|path)$"]["bicycle"="no"]["access
 # A footway or path is rideable with one of these bicycle tags. Without a tag, bikes are not allowed on it.
 BIKE_ALLOWED = {"yes", "designated", "permissive"}
 FOOTWAY_TYPES = {"footway", "path"}
+# Roads bikes may not use, which BIKE_FILTER leaves out. Where a short road ends on one of them, routing is left with a
+# dead end: see drop_orphan_stubs.
+CUT_FILTER = ('["highway"~"^(trunk|primary|secondary|tertiary|unclassified|residential|living_street|service|road)(_link)?$"]'
+              '["bicycle"~"^(no|use_sidepath|dismount)$"]["access"!~"private"]')
+STUB_M = 50  # longest dead end that drop_orphan_stubs removes
+# Service roads that lead to a property: a dead end of these is the point, not a leftover.
+PROPERTY_ACCESS = {"driveway", "parking_aisle", "drive-through"}
 LINK_M = 30  # longest footway without a bicycle tag that may link two rideable places
 GAP_M = 150  # longest footway without a bicycle tag that may fill a gap between two ways tagged bicycle=yes
 
@@ -127,27 +137,70 @@ def keep_rideable_footways(G):
     return removed
 
 
-def load_graph(path=GRAPH_PATH, footways_path=DROPPED_FOOTWAYS_PATH):
+def _stub(G, U, end):
+    """(nodes, edges) of the dead end that starts at the free node `end` of the undirected U, up to the junction where it
+    meets the rest of the graph (not included), or None if it is longer than STUB_M. `edges` are (u, v, key) of G."""
+    nodes, edges, length = [end], [], 0.0
+    while True:
+        (ahead,) = [m for m in U[nodes[-1]] if m not in nodes]
+        pieces = [(a, b, k, d) for a, b in ((nodes[-1], ahead), (ahead, nodes[-1])) if G.has_edge(a, b) for k, d in G[a][b].items()]
+        length += min(float(d["length"]) for *_, d in pieces)  # a two-way road is two edges: count it once
+        if length > STUB_M:
+            return None
+        edges += [(a, b, k) for a, b, k, _ in pieces]
+        if U.degree(ahead) != 2:
+            if U.degree(ahead) == 1:  # free at both ends: nothing else holds it
+                nodes.append(ahead)
+            return nodes, edges
+        nodes.append(ahead)
+
+
+def drop_orphan_stubs(G, cut_nodes):
+    """Remove short dead-end roads that only exist because BIKE_FILTER cut off the road they ended on, from the graph.
+
+    A stub runs at most STUB_M metres from a free end (a node with one neighbour) that lies on one of `cut_nodes`, the
+    roads bikes may not use (CUT_FILTER), to the junction where it meets the rest of the graph: a service road between a
+    bike path and Mannheimer Strasse. It leads nowhere now, but a trip starting next to it would snap onto it. Dead ends
+    that end in OSM itself stay, as a road to a building doesn't end on a cut road. So do roads that lead to a property
+    (service=driveway|parking_aisle|drive-through).
+
+    Returns the removed edges as routing.footways.footway_collection, to check what was removed.
+    """
+    U = nx.Graph(G)
+    removed = []
+    for end in [n for n in U if n in cut_nodes and U.degree(n) == 1]:
+        stub = _stub(G, U, end)
+        if stub and not any(set(_tags(G.edges[e].get("service"))) & PROPERTY_ACCESS for e in stub[1]):
+            removed += stub[1]
+    collection = footway_collection(G, removed)
+    G.remove_edges_from(removed)
+    G.remove_nodes_from([n for n in list(G) if G.degree(n) == 0])
+    return collection
+
+
+def load_graph(path=GRAPH_PATH, footways_path=DROPPED_FOOTWAYS_PATH, stubs_path=DROPPED_STUBS_PATH):
     """Load the bike graph from cache/, downloading it from OSM the first time (~2 min).
 
     Delete the .graphml file to pick up newer OSM data. It is built again by itself when RIDEABLE_WAYS changed
     (e.g. an approved user report), as that decides which footways stay, and when the footways it left out
-    (`footways_path`, see routing.footways) are missing.
+    (`footways_path`, see routing.footways) or the dead ends it removed (`stubs_path`) are missing.
     """
-    path, footways_path = Path(path), Path(footways_path)
+    path, footways_path, stubs_path = Path(path), Path(footways_path), Path(stubs_path)
     rideable = ",".join(map(str, sorted(RIDEABLE_WAYS)))
     G = ox.load_graphml(path) if path.exists() else None
     if G is not None and "rideable_ways" not in G.graph:
         # Cached before the list was recorded, when it held only the hand-picked ways: record it.
         G.graph["rideable_ways"] = rideable
         ox.save_graphml(G, path)
-    if G is None or G.graph["rideable_ways"] != rideable or not footways_path.exists():
+    if G is None or G.graph["rideable_ways"] != rideable or not footways_path.exists() or not stubs_path.exists():
         ox.settings.cache_folder = CACHE_DIR
-        ox.settings.useful_tags_way = sorted({*ox.settings.useful_tags_way, "bicycle", "footway"})  # keep_rideable_footways needs them
+        ox.settings.useful_tags_way = sorted({*ox.settings.useful_tags_way, "bicycle", "footway", "service"})  # keep_rideable_footways and drop_orphan_stubs need them
         G = ox.graph_from_place(PLACE, network_type="bike", custom_filter=[BIKE_FILTER, CROSSING_FILTER, NO_BIKE_FOOTWAY_FILTER], simplify=False)
         # Elevator nodes must survive simplification, as the footways only count as rideable near them.
         G = ox.simplify_graph(G, node_attrs_include=["highway"])
         save_footways(keep_rideable_footways(G), footways_path)
+        cut_nodes = set(ox.graph_from_place(PLACE, custom_filter=CUT_FILTER, retain_all=True, simplify=False))
+        save_footways(drop_orphan_stubs(G, cut_nodes), stubs_path)
         G.graph["rideable_ways"] = rideable
         ox.save_graphml(G, path)
     attach_lifts(G)
