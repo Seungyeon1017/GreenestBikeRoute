@@ -132,16 +132,7 @@ export default function OverviewMap({
     ridden: t('greenest.overview.street.ridden'),
     lightsPer100m: t('greenest.overview.street.lightsPer100m'),
     nameLoading: t('greenest.overview.street.nameLoading'),
-    whyTitle: t('greenest.overview.street.whyTitle'),
-    whyNone: t('greenest.overview.street.whyNone'),
-    why: key => t(`greenest.overview.street.why.${key}`),
-    whyFactor: (factor, credit) =>
-      t(
-        credit
-          ? 'greenest.overview.street.whyCredit'
-          : 'greenest.overview.street.whyFactor',
-        { factor },
-      ),
+    traffic: t('greenest.overview.street.traffic'),
   }
   const labelsRef = useRef(labels)
   labelsRef.current = labels

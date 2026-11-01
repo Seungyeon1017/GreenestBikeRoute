@@ -254,7 +254,7 @@
         "description": "How good each street feels to ride (0–100, higher is better): traffic (road type, speed limit, bike lanes), smooth surface, safe overtaking, clean air, few stops. Faded streets have no sensor-bike data yet.",
         "unit": "score 0–100 (higher = better)",
         "legend": {
-          "top": "75–100 (calm, smooth)",
+          "top": "85–100 (calm, smooth)",
           "faded": "faded: no sensor bike rode it yet"
         }
       },
@@ -355,23 +355,7 @@
         "ridden": "Measured by sensor bikes",
         "lightsPer100m": "Street lamps per 100 m",
         "nameLoading": "Loading street name…",
-        "whyTitle": "Why this score",
-        "whyNone": "Nothing holds this street back.",
-        "why": {
-          "traffic": "Traffic",
-          "roughness": "Rough surface",
-          "air": "Fine dust",
-          "stop_go": "Stop and go",
-          "danger": "Close overtaking",
-          "lifts": "Lift to carry the bike",
-          "sun": "Little shade",
-          "dark": "Unlit",
-          "no_bike_path": "No bike path",
-          "unpaved": "Unpaved surface",
-          "slower": "Slow street"
-        },
-        "whyFactor": "feels {{factor}}× longer",
-        "whyCredit": "feels {{factor}}× shorter"
+        "traffic": "Traffic stress (1 calm – 4 busy)"
       }
     },
     "planTrip": {

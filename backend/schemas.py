@@ -579,10 +579,16 @@ class ScoreProperties(StreetName):
         "default). Air where no sensor passed: the measured streets within 300 m"))
     ridden: bool = Field(description=(
         "Whether ATRAI bikes measured the street. Without, the score rests on OSM, nearby air and estimates only"))
-    why: dict[str, float] = Field(description=(
-        "Why the score is what it is: the factors that move it, worst first, each as how many times its length it makes "
-        "the street feel (1 = no effect). Above 1 costs points (bad), below 1 earns credit. Keys: traffic, roughness, "
-        "air, stop_go, danger, lifts, sun, dark, no_bike_path, unpaved, slower. Only factors of 5 % or more are listed"))
+    why: dict[str, Literal["bad", "good"]] = Field(description=(
+        "Which factors hold the score down (bad) or lift it (good), those that move it by 5 % or more. Keys: traffic, "
+        "roughness, air, stop_go, danger, lifts, sun, dark, no_bike_path, unpaved, slower"))
+    roughness: Optional[float] = Field(description="Surface roughness 0-100, higher = bumpier; null if no bike measured it")
+    danger_points: int = Field(description="Spots where cars overtook bikes closely")
+    pm_risk: Optional[float] = Field(description="Air score 0-1 as in /air (0.5 = usual, higher = worse); null if no bike measured it")
+    stop_go: Optional[float] = Field(description="Stop-and-go 0-1, higher = more stops; null if no bike measured it")
+    traffic: int = Field(description="Level of traffic stress 1-4 from OSM (1 = car-free or calm, 4 = fast, busy, no room for bikes)")
+    bike_friendly: bool = Field(description="Whether it is a bike path or lane")
+    unpaved: float = Field(description="Share 0-1 of unpaved surface (OSM)")
 
 
 class ScoreFeature(BaseModel):
@@ -597,7 +603,7 @@ class ScoreCollection(BaseModel):
     features: list[ScoreFeature]
     named: bool = named_field()
 
-    model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"score": 72.4, "ridden": True, "why": {"traffic": 1.15, "roughness": 1.08}, **NAMED_EXAMPLE}}, named=True)
+    model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"score": 72.4, "ridden": True, "why": {"traffic": "bad", "air": "good"}, "roughness": 11.0, "danger_points": 0, "pm_risk": 0.53, "stop_go": 0.65, "traffic": 2, "bike_friendly": False, "unpaved": 0.0, **NAMED_EXAMPLE}}, named=True)
 
 
 class VehicleProperties(BaseModel):

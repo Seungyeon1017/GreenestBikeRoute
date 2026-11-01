@@ -4,6 +4,7 @@ import {
   type SegmentLabels,
   type StreetPlace,
   streetTitle,
+  surfaceKind,
 } from '@/components/Greenest/PlanTrip/routeSegments'
 import { el } from '@/components/Greenest/PlanTrip/sharingLayers'
 import type { EnvironmentLayerId } from '@/types/greenest'
@@ -18,42 +19,68 @@ export type StreetLabels = SegmentLabels & {
   lightsPer100m: string
   /** In place of the name while the backend is still naming the streets. */
   nameLoading: string
-  whyTitle: string
-  whyNone: string
-  /** A factor's name, e.g. "Traffic". */
-  why: (_key: string) => string
-  /** "feels 1.5× longer", or "shorter" for a credit. */
-  whyFactor: (_factor: string, _credit: boolean) => string
+  /** Traffic stress 1-4, a row only the Overview has. */
+  traffic: string
 }
 
 /**
- * The score's factors, worst first, orange when they cost points and blue when
- * they earn credit, like Plan a trip's flags. MapLibre hands nested properties
- * over as a JSON string.
+ * The factors behind the overall score, as Plan a trip lists a stretch's:
+ * measured values, orange where they hold the score down, blue for a bike path.
+ * `why` is a JSON string once MapLibre has handed it over.
  */
-function whyRows(raw: unknown, labels: StreetLabels): HTMLElement[] {
-  let why: Record<string, number> = {}
+function scoreRows(
+  p: Record<string, unknown>,
+  labels: StreetLabels,
+): HTMLElement[] {
+  let why: Record<string, string> = {}
   try {
-    why = typeof raw === 'string' ? JSON.parse(raw) : ((raw as never) ?? {})
+    why =
+      typeof p.why === 'string' ? JSON.parse(p.why) : ((p.why as never) ?? {})
   } catch {
-    return []
+    why = {}
   }
-  const entries = Object.entries(why).sort((a, b) => b[1] - a[1])
-  return [
-    el('strong', 'mt-1 text-leaf-forest', labels.whyTitle),
-    ...(entries.length === 0
-      ? [el('span', 'text-leaf-muted', labels.whyNone)]
-      : entries.map(([key, factor]) =>
-          popupRow(
-            labels.why(key),
-            labels.whyFactor(
-              labels.number(factor < 1 ? 1 / factor : factor, 2),
-              factor < 1,
-            ),
-            factor < 1 ? 'good' : 'bad',
-          ),
-        )),
+  const num = (key: string) =>
+    typeof p[key] === 'number' ? (p[key] as number) : null
+  const known = (value: number | null, show: (_v: number) => string) =>
+    value == null ? labels.notMeasured : show(value)
+  const bad = (key: string) => (why[key] === 'bad' ? 'bad' : undefined)
+  const rows: Array<[string, string, ('bad' | 'good')?]> = [
+    [labels.traffic, String(num('traffic') ?? ''), bad('traffic')],
+    [
+      labels.row('roughness'),
+      known(num('roughness'), v => labels.number(v, 0)),
+      bad('roughness'),
+    ],
+    [
+      labels.row('overtaking'),
+      labels.number(num('danger_points') ?? 0, 0),
+      bad('danger'),
+    ],
+    [
+      labels.row('fineDust'),
+      known(num('pm_risk'), v => labels.number(v, 2)),
+      bad('air'),
+    ],
+    [
+      labels.row('stopGo'),
+      known(num('stop_go'), v => labels.number(v, 2)),
+      bad('stop_go'),
+    ],
   ]
+  const unpaved = num('unpaved') ?? 0
+  if (unpaved > 0 || why.unpaved) {
+    rows.push([
+      labels.row('surface'),
+      labels.row(`surfaces.${surfaceKind(unpaved)}`),
+      bad('unpaved'),
+    ])
+  }
+  rows.push([
+    labels.row('bikePath'),
+    p.bike_friendly ? labels.yes : labels.no,
+    p.bike_friendly ? 'good' : undefined,
+  ])
+  return rows.map(([label, value, tone]) => popupRow(label, value, tone))
 }
 
 /** The pointed-at street's values on the street layer that is switched on, with Plan a trip's row names. */
@@ -77,7 +104,7 @@ function streetRows(
           known(num('score'), v => `${labels.number(v, 0)} / 100`),
         ),
         popupRow(labels.ridden, p.ridden ? labels.yes : labels.no),
-        ...whyRows(p.why, labels),
+        ...scoreRows(p, labels),
       ]
     case 'surface-roughness':
       return [

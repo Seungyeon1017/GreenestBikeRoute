@@ -138,10 +138,21 @@ WHY_MIN = 0.05
 
 
 def why(factors):
-    """The factors that matter for the street, worst first: {name: factor rounded to 2 places}, those of at least
-    1 + WHY_MIN costs and, as credit, those of at most 1 / (1 + WHY_MIN)."""
-    shown = {k: round(f, 2) for k, f in factors.items() if f >= 1 + WHY_MIN or f <= 1 / (1 + WHY_MIN)}
-    return dict(sorted(shown.items(), key=lambda kv: -kv[1]))
+    """The factors that matter for the street: {name: "bad"} for those that cost it at least WHY_MIN, {name: "good"}
+    for those that earn it as much credit."""
+    return {k: "bad" if f > 1 else "good" for k, f in factors.items() if f >= 1 + WHY_MIN or f <= 1 / (1 + WHY_MIN)}
+
+
+def street_facts(d):
+    """The values behind the factors as the street popup shows them, like a Plan a trip stretch: roughness, close-overtaking
+    spots, fine dust and stop-and-go (None where no bike measured), traffic stress 1-4, whether it is a bike path or
+    lane, and the unpaved share."""
+    def rounded(v, digits):
+        return None if v is None else round(float(v), digits)
+    return {"roughness": rounded(d.get("roughness"), 0), "danger_points": int(d.get("danger_points", 0)),
+            "pm_risk": rounded(d.get("pm_risk"), 2), "stop_go": rounded(d.get("stop_go"), 2),
+            "traffic": traffic_stress(d), "bike_friendly": bool(d.get("bike_friendly")),
+            "unpaved": round(float(d.get("unpaved", 0.0)), 2)}
 
 
 def street_scores(G, bump_penalty=DEFAULT_BUMP_PENALTY, danger_penalty=DEFAULT_DANGER_PENALTY,
@@ -156,7 +167,7 @@ def street_scores(G, bump_penalty=DEFAULT_BUMP_PENALTY, danger_penalty=DEFAULT_D
     the score comes from OSM (traffic stress), nearby air and estimates only. `name`, `way` and `along` as
     routing.route.street_lines: one line per name, so a street merged from ways with different names is several lines
     with the same score; not `named`, one line per street without them. `why`: the factors behind the score
-    (feel_factors, see why())."""
+    (feel_factors, see why()) and the values behind them (street_facts)."""
     slot, dark = sky(G, depart_time)
     weights = (bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty,
                prefer_bike_friendly, unpaved_penalty, slot, dark)
@@ -169,7 +180,8 @@ def street_scores(G, bump_penalty=DEFAULT_BUMP_PENALTY, danger_penalty=DEFAULT_D
             streets[street] = (f, u, v, d, factors)
     features = [
         {"type": "Feature", "geometry": {"type": "LineString", "coordinates": coords},
-         "properties": {"score": round(min(100.0, 100 / f), 1), "ridden": ridden(d), "why": why(factors), **label}}
+         "properties": {"score": round(min(100.0, 100 / f), 1), "ridden": ridden(d), "why": why(factors),
+                        **street_facts(d), **label}}
         for f, u, v, d, factors in sorted(streets.values(), key=lambda s: s[0])
         for coords, label in street_lines(G, u, v, d, named)
     ]

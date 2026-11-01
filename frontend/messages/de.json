@@ -254,7 +254,7 @@
         "description": "Wie gut sich jede Straße fahren lässt (0–100, höher ist besser): Verkehr (Straßentyp, Tempolimit, Radwege), glatter Belag, sicheres Überholen, saubere Luft, wenig Stopps. Blasse Straßen hat noch kein Sensor-Rad befahren.",
         "unit": "Wert 0–100 (höher = besser)",
         "legend": {
-          "top": "75–100 (ruhig, glatt)",
+          "top": "85–100 (ruhig, glatt)",
           "faded": "blass: noch kein Sensor-Rad hier gefahren"
         }
       },
@@ -355,23 +355,7 @@
         "ridden": "Von Sensorrädern gemessen",
         "lightsPer100m": "Straßenlampen pro 100 m",
         "nameLoading": "Straßenname wird geladen…",
-        "whyTitle": "Warum diese Bewertung",
-        "whyNone": "Nichts bremst diese Straße.",
-        "why": {
-          "traffic": "Verkehr",
-          "roughness": "Holpriger Belag",
-          "air": "Feinstaub",
-          "stop_go": "Stop-and-go",
-          "danger": "Enges Überholen",
-          "lifts": "Aufzug zum Rad-Tragen",
-          "sun": "Wenig Schatten",
-          "dark": "Unbeleuchtet",
-          "no_bike_path": "Kein Radweg",
-          "unpaved": "Unbefestigter Belag",
-          "slower": "Langsame Straße"
-        },
-        "whyFactor": "fühlt sich {{factor}}× länger an",
-        "whyCredit": "fühlt sich {{factor}}× kürzer an"
+        "traffic": "Verkehrsbelastung (1 ruhig – 4 stark)"
       }
     },
     "planTrip": {

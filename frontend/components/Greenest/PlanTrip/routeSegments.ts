@@ -235,7 +235,7 @@ type Row = {
 }
 
 /** The surface class of a stretch's length-weighted unpavedness (0, 0.25, 0.5 or 1 per street, routing/surface.py). */
-function surfaceKind(unpaved: number): string {
+export function surfaceKind(unpaved: number): string {
   if (unpaved < 0.125) {
     return 'paved'
   }
