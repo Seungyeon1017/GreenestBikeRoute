@@ -76,12 +76,18 @@ export default function ProfileView() {
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6 md:px-8">
       <PageIntro
         subtitle={t('greenest.profile.subtitle')}
-        title={user.display_name ?? t('greenest.profile.title')}
+        title={t('greenest.profile.title')}
       />
 
       <Card className="flex flex-col gap-3">
         <CardTitle>{t('greenest.profile.account')}</CardTitle>
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+          {user.display_name && (
+            <>
+              <dt className="text-leaf-muted">{t('greenest.profile.name')}</dt>
+              <dd className="text-leaf-ink">{user.display_name}</dd>
+            </>
+          )}
           <dt className="text-leaf-muted">{t('greenest.auth.email')}</dt>
           <dd className="text-leaf-ink">{user.email}</dd>
           <dt className="text-leaf-muted">

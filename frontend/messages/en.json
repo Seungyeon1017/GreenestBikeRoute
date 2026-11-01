@@ -839,11 +839,12 @@
       "toProfile": "Go to your profile"
     },
     "profile": {
-      "title": "Your profile",
+      "title": "Profile",
       "subtitle": "Your account and your saved routes.",
       "loggedOutText": "Log in to see your account and the routes you saved.",
       "loading": "Loading…",
       "account": "Account",
+      "name": "Name",
       "memberSince": "Member since",
       "logOut": "Log out",
       "savedRoutes": "Saved routes",

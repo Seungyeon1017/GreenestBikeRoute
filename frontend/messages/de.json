@@ -839,11 +839,12 @@
       "toProfile": "Zu deinem Profil"
     },
     "profile": {
-      "title": "Dein Profil",
+      "title": "Profil",
       "subtitle": "Dein Konto und deine gespeicherten Routen.",
       "loggedOutText": "Melde dich an, um dein Konto und deine gespeicherten Routen zu sehen.",
       "loading": "Wird geladen…",
       "account": "Konto",
+      "name": "Name",
       "memberSince": "Dabei seit",
       "logOut": "Abmelden",
       "savedRoutes": "Gespeicherte Routen",
