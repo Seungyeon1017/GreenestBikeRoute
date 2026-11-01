@@ -25,6 +25,8 @@ CACHE_DIR = Path(__file__).resolve().parent.parent / "cache"
 GRAPH_PATH = CACHE_DIR / "heilbronn_bike_rideable.graphml"
 # Written next to it: the dead ends drop_orphan_stubs removed, to check them on a map.
 DROPPED_STUBS_PATH = CACHE_DIR / "heilbronn_dropped_stubs.geojson"
+# And the links link_sidepaths added from road ends to bike paths.
+SIDEPATH_LINKS_PATH = CACHE_DIR / "heilbronn_sidepath_links.geojson"
 # Written by estimation/estimate_roughness.py: roughness of unmeasured OSM ways close to measured streets.
 ESTIMATED_ROUGHNESS_PATH = CACHE_DIR.parent / "data" / "custom" / "roughness_estimates_heilbronn.json"
 # Written by routing/air_hotspots.py: the car roads of the clean-air plan's NO2 hotspot sections. A bike street with at
@@ -70,6 +72,9 @@ CUT_FILTER = ('["highway"~"^(trunk|primary|secondary|tertiary|unclassified|resid
 STUB_M = 50  # longest dead end that drop_orphan_stubs removes
 # Service roads that lead to a property: a dead end of these is the point, not a leftover.
 PROPERTY_ACCESS = {"driveway", "parking_aisle", "drive-through"}
+# link_sidepaths: a road that ends at a use_sidepath road links to a bike path vertex this near.
+SIDEPATH_LINK_M = 20
+SIDEPATH_TYPES = {"cycleway", "footway", "path", "pedestrian", "bridleway"}
 LINK_M = 30  # longest footway without a bicycle tag that may link two rideable places
 GAP_M = 150  # longest footway without a bicycle tag that may fill a gap between two ways tagged bicycle=yes
 
@@ -178,29 +183,122 @@ def drop_orphan_stubs(G, cut_nodes):
     return collection
 
 
-def load_graph(path=GRAPH_PATH, footways_path=DROPPED_FOOTWAYS_PATH, stubs_path=DROPPED_STUBS_PATH):
+def _path(d):
+    """Whether the edge is a path bikes may ride beside a road: a cycleway, or a footway or path they may use
+    (_allowed); not a crossing."""
+    highways = set(_tags(d["highway"]))
+    return highways <= SIDEPATH_TYPES and ("cycleway" in highways or _allowed(d)) and "crossing" not in _tags(d.get("footway"))
+
+
+def _coords(G, u, v, d):
+    return list(d["geometry"].coords) if "geometry" in d else [(G.nodes[n]["x"], G.nodes[n]["y"]) for n in (u, v)]
+
+
+def _split(G, u, v, at, node):
+    """Split the edges between u and v (both directions) at their vertex `at` (lon, lat), which becomes `node`."""
+    G.add_node(node, x=at[0], y=at[1])
+    for a, b in ((u, v), (v, u)):
+        for k, d in list(G[a][b].items()) if G.has_edge(a, b) else []:
+            coords = _coords(G, a, b, d)
+            i = coords.index(at)
+            first, second = LineString(coords[:i + 1]), LineString(coords[i:])
+            share = first.length / (first.length + second.length)
+            G.remove_edge(a, b, k)
+            G.add_edge(a, node, **{**d, "geometry": first, "length": float(d["length"]) * share})
+            G.add_edge(node, b, **{**d, "geometry": second, "length": float(d["length"]) * (1 - share)})
+
+
+def link_sidepaths(G, sidepath_nodes, node_ids):
+    """Link roads that end where BIKE_FILTER cut off a bicycle=use_sidepath road to the bike path that takes over.
+
+    The road on is left out, and OSM rarely joins the path to it: westbound Mannheimer Strasse ends at Schaeuffelenstrasse
+    with its bike path starting 11 m north. A road end is a node of `sidepath_nodes` (the use_sidepath roads) where a road
+    of the graph arrives with no way on, or leaves with no way in. It gets an edge to the nearest vertex of a rideable path
+    (_path) within SIDEPATH_LINK_M, in the direction(s) the road is ridden, unless that edge would cross another road. A
+    vertex inside an edge becomes a node: its OSM id from `node_ids` {(lon, lat): id} of the graph before simplifying.
+    The link takes the path's tags and data, and its length as the crow flies.
+
+    Returns the added links as routing.footways.footway_collection, under the path's OSM way, to check them on a map.
+    """
+    lat0 = float(np.mean([y for _, y in G.nodes(data="y")]))
+    roads = [(u, v, LineString(_to_metres(_coords(G, u, v, d), lat0))) for u, v, d in G.edges(data=True)
+             if not set(_tags(d["highway"])) <= SIDEPATH_TYPES]
+    road_tree = STRtree([line for *_, line in roads])
+    vertices = {}  # (lon, lat) -> (u, v) of a path edge it lies on
+    for u, v, d in G.edges(data=True):
+        if _path(d):
+            for c in _coords(G, u, v, d):
+                vertices.setdefault(c, (u, v))
+    spots = list(vertices)
+    tree = STRtree(points(_to_metres(spots, lat0)))
+    links = []
+    for n in [n for n in G if n in sidepath_nodes]:
+        ahead, behind = set(G.successors(n)), set(G.predecessors(n))
+        if all(set(_tags(d["highway"])) <= SIDEPATH_TYPES for *_, d in [*G.in_edges(n, data=True), *G.out_edges(n, data=True)]):
+            continue  # a path itself, not a road end
+        one = len(ahead | behind) == 1
+        out_link, in_link = bool(behind) and (not ahead or one), bool(ahead) and (not behind or one)
+        if not (out_link or in_link):
+            continue
+        here = (G.nodes[n]["x"], G.nodes[n]["y"])
+        at = points(_to_metres([here], lat0))[0]
+        near = sorted((at.distance(tree.geometries[i]), spots[i])
+                      for i in tree.query(at, predicate="dwithin", distance=SIDEPATH_LINK_M))
+        for dist, spot in near:
+            u, v = vertices[spot]
+            if n in (u, v) or spot == here:
+                continue
+            line = LineString(_to_metres([here, spot], lat0))
+            # Another road between the end and the path: one not at the end that meets the link short of the path.
+            crossed = (roads[i] for i in road_tree.query(line, predicate="intersects"))
+            if any(n not in (a, b) and line.intersection(road).distance(points(line.coords[-1])) > 1 for a, b, road in crossed):
+                continue
+            target = next((m for m in (u, v) if (G.nodes[m]["x"], G.nodes[m]["y"]) == spot), None)
+            if target is None:
+                target = node_ids[spot]
+                _split(G, u, v, spot, target)
+                for a, b in ((u, target), (target, v)):
+                    if G.has_edge(a, b):
+                        vertices.update({c: (a, b) for c in _coords(G, a, b, G.edges[a, b, 0])})
+            data = next(d for *_, d in [*G.out_edges(target, data=True), *G.in_edges(target, data=True)] if _path(d))
+            for a, b, ok in ((n, target, out_link), (target, n, in_link)):
+                if ok:
+                    coords = [here, spot] if a == n else [spot, here]
+                    links.append((a, b, G.add_edge(a, b, **{**data, "geometry": LineString(coords), "length": dist})))
+            break
+    return footway_collection(G, links)
+
+
+def load_graph(path=GRAPH_PATH, footways_path=DROPPED_FOOTWAYS_PATH, stubs_path=DROPPED_STUBS_PATH,
+               links_path=SIDEPATH_LINKS_PATH):
     """Load the bike graph from cache/, downloading it from OSM the first time (~2 min).
 
     Delete the .graphml file to pick up newer OSM data. It is built again by itself when RIDEABLE_WAYS changed
     (e.g. an approved user report), as that decides which footways stay, and when the footways it left out
-    (`footways_path`, see routing.footways) or the dead ends it removed (`stubs_path`) are missing.
+    (`footways_path`, see routing.footways), the dead ends it removed (`stubs_path`) or the links it added to bike paths
+    (`links_path`) are missing.
     """
-    path, footways_path, stubs_path = Path(path), Path(footways_path), Path(stubs_path)
+    path, footways_path, stubs_path, links_path = Path(path), Path(footways_path), Path(stubs_path), Path(links_path)
     rideable = ",".join(map(str, sorted(RIDEABLE_WAYS)))
     G = ox.load_graphml(path) if path.exists() else None
     if G is not None and "rideable_ways" not in G.graph:
         # Cached before the list was recorded, when it held only the hand-picked ways: record it.
         G.graph["rideable_ways"] = rideable
         ox.save_graphml(G, path)
-    if G is None or G.graph["rideable_ways"] != rideable or not footways_path.exists() or not stubs_path.exists():
+    if (G is None or G.graph["rideable_ways"] != rideable or not footways_path.exists() or not stubs_path.exists()
+            or not links_path.exists()):
         ox.settings.cache_folder = CACHE_DIR
         ox.settings.useful_tags_way = sorted({*ox.settings.useful_tags_way, "bicycle", "footway", "service"})  # keep_rideable_footways and drop_orphan_stubs need them
         G = ox.graph_from_place(PLACE, network_type="bike", custom_filter=[BIKE_FILTER, CROSSING_FILTER, NO_BIKE_FOOTWAY_FILTER], simplify=False)
+        node_ids = {(d["x"], d["y"]): n for n, d in G.nodes(data=True)}  # link_sidepaths makes some of them nodes again
         # Elevator nodes must survive simplification, as the footways only count as rideable near them.
         G = ox.simplify_graph(G, node_attrs_include=["highway"])
         save_footways(keep_rideable_footways(G), footways_path)
-        cut_nodes = set(ox.graph_from_place(PLACE, custom_filter=CUT_FILTER, retain_all=True, simplify=False))
-        save_footways(drop_orphan_stubs(G, cut_nodes), stubs_path)
+        cut = ox.graph_from_place(PLACE, custom_filter=CUT_FILTER, retain_all=True, simplify=False)
+        sidepath_nodes = {n for u, v, d in cut.edges(data=True) if "use_sidepath" in _tags(d.get("bicycle")) for n in (u, v)}
+        # Links first: a bike path that starts on the cut road is a dead end until a road end links to it.
+        save_footways(link_sidepaths(G, sidepath_nodes, node_ids), links_path)
+        save_footways(drop_orphan_stubs(G, set(cut)), stubs_path)
         G.graph["rideable_ways"] = rideable
         ox.save_graphml(G, path)
     attach_lifts(G)
