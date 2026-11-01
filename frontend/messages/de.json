@@ -669,6 +669,7 @@
           "shade": "Im Schatten",
           "lit": "Nachts beleuchtet (Chance)",
           "bikePath": "Radweg oder Radspur",
+          "lift": "Aufzug (Wartezeit)",
           "surfaces": {
             "paved": "befestigt",
             "compacted": "wassergebunden / Feinsplitt",

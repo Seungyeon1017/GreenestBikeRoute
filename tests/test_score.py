@@ -46,6 +46,12 @@ def test_feel_factor_spreads_overtaking_over_at_least_the_gps_noise():
     assert feel_factor({**calm, "length": 200.0, "danger": 1.0}) == pytest.approx(1 + 10 * 1.0 / 200)
 
 
+def test_feel_factor_spreads_a_lift_wait_over_at_least_the_gps_noise():
+    calm = {"highway": "footway", "length": 5.0, "roughness": None, "lift_end": True}
+    assert feel_factor(calm) == pytest.approx(1 + 0.25 * 100 / 2 / 50)  # not over the 5 m it measures
+    assert feel_factor({**calm, "length": 200.0}) == pytest.approx(1 + 0.25 * 100 / 2 / 200)
+
+
 def test_feel_factor_counts_the_surface():
     track = {"highway": "track", "length": 100.0, "roughness": None}
     assert feel_factor({**track, "unpaved": 1.0}) == pytest.approx(2.5)  # soil or grass at the default 6 points

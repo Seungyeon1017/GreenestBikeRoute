@@ -589,6 +589,7 @@ class ScoreProperties(StreetName):
     traffic: int = Field(description="Level of traffic stress 1-4 from OSM (1 = car-free or calm, 4 = fast, busy, no room for bikes)")
     bike_friendly: bool = Field(description="Whether it is a bike path or lane")
     unpaved: float = Field(description="Share 0-1 of unpaved surface (OSM)")
+    lift: bool = Field(description="Whether a lift (elevator) is at either end, which costs waiting time")
 
 
 class ScoreFeature(BaseModel):
@@ -603,7 +604,7 @@ class ScoreCollection(BaseModel):
     features: list[ScoreFeature]
     named: bool = named_field()
 
-    model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"score": 72.4, "ridden": True, "why": {"traffic": "bad", "air": "good"}, "roughness": 11.0, "danger_points": 0, "pm_risk": 0.53, "stop_go": 0.65, "traffic": 2, "bike_friendly": False, "unpaved": 0.0, **NAMED_EXAMPLE}}, named=True)
+    model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"score": 72.4, "ridden": True, "why": {"traffic": "bad", "air": "good"}, "roughness": 11.0, "danger_points": 0, "pm_risk": 0.53, "stop_go": 0.65, "traffic": 2, "bike_friendly": False, "unpaved": 0.0, "lift": False, **NAMED_EXAMPLE}}, named=True)
 
 
 class VehicleProperties(BaseModel):

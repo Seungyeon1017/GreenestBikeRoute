@@ -75,6 +75,9 @@ function scoreRows(
       bad('unpaved'),
     ])
   }
+  if (p.lift) {
+    rows.push([labels.row('lift'), labels.yes, bad('lifts')])
+  }
   rows.push([
     labels.row('bikePath'),
     p.bike_friendly ? labels.yes : labels.no,

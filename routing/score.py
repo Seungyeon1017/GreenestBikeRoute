@@ -100,7 +100,8 @@ def feel_factors(d, bump_penalty=DEFAULT_BUMP_PENALTY, danger_penalty=DEFAULT_DA
                  dark=False):
     """What the edge feels like to ride, factor by factor: how many times its length each makes it (1 = no effect,
     below 1 = credit), by `traffic`, `roughness`, `air`, `stop_go`, `danger` (overtaking risk per metre, danger_penalty
-    metres each, as routing), `lifts` (the wait at a lift, as a share of the rest), `sun` (by day) and `dark` (unlit,
+    metres each, as routing), `lifts` (the wait at a lift, as a share of the rest; over at least DANGER_MIN_M, as
+    danger), `sun` (by day) and `dark` (unlit,
     after dark), like routing; `slower` (prefer_time), `no_bike_path` (prefer_bike_friendly) and `unpaved`
     (unpaved_penalty, routing.surface) as routing too."""
     length = max(float(d["length"]), 1.0)
@@ -120,7 +121,7 @@ def feel_factors(d, bump_penalty=DEFAULT_BUMP_PENALTY, danger_penalty=DEFAULT_DA
         base *= f
     lifts = d.get("lift_start", False) + d.get("lift_end", False)
     factors["danger"] = 1 + danger_penalty * d.get("danger", 0.0) / max(length, DANGER_MIN_M)
-    factors["lifts"] = 1 + stop_penalty * POINT * LIFT_WAIT_M * lifts / 2 / length / (base * factors["danger"])
+    factors["lifts"] = 1 + stop_penalty * POINT * LIFT_WAIT_M * lifts / 2 / max(length, DANGER_MIN_M) / (base * factors["danger"])
     return factors
 
 
@@ -146,13 +147,13 @@ def why(factors):
 def street_facts(d):
     """The values behind the factors as the street popup shows them, like a Plan a trip stretch: roughness, close-overtaking
     spots, fine dust and stop-and-go (None where no bike measured), traffic stress 1-4, whether it is a bike path or
-    lane, and the unpaved share."""
+    lane, the unpaved share and whether a lift is at either end."""
     def rounded(v, digits):
         return None if v is None else round(float(v), digits)
     return {"roughness": rounded(d.get("roughness"), 0), "danger_points": int(d.get("danger_points", 0)),
             "pm_risk": rounded(d.get("pm_risk"), 2), "stop_go": rounded(d.get("stop_go"), 2),
             "traffic": traffic_stress(d), "bike_friendly": bool(d.get("bike_friendly")),
-            "unpaved": round(float(d.get("unpaved", 0.0)), 2)}
+            "unpaved": round(float(d.get("unpaved", 0.0)), 2), "lift": bool(d.get("lift_start") or d.get("lift_end"))}
 
 
 def street_scores(G, bump_penalty=DEFAULT_BUMP_PENALTY, danger_penalty=DEFAULT_DANGER_PENALTY,

@@ -669,6 +669,7 @@
           "shade": "In shade",
           "lit": "Chance lit at night",
           "bikePath": "Bike path or lane",
+          "lift": "Lift (waiting time)",
           "surfaces": {
             "paved": "paved",
             "compacted": "compacted / fine gravel",
