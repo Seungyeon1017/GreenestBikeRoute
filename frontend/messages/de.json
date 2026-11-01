@@ -302,7 +302,7 @@
       },
       "lighting": {
         "label": "Straßenbeleuchtung",
-        "description": "Wie wahrscheinlich jede Straße nachts beleuchtet ist, und wo nur wenige Laternen gesehen wurden.",
+        "description": "Wie wahrscheinlich jede Straße nachts beleuchtet ist (aus OSM-Daten) und wie viele Straßenlaternen dort zu sehen sind (aus Mapillary-Daten). Beleuchtete Straßen mit wenigen gesehenen Laternen werden als schwach beleuchtet dargestellt.",
         "unit": "Wahrscheinlichkeit, dass die Straße beleuchtet ist, 0–1",
         "legend": {
           "lit": "beleuchtet",

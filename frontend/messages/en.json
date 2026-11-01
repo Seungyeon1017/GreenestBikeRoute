@@ -302,7 +302,7 @@
       },
       "lighting": {
         "label": "Street lighting",
-        "description": "How likely each street is to be lit at night, and where few street lamps were seen.",
+        "description": "How each street is likely to be lit at night (from OSM data) and how many street lamps are seen on it (from Mapillary data). Lit streets with few lamps seen are shown as dimly lit.",
         "unit": "chance the street is lit 0–1",
         "legend": {
           "lit": "lit",
