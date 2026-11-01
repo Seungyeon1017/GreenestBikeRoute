@@ -14,6 +14,8 @@ import type { EnvironmentLayer, EnvironmentLayerId } from '@/types/greenest'
 
 /** How opaque the air-quality cells and the roughness lines are drawn; their legends' swatches match. */
 export const AIR_OPACITY = 0.4
+// The swatches on the white panel are a little stronger, or they look washed out.
+const AIR_LEGEND_OPACITY = 0.55
 const ROUGHNESS_OPACITY = 0.85
 
 // Breaks follow the spread of the Heilbronn cells (roughly quintiles), so the
@@ -60,6 +62,47 @@ const SUNNY = '#f59e0b'
 const LIT = '#eab308'
 const UNKNOWN_LIT = '#94a3b8'
 const DARK_STREET = '#334155'
+// Dimly lit: halfway between lit and dark.
+const DIM = '#8f7a2e'
+// Between two of the colours above, for the finer classes.
+const SUNNY_HALF = '#cca05b'
+const SHADED_HALF = '#606e96'
+const DIM_DARK = '#615e41'
+const DIM_LIT = '#bc961b'
+
+// Classes, worst first as stepColor wants them; a legend shows them best first.
+// Fine-grained like Plan a trip's hill bands: one swatch per class, exactly the
+// colours on the map.
+const STOP_GO_STEPS = [
+  { color: GREEN, max: 0.4, key: 'free' },
+  { color: LIME, max: 0.5, label: '0.4–0.5' },
+  { color: YELLOW, max: 0.6, label: '0.5–0.6' },
+  { color: ORANGE, max: 0.8, label: '0.6–0.8' },
+  { color: RED, max: Infinity, key: 'stopping' },
+]
+const SPEED_STEPS = [
+  { color: RED, max: 8, key: 'slow' },
+  { color: ORANGE, max: 11, label: '8–11 km/h' },
+  { color: YELLOW, max: 14, label: '11–14 km/h' },
+  { color: LIME, max: 17, label: '14–17 km/h' },
+  { color: GREEN, max: Infinity, key: 'fast' },
+]
+const SHADE_STEPS = [
+  { color: SUNNY, max: 0.2, key: 'sunny' },
+  { color: SUNNY_HALF, max: 0.4, label: '20–40 %' },
+  { color: HALF_SHADED, max: 0.6, label: '40–60 %' },
+  { color: SHADED_HALF, max: 0.8, label: '60–80 %' },
+  { color: SHADED, max: Infinity, key: 'shaded' },
+]
+// Where a street is on the lighting axis (LIGHTING_LEVEL): its chance of being
+// lit, with lit streets sliding down to dimly lit as fewer lamps were seen.
+const LIGHTING_STEPS = [
+  { color: DARK_STREET, max: 0.25, key: 'dark' },
+  { color: DIM_DARK, max: 0.5, key: 'unlikely' },
+  { color: DIM, max: 0.65, key: 'dim' },
+  { color: DIM_LIT, max: 0.9, key: 'fewer' },
+  { color: LIT, max: Infinity, key: 'lit' },
+]
 
 /** Line width that grows when zooming in. */
 const LINE_WIDTH = [
@@ -73,26 +116,52 @@ const LINE_WIDTH = [
 ] as never
 
 // Lit streets where Mapillary saw fewer lights per 100 m than this are dimly
-// lit (routing.lighting DIM_LIGHTS_PER_100M). Drawn halfway between lit
-// (#eab308) and dark (#334155).
+// lit (routing.lighting DIM_LIGHTS_PER_100M), drawn in DIM.
 const DIM_LIGHTS_PER_100M = 1
-const DIM = '#8f7a2e'
+
+const IS_NUMBER = (key: string) => ['==', ['typeof', ['get', key]], 'number']
+
+// No lighting data, or nothing known about the street (chance exactly 0.5, see
+// routing/lighting.py): grey, off the axis.
+const UNKNOWN_LIGHTING = [
+  'any',
+  ['!', IS_NUMBER('lit')],
+  ['==', ['get', 'lit'], 0.5],
+]
+
+// Where on the lighting axis a street is: its chance of being lit (0 dark to 1
+// lit), but a lit street where Mapillary saw fewer lamps than
+// DIM_LIGHTS_PER_100M slides from lit (1) down to dimly lit (0.5) as the lamps
+// get fewer.
+const LIGHTING_LEVEL = [
+  'case',
+  ['<', ['get', 'lit'], 0.5],
+  ['get', 'lit'],
+  IS_NUMBER('lights_per_100m'),
+  [
+    '+',
+    0.5,
+    ['*', 0.5, ['min', 1, ['/', ['get', 'lights_per_100m'], DIM_LIGHTS_PER_100M]]],
+  ],
+  ['get', 'lit'],
+]
 
 /** MapLibre `step` expression from legend steps with an upper bound per class. */
 export function stepColor(
   property: string,
   steps: Array<{ color: string; max: number }>,
 ) {
-  const expression: unknown[] = ['step', ['get', property], steps[0].color]
+  return stepOf(['get', property], steps)
+}
+
+/** Same for any expression, e.g. a computed value. */
+function stepOf(value: unknown, steps: Array<{ color: string; max: number }>) {
+  const expression: unknown[] = ['step', value, steps[0].color]
   steps.slice(1).forEach((step, i) => {
     expression.push(steps[i].max, step.color)
   })
   return expression as never
 }
-
-/** Colour along a value range, e.g. [0, RED, 100, GREEN]. */
-const ramp = (property: string, ...stops: Array<number | string>) =>
-  ['interpolate', ['linear'], ['get', property], ...stops] as never
 
 /**
  * How each backend overlay is drawn. Every overlay is one MapLibre layer with
@@ -153,21 +222,21 @@ export const OVERLAY_STYLES: Partial<
   'stop-and-go': {
     type: 'line',
     paint: {
-      'line-color': ramp('stop_go', 0.4, GREEN, 0.6, YELLOW, 0.8, RED),
+      'line-color': stepColor('stop_go', STOP_GO_STEPS),
       'line-width': LINE_WIDTH,
     },
   },
   speed: {
     type: 'line',
     paint: {
-      'line-color': ramp('speed_kmh', 8, RED, 14, YELLOW, 20, GREEN),
+      'line-color': stepColor('speed_kmh', SPEED_STEPS),
       'line-width': LINE_WIDTH,
     },
   },
   shade: {
     type: 'line',
     paint: {
-      'line-color': ramp('shade', 0, SUNNY, 0.5, HALF_SHADED, 1, SHADED),
+      'line-color': stepColor('shade', SHADE_STEPS),
       'line-width': LINE_WIDTH,
     },
   },
@@ -176,24 +245,23 @@ export const OVERLAY_STYLES: Partial<
     paint: {
       'line-color': [
         'case',
-        [
-          'all',
-          ['has', 'lights_per_100m'],
-          ['>=', ['get', 'lit'], 0.5],
-          ['<', ['get', 'lights_per_100m'], DIM_LIGHTS_PER_100M],
-        ],
-        DIM,
-        ramp('lit', 0, DARK_STREET, 0.5, UNKNOWN_LIT, 1, LIT),
+        UNKNOWN_LIGHTING,
+        UNKNOWN_LIT,
+        stepOf(LIGHTING_LEVEL, LIGHTING_STEPS),
       ] as never,
       'line-width': LINE_WIDTH,
     },
   },
 }
 
-const legendOf = (
-  steps: Array<{ color: string; label: string }>,
-  opacity?: number,
-) => steps.map(({ color, label }) => ({ color, label, opacity }))
+type LegendStep = { color: string; label?: string; key?: string }
+
+/** Swatches of the classes, in the order given. */
+const legendOf = (steps: LegendStep[], opacity?: number) =>
+  steps.map(({ color, label, key }) => ({ color, label, key, opacity }))
+
+/** The classes best first, for steps that are listed worst first. */
+const bestFirst = (steps: LegendStep[]) => [...steps].reverse()
 
 export const ENVIRONMENT_LAYERS: EnvironmentLayer[] = [
   {
@@ -215,7 +283,7 @@ export const ENVIRONMENT_LAYERS: EnvironmentLayer[] = [
     id: 'air-quality',
     source: 'ATRAI senseBox:bike (danger_zones_PM)',
     availability: 'measured',
-    legend: legendOf(PM_RISK_STEPS, AIR_OPACITY),
+    legend: legendOf(PM_RISK_STEPS, AIR_LEGEND_OPACITY),
   },
   {
     id: 'surface-roughness',
@@ -246,11 +314,7 @@ export const ENVIRONMENT_LAYERS: EnvironmentLayer[] = [
     overlay: 'flow',
     source: 'ATRAI senseBox:bike (traffic_flow)',
     availability: 'measured',
-    legend: [
-      { color: GREEN, key: 'free' },
-      { color: YELLOW, label: '0.6' },
-      { color: RED, key: 'stopping' },
-    ],
+    legend: legendOf(STOP_GO_STEPS),
   },
   {
     id: 'speed',
@@ -258,11 +322,7 @@ export const ENVIRONMENT_LAYERS: EnvironmentLayer[] = [
     overlay: 'speed',
     source: 'ATRAI senseBox:bike (speed_map)',
     availability: 'measured',
-    legend: [
-      { color: GREEN, key: 'fast' },
-      { color: YELLOW, label: '14 km/h' },
-      { color: RED, key: 'slow' },
-    ],
+    legend: legendOf(bestFirst(SPEED_STEPS)),
   },
   {
     id: 'shade',
@@ -270,11 +330,7 @@ export const ENVIRONMENT_LAYERS: EnvironmentLayer[] = [
     overlay: 'shade',
     source: 'LGL BW LoD2, Stadt Heilbronn Baumkataster (dl-de/by-2-0)',
     availability: 'estimated',
-    legend: [
-      { color: SHADED, key: 'shaded' },
-      { color: HALF_SHADED, key: 'half' },
-      { color: SUNNY, key: 'sunny' },
-    ],
+    legend: legendOf(bestFirst(SHADE_STEPS)),
   },
   {
     id: 'lighting',
@@ -284,10 +340,8 @@ export const ENVIRONMENT_LAYERS: EnvironmentLayer[] = [
       'OpenStreetMap (ODbL), Mapillary (CC BY-SA 4.0), LGL BW LoD2 (dl-de/by-2-0)',
     availability: 'estimated',
     legend: [
-      { color: LIT, key: 'lit' },
-      { color: DIM, key: 'dim' },
+      ...legendOf(bestFirst(LIGHTING_STEPS)),
       { color: UNKNOWN_LIT, key: 'unknown' },
-      { color: DARK_STREET, key: 'dark' },
     ],
   },
   {

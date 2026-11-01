@@ -278,8 +278,8 @@
         "description": "How often bikes have to slow down or stop, e.g. at traffic lights.",
         "unit": "stop-and-go 0–1",
         "legend": {
-          "free": "0.4 or less (rolls freely)",
-          "stopping": "0.8 or more (much stopping)"
+          "free": "under 0.4 (rolls freely)",
+          "stopping": "over 0.8 (much stopping)"
         }
       },
       "speed": {
@@ -287,8 +287,8 @@
         "description": "Average speed bikes were measured at, waits included.",
         "unit": "km/h",
         "legend": {
-          "fast": "20 km/h or more",
-          "slow": "8 km/h or less"
+          "fast": "over 17 km/h",
+          "slow": "under 8 km/h"
         }
       },
       "shade": {
@@ -296,9 +296,8 @@
         "description": "Share of each street in building or tree shade on a summer afternoon.",
         "unit": "share in shade, {{hour}}:00 on 21 July",
         "legend": {
-          "shaded": "mostly shaded",
-          "half": "half",
-          "sunny": "mostly sunny"
+          "shaded": "over 80 % (mostly shaded)",
+          "sunny": "under 20 % (mostly sunny)"
         }
       },
       "lighting": {
@@ -306,10 +305,12 @@
         "description": "How likely each street is to be lit at night, and where few street lamps were seen.",
         "unit": "chance the street is lit 0–1",
         "legend": {
-          "lit": "probably lit",
+          "lit": "lit",
           "dim": "dimly lit (few lamps seen)",
           "unknown": "unknown",
-          "dark": "probably dark"
+          "dark": "probably dark",
+          "fewer": "lit, but fewer lamps seen",
+          "unlikely": "probably not lit"
         }
       }
     },

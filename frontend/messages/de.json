@@ -278,8 +278,8 @@
         "description": "Wie oft Räder bremsen oder anhalten müssen, z. B. an Ampeln.",
         "unit": "Stop-and-go 0–1",
         "legend": {
-          "free": "0,4 oder weniger (rollt frei)",
-          "stopping": "0,8 oder mehr (viel Anhalten)"
+          "free": "unter 0,4 (rollt frei)",
+          "stopping": "über 0,8 (viel Anhalten)"
         }
       },
       "speed": {
@@ -287,8 +287,8 @@
         "description": "Gemessene Durchschnittsgeschwindigkeit von Rädern, Wartezeiten eingerechnet.",
         "unit": "km/h",
         "legend": {
-          "fast": "20 km/h oder mehr",
-          "slow": "8 km/h oder weniger"
+          "fast": "über 17 km/h",
+          "slow": "unter 8 km/h"
         }
       },
       "shade": {
@@ -296,9 +296,8 @@
         "description": "Anteil jeder Straße im Schatten von Gebäuden oder Bäumen an einem Sommernachmittag.",
         "unit": "Schattenanteil, {{hour}}:00 Uhr am 21. Juli",
         "legend": {
-          "shaded": "überwiegend schattig",
-          "half": "halb",
-          "sunny": "überwiegend sonnig"
+          "shaded": "über 80 % (überwiegend schattig)",
+          "sunny": "unter 20 % (überwiegend sonnig)"
         }
       },
       "lighting": {
@@ -306,10 +305,12 @@
         "description": "Wie wahrscheinlich jede Straße nachts beleuchtet ist, und wo nur wenige Laternen gesehen wurden.",
         "unit": "Wahrscheinlichkeit, dass die Straße beleuchtet ist, 0–1",
         "legend": {
-          "lit": "wahrscheinlich beleuchtet",
+          "lit": "beleuchtet",
           "dim": "schwach beleuchtet (wenige Laternen gesehen)",
           "unknown": "unbekannt",
-          "dark": "wahrscheinlich dunkel"
+          "dark": "wahrscheinlich dunkel",
+          "fewer": "beleuchtet, aber weniger Laternen gesehen",
+          "unlikely": "wahrscheinlich nicht beleuchtet"
         }
       }
     },
