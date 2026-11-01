@@ -12,6 +12,8 @@ type AreaDetailsPanelProps = {
   open: boolean
   onToggle: () => void
   onClear: () => void
+  /** The map picks streets, not areas: say how to get back to them. */
+  streetMode: boolean
 }
 
 type Indicator = {
@@ -69,6 +71,7 @@ export default function AreaDetailsPanel({
   open,
   onToggle,
   onClear,
+  streetMode,
 }: AreaDetailsPanelProps) {
   const { t } = useTranslation()
 
@@ -155,7 +158,11 @@ export default function AreaDetailsPanel({
               className="h-6 w-6 text-leaf-muted/70"
             />
             <p className="text-sm text-leaf-muted">
-              {t('greenest.overview.detailsEmpty')}
+              {t(
+                streetMode
+                  ? 'greenest.overview.detailsStreetMode'
+                  : 'greenest.overview.detailsEmpty',
+              )}
             </p>
           </div>
         ))}

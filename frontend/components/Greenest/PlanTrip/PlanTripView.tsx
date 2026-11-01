@@ -36,7 +36,6 @@ import type {
   ReportKind,
   ReportPick,
   RouteFlag,
-  RouteKind,
   RouteOptions,
   RouteComparison as RouteResult,
   RouteSegment,
@@ -70,9 +69,9 @@ import {
   markSegment,
   SEGMENT_HIT_LAYER,
   segmentAt,
+  segmentLabels,
   segmentPopup,
 } from './routeSegments'
-import type { SegmentLabels } from './routeSegments'
 import SharingCard, {
   localPrice,
   priceFor,
@@ -789,27 +788,6 @@ export default function PlanTripView() {
 
   // 4. HANDLERS: functions called by clicks and buttons.
 
-  function segmentLabels(): SegmentLabels {
-    const g = (key: string, values?: Record<string, unknown>) =>
-      t(`greenest.planTrip.segment.${key}`, values)
-    return {
-      route: (kind: RouteKind) => t(`greenest.planTrip.routes.${kind}`),
-      unnamed: g('unnamed'),
-      way: kind => g(`ways.${kind}`),
-      beside: way => g('beside', { way }),
-      length: m => g('length', { m }),
-      row: key => g(`rows.${key}`),
-      notMeasured: g('notMeasured'),
-      yes: g('yes'),
-      no: g('no'),
-      number: (n, digits) =>
-        n.toLocaleString(i18n.language, {
-          minimumFractionDigits: digits,
-          maximumFractionDigits: digits,
-        }),
-    }
-  }
-
   function closeSegmentPopup() {
     segmentPopupRef.current?.popup.remove()
     segmentPopupRef.current = null
@@ -853,7 +831,7 @@ export default function PlanTripView() {
           hit.kind,
           hit.segment,
           current.route.properties,
-          segmentLabels(),
+          segmentLabels(t, i18n.language),
           // Only once clicked (a hovering popup can't be clicked) and from a backend that names the segments.
           pinned && hit.segment.segments?.length
             ? {

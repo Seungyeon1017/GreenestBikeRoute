@@ -314,11 +314,12 @@
     },
     "overview": {
       "title": "Entdecke die Umwelt deiner Stadt",
-      "subtitle": "Was beim Radfahren zählt: Luft, Belag, Verkehr, Schatten und Licht. Ebenen ein- und ausblenden und ein Gebiet für Details anklicken.",
-      "layersTitle": "Umweltebenen",
+      "subtitle": "Was beim Radfahren zählt: Luft, Belag, Verkehr, Schatten und Licht. Ebenen ein- und ausblenden und ein Gebiet oder eine Straße für Details anklicken.",
+      "layersTitle": "Ebenen",
       "streetLayersHint": "Ebenen, die Straßen einfärben, werden einzeln gezeigt.",
       "detailsTitle": "Gebietsdetails",
       "detailsEmpty": "Klicke ein Gebiet auf der Karte an, um gemessene Indikatoren, Datenquelle und Einheit zu sehen.",
+      "detailsStreetMode": "Wechsle zurück in den Modus „Gebiete“ (oben links auf der Karte) und klicke ein Gebiet an, um gemessene Indikatoren, Datenquelle und Einheit zu sehen.",
       "mapLabel": "Umweltkarte von Heilbronn",
       "loadingData": "Kartendaten werden geladen…",
       "clearSelection": "Auswahl aufheben",
@@ -342,7 +343,17 @@
         "manoeuvres": "aus {{count}} gemessenen Überholvorgängen"
       },
       "loadingLayer": "Ebene wird geladen…",
-      "layerError": "Diese Ebene konnte nicht geladen werden."
+      "layerError": "Diese Ebene konnte nicht geladen werden.",
+      "pickMode": {
+        "label": "Was ein Klick auf die Karte auswählt",
+        "area": "Gebiete",
+        "street": "Straßen",
+        "noStreetLayer": "Schalte eine Ebene ein, die Straßen einfärbt, z. B. Oberflächenrauheit, um auf sie zu zeigen."
+      },
+      "street": {
+        "ridden": "Von Sensorrädern gemessen",
+        "lightsPer100m": "Straßenlampen pro 100 m"
+      }
     },
     "planTrip": {
       "title": "Finde deine grünste Route",

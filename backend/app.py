@@ -28,7 +28,7 @@ from routing.graph import load_graph
 from routing.highlights import greenest_streets
 from routing.tours import plan_tours
 from routing.footways import Footways
-from routing.route import RouteError, compare_routes, day_routes, edge_coords, find_route, nearest_street, segment_id, set_closures, street_name, sky
+from routing.route import RouteError, compare_routes, day_routes, edge_coords, find_route, nearest_street, segment_id, set_closures, street_label,     street_name, sky, way_label
 from routing.score import street_scores
 from routing.sharing_trip import WalkNetwork, load_walk_graph, plan_sharing_trip
 
@@ -37,14 +37,21 @@ class GeoJSONResponse(JSONResponse):
     media_type = "application/geo+json"
 
 
-@cache
-def roughness_collection():
-    """The measured streets from bumpy_roads_heilbronn, trimmed to geometry + roughness (0-100)."""
+def atrai_streets(G, name, key, value, convert=lambda x: x):
+    """The street segments of ATRAI dataset `name` that have property `key`, trimmed to geometry + `value`: convert(it)
+    + the street's name, way and along (routing.route.way_label, from its OSM way)."""
     features = [
-        {"type": "Feature", "geometry": f["geometry"], "properties": {"roughness": f["properties"]["Normalized Roughness"]}}
-        for f in load_features("bumpy_roads_heilbronn")
+        {"type": "Feature", "geometry": f["geometry"], "properties": {
+            value: convert(p[key]),
+            **way_label(G, p["osmid"], f["geometry"]["coordinates"], p.get("name"))}}
+        for f in load_features(name) if (p := f["properties"]).get(key) is not None
     ]
     return {"type": "FeatureCollection", "features": features}
+
+
+def roughness_collection(G):
+    """The measured streets from bumpy_roads_heilbronn, trimmed to geometry + roughness (0-100) + name."""
+    return atrai_streets(G, "bumpy_roads_heilbronn", "Normalized Roughness", "roughness")
 
 
 @cache
@@ -68,36 +75,29 @@ def air_collection():
     return {"type": "FeatureCollection", "features": features}
 
 
-@cache
-def flow_collection():
-    """The measured streets from traffic_flow_heilbronn, trimmed to geometry + stop_go (0-1, 1 - avg_traffic_flow)."""
-    features = [
-        {"type": "Feature", "geometry": f["geometry"], "properties": {"stop_go": 1 - f["properties"]["avg_traffic_flow"]}}
-        for f in load_features("traffic_flow_heilbronn") if f["properties"].get("avg_traffic_flow") is not None
-    ]
-    return {"type": "FeatureCollection", "features": features}
+def flow_collection(G):
+    """The measured streets from traffic_flow_heilbronn, trimmed to geometry + stop_go (0-1, 1 - avg_traffic_flow) +
+    name."""
+    return atrai_streets(G, "traffic_flow_heilbronn", "avg_traffic_flow", "stop_go", lambda flow: 1 - flow)
 
 
-@cache
-def speed_collection():
-    """The measured streets from speed_map_heilbronn, trimmed to geometry + speed_kmh (mean cyclist speed)."""
-    features = [
-        {"type": "Feature", "geometry": f["geometry"], "properties": {"speed_kmh": f["properties"]["avg_speed[km/h]"]}}
-        for f in load_features("speed_map_heilbronn") if f["properties"].get("avg_speed[km/h]") is not None
-    ]
-    return {"type": "FeatureCollection", "features": features}
+def speed_collection(G):
+    """The measured streets from speed_map_heilbronn, trimmed to geometry + speed_kmh (mean cyclist speed) + name."""
+    return atrai_streets(G, "speed_map_heilbronn", "avg_speed[km/h]", "speed_kmh")
 
 
 
 BIKE_FRIENDLY_PATH = DATA_DIR / "custom" / "bike_friendly_streets_heilbronn.geojson"
 
 
-@cache
-def bike_friendly_collection():
-    """Bike paths, bike lanes and bike routes from OSM (Overpass query next to the file), trimmed to geometry + osm_id."""
+def bike_friendly_collection(G):
+    """Bike paths, bike lanes and bike routes from OSM (Overpass query next to the file), trimmed to geometry + osm_id
+    + name (routing.route.way_label)."""
     data = json.loads(BIKE_FRIENDLY_PATH.read_text(encoding="utf-8"))
     features = [
-        {"type": "Feature", "geometry": f["geometry"], "properties": {"osm_id": int(f["id"].split("/")[1])}}
+        {"type": "Feature", "geometry": f["geometry"], "properties": {
+            "osm_id": (osm_id := int(f["id"].split("/")[1])),
+            **way_label(G, osm_id, f["geometry"]["coordinates"], f["properties"].get("name"))}}
         for f in data["features"] if f["geometry"]["type"] == "LineString"
     ]
     return {"type": "FeatureCollection", "features": features}
@@ -124,7 +124,8 @@ def mapping_feature(report):
 
 def street_collection(G, key, *extra):
     """The graph's streets with a value for edge attribute `key`, each street once (a two-way street is two edges),
-    trimmed to geometry + that value (+ the `extra` attributes the edge has a value for)."""
+    trimmed to geometry + that value (+ the `extra` attributes the edge has a value for) + name, way and along
+    (routing.route.street_label)."""
     features, seen = [], set()
     for u, v, d in G.edges(data=True):
         street = (min(u, v), max(u, v), str(d["osmid"]), round(float(d["length"]), 1))
@@ -133,7 +134,8 @@ def street_collection(G, key, *extra):
         seen.add(street)
         coords = [[round(x, 6), round(y, 6)] for x, y in edge_coords(G, u, v, d)]
         value = [round(x, 2) for x in d[key]] if isinstance(d[key], list) else round(d[key], 2)
-        properties = {key: value, **{k: round(d[k], 2) for k in extra if d.get(k) is not None}}
+        properties = {key: value, **{k: round(d[k], 2) for k in extra if d.get(k) is not None},
+                      **street_label(G, u, v, d)}
         features.append({"type": "Feature", "geometry": {"type": "LineString", "coordinates": coords},
                          "properties": properties})
     return {"type": "FeatureCollection", "features": features}
@@ -359,6 +361,7 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
         app.state.graph = graph if graph is not None else load_graph()
         attach_elevation(app.state.graph, load_elevation(), load_crests())  # node heights and bridge crests for /route/grade
         app.state.scores = {}
+        app.state.overlays = {}
         app.state.footways = footways if footways is not None else Footways()  # written with the graph, so after it
         if graph is None:  # the live API: no first /route/sharing waits ~2.5 s for the walking graph
             app.state.walk = WalkNetwork(walk_graph if walk_graph is not None else load_walk_graph())
@@ -448,11 +451,17 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
             raise HTTPException(status_code=400, detail=str(e))
         return JSONResponse({**trip, "updated": snap["updated"], "attribution": ATTRIBUTION})
 
+    def named_streets(name, collection):
+        """`collection`(graph), made on the first request: naming the streets takes a few seconds."""
+        if name not in app.state.overlays:
+            app.state.overlays[name] = collection(app.state.graph)
+        return app.state.overlays[name]
+
     @app.get("/roughness", tags=[OVERLAYS], summary="Measured street roughness as GeoJSON, e.g. for a map overlay",
              response_class=GeoJSONResponse, response_model=RoughnessCollection,
              response_description="LineStrings with `roughness` 0-100 (higher = bumpier); unmeasured streets are left out")
     def roughness():
-        return GeoJSONResponse(roughness_collection())
+        return GeoJSONResponse(named_streets("roughness", roughness_collection))
 
     @app.get("/danger", tags=[OVERLAYS], summary="Spots where cars overtook bikes closely, as GeoJSON points for a map overlay",
              response_class=GeoJSONResponse, response_model=DangerCollection,
@@ -470,13 +479,13 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
              response_class=GeoJSONResponse, response_model=FlowCollection,
              response_description="LineStrings with `stop_go` 0-1 (higher = more slowing and stopping); unmeasured streets are left out")
     def flow():
-        return GeoJSONResponse(flow_collection())
+        return GeoJSONResponse(named_streets("flow", flow_collection))
 
     @app.get("/speed", tags=[OVERLAYS], summary="How fast bikes ride per street, as GeoJSON for a map overlay",
              response_class=GeoJSONResponse, response_model=SpeedCollection,
              response_description="LineStrings with `speed_kmh` (mean measured cyclist speed, waits included; higher = faster); unmeasured streets are left out")
     def speed():
-        return GeoJSONResponse(speed_collection())
+        return GeoJSONResponse(named_streets("speed", speed_collection))
 
     @app.get("/shade", tags=[OVERLAYS], summary="How much of each street lies in building or tree shade, per time of day, as GeoJSON for a map overlay",
              response_class=GeoJSONResponse, response_model=ShadeCollection,
@@ -501,7 +510,7 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
              response_class=GeoJSONResponse, response_model=BikeFriendlyCollection,
              response_description="LineStrings with `osm_id` (OpenStreetMap way id); every bike path, bike lane and bike route")
     def bike_friendly_streets():
-        return GeoJSONResponse(bike_friendly_collection())
+        return GeoJSONResponse(named_streets("bike_friendly", bike_friendly_collection))
 
     @app.get("/score", tags=[OVERLAYS], summary="Overall score per street, all factors in one, as GeoJSON for a map overlay",
              response_class=GeoJSONResponse, response_model=ScoreCollection,

@@ -314,11 +314,12 @@
     },
     "overview": {
       "title": "Explore your city's environment",
-      "subtitle": "See what matters for cycling: air, road surface, traffic, shade and lighting. Turn layers on and off and click an area for details.",
-      "layersTitle": "Environmental layers",
+      "subtitle": "See what matters for cycling: air, road surface, traffic, shade and lighting. Turn layers on and off and click an area or a street for details.",
+      "layersTitle": "Layers",
       "streetLayersHint": "Layers that colour the streets are shown one at a time.",
       "detailsTitle": "Area details",
       "detailsEmpty": "Click an area on the map to see its measured indicators, data source and unit.",
+      "detailsStreetMode": "Switch back to Areas mode (top left of the map) and click an area to see its measured indicators, data source and unit.",
       "mapLabel": "Environmental map of Heilbronn",
       "loadingData": "Loading map data…",
       "clearSelection": "Clear selection",
@@ -342,7 +343,17 @@
         "manoeuvres": "based on {{count}} measured overtaking manoeuvres"
       },
       "loadingLayer": "Loading layer…",
-      "layerError": "Could not load this layer."
+      "layerError": "Could not load this layer.",
+      "pickMode": {
+        "label": "What a click on the map picks",
+        "area": "Areas",
+        "street": "Streets",
+        "noStreetLayer": "Turn on a layer that colours the streets, e.g. surface roughness, to point at them."
+      },
+      "street": {
+        "ridden": "Measured by sensor bikes",
+        "lightsPer100m": "Street lamps per 100 m"
+      }
     },
     "planTrip": {
       "title": "Find your greenest route",

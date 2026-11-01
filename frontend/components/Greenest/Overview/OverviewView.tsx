@@ -1,6 +1,7 @@
 'use client'
 
-import { AlertTriangle } from 'lucide-react'
+import { cx } from 'class-variance-authority'
+import { AlertTriangle, Grid2x2, Route } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Spinner } from '@/components/Elements/Spinner'
@@ -11,7 +12,12 @@ import type { EnvironmentLayerId } from '@/types/greenest'
 import AreaDetailsPanel from './AreaDetailsPanel'
 import LayerPanel from './LayerPanel'
 import { ENVIRONMENT_LAYERS } from './layers'
-import OverviewMap from './OverviewMap'
+import OverviewMap, { type PickMode } from './OverviewMap'
+
+const PICK_MODES: Array<{ mode: PickMode; icon: typeof Route }> = [
+  { mode: 'area', icon: Grid2x2 },
+  { mode: 'street', icon: Route },
+]
 
 const STREET_LAYERS = new Set(
   ENVIRONMENT_LAYERS.filter(layer => layer.colorsStreets).map(
@@ -31,6 +37,16 @@ export default function OverviewView() {
   const overlays = useOverlays(ENVIRONMENT_LAYERS, enabled)
   const [detailsOpen, setDetailsOpen] = useState(true)
   const [selectedCell, setSelectedCell] = useState<string | null>(null)
+  const [pickMode, setPickMode] = useState<PickMode>('area')
+  const streetLayerOn = Array.from(enabled).some(id => STREET_LAYERS.has(id))
+
+  const changePickMode = (mode: PickMode) => {
+    setPickMode(mode)
+    // Streets aren't areas: a cell outlined from before would look picked.
+    if (mode === 'street') {
+      setSelectedCell(null)
+    }
+  }
 
   const selectedArea = useMemo(
     () =>
@@ -89,17 +105,50 @@ export default function OverviewView() {
             enabled={enabled}
             onSelectCell={selectCell}
             overlays={overlays}
+            pickMode={pickMode}
             selectedCell={selectedCell}
           />
+          <div className="absolute left-3 top-3 flex max-w-[calc(100%-4.5rem)] flex-col items-start gap-2">
+            <div
+              aria-label={t('greenest.overview.pickMode.label')}
+              className="flex rounded-full border border-leaf-sand bg-white p-0.5 shadow-soft"
+              role="radiogroup"
+            >
+              {PICK_MODES.map(({ mode, icon: Icon }) => (
+                <button
+                  aria-checked={pickMode === mode}
+                  className={cx(
+                    'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold',
+                    pickMode === mode
+                      ? 'bg-leaf-forest text-white'
+                      : 'text-leaf-forest hover:bg-leaf-cream',
+                  )}
+                  key={mode}
+                  onClick={() => changePickMode(mode)}
+                  role="radio"
+                  type="button"
+                >
+                  <Icon aria-hidden className="h-3.5 w-3.5" />
+                  {t(`greenest.overview.pickMode.${mode}`)}
+                </button>
+              ))}
+            </div>
+            {/* Only when there is nothing to point at: a hint over the streets would cover their popups. */}
+            {pickMode === 'street' && !streetLayerOn && (
+              <p className="rounded-lg bg-white/90 px-3 py-1.5 text-xs text-leaf-muted shadow-sm">
+                {t('greenest.overview.pickMode.noStreetLayer')}
+              </p>
+            )}
+          </div>
           {overview.status === 'loading' && (
-            <div className="absolute left-3 top-3 flex items-center gap-2 rounded-lg bg-white/90 px-3 py-1.5 text-xs text-leaf-muted shadow-sm">
+            <div className="absolute bottom-3 left-3 flex items-center gap-2 rounded-lg bg-white/90 px-3 py-1.5 text-xs text-leaf-muted shadow-sm">
               <Spinner size="sm" />
               {t('greenest.overview.loadingData')}
             </div>
           )}
           {overview.status === 'error' && (
             <div
-              className="absolute inset-x-3 top-3 flex items-start gap-2 rounded-lg border border-red-200 bg-white/95 p-3 text-xs text-red-700 shadow-sm"
+              className="absolute inset-x-3 top-14 flex items-start gap-2 rounded-lg border border-red-200 bg-white/95 p-3 text-xs text-red-700 shadow-sm"
               role="alert"
             >
               <AlertTriangle aria-hidden className="h-4 w-4 shrink-0" />
@@ -113,6 +162,7 @@ export default function OverviewView() {
             onClear={() => setSelectedCell(null)}
             onToggle={() => setDetailsOpen(open => !open)}
             open={detailsOpen}
+            streetMode={pickMode === 'street'}
           />
         </aside>
       </div>
