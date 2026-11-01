@@ -1,4 +1,5 @@
 import type { Feature, FeatureCollection, LineString } from 'geojson'
+import type { TFunction } from 'i18next'
 import maplibregl from 'maplibre-gl'
 import type {
   RouteFlag,
@@ -204,6 +205,28 @@ export type SegmentLabels = {
   number: (_n: number, _digits: number) => string
 }
 
+/** The street popup texts in `language`, for Plan a trip and the Overview map. */
+export function segmentLabels(t: TFunction, language: string): SegmentLabels {
+  const g = (key: string, values?: Record<string, unknown>) =>
+    t(`greenest.planTrip.segment.${key}`, values)
+  return {
+    route: kind => t(`greenest.planTrip.routes.${kind}`),
+    unnamed: g('unnamed'),
+    way: kind => g(`ways.${kind}`),
+    beside: way => g('beside', { way }),
+    length: m => g('length', { m }),
+    row: key => g(`rows.${key}`),
+    notMeasured: g('notMeasured'),
+    yes: g('yes'),
+    no: g('no'),
+    number: (n, digits) =>
+      n.toLocaleString(language, {
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits,
+      }),
+  }
+}
+
 type Row = {
   key: string
   value: string
@@ -297,10 +320,68 @@ function segmentRows(
   return rows.filter(r => r.on)
 }
 
+/** What a popup title names: a route stretch, or a street line on the Overview map. */
+export type StreetPlace = Pick<RouteSegment, 'name' | 'way' | 'along'>
+
+/** The box of a street popup, on Plan a trip and the Overview map alike. */
+export function popupBox(): HTMLElement {
+  return el('div', 'flex min-w-[12rem] flex-col gap-1 text-xs text-leaf-ink')
+}
+
+/**
+ * A street popup's title: the street name, else its kind of way, else
+ * "Unnamed street" (after a coloured dot, when given), then a line with what
+ * kind of way it is under a name and the `details`. Built from DOM nodes with
+ * textContent, so street names from OSM are never read as HTML.
+ */
+export function streetTitle(
+  place: StreetPlace,
+  labels: SegmentLabels,
+  details: string[] = [],
+  dotColor?: string,
+): HTMLElement[] {
+  const title = el('span', 'flex items-center gap-2 pr-4')
+  if (dotColor) {
+    const dot = el('span', 'h-2.5 w-2.5 shrink-0 rounded-full')
+    dot.style.background = dotColor
+    title.appendChild(dot)
+  }
+  title.appendChild(
+    el(
+      'strong',
+      'text-sm font-semibold text-leaf-forest',
+      place.name ?? (place.way ? labels.way(place.way) : labels.unnamed),
+    ),
+  )
+  // Under a street name, what kind of way it is: "Sidewalk beside the road", or "Crossing" for the road it crosses.
+  const way =
+    place.name && place.way
+      ? place.along && place.way !== 'crossing'
+        ? labels.beside(labels.way(place.way))
+        : labels.way(place.way)
+      : null
+  const line = [way, ...details].filter(Boolean).join(' · ')
+  return line ? [title, el('span', 'mb-0.5 text-leaf-muted', line)] : [title]
+}
+
+/** One factor of a street popup: its name, and its value in bold (orange when bad, blue for a bike path). */
+export function popupRow(
+  label: string,
+  value: string,
+  tone?: 'bad' | 'good',
+): HTMLElement {
+  const line = el('span', 'flex justify-between gap-3')
+  const bold = el('span', 'font-semibold tabular-nums', value)
+  if (tone) {
+    bold.style.color = FLAG_COLORS[tone]
+  }
+  line.append(el('span', 'text-leaf-muted', label), bold)
+  return line
+}
+
 /**
  * Popup content for a pointed-at stretch: street, which route and how long,
- * then one line per factor. Built from DOM nodes with textContent, so street
- * names from OSM are never read as HTML.
+ * then one line per factor.
  */
 export function segmentPopup(
   kind: RouteKind,
@@ -310,46 +391,17 @@ export function segmentPopup(
   /** A button under the values, e.g. to report the stretch closed. */
   action?: { label: string; onClick: () => void },
 ): HTMLElement {
-  const box = el(
-    'div',
-    'flex min-w-[12rem] flex-col gap-1 text-xs text-leaf-ink',
-  )
-  const title = el('span', 'flex items-center gap-2 pr-4')
-  const dot = el('span', 'h-2.5 w-2.5 shrink-0 rounded-full')
-  dot.style.background = ROUTE_COLORS[kind]
-  title.append(
-    dot,
-    el(
-      'strong',
-      'text-sm font-semibold text-leaf-forest',
-      s.name ?? (s.way ? labels.way(s.way) : labels.unnamed),
-    ),
-  )
-  // Under a street name, what kind of way it is: "Sidewalk beside the road", or "Crossing" for the road it crosses.
-  const way =
-    s.name && s.way
-      ? s.along && s.way !== 'crossing'
-        ? labels.beside(labels.way(s.way))
-        : labels.way(s.way)
-      : null
+  const box = popupBox()
   box.append(
-    title,
-    el(
-      'span',
-      'mb-0.5 text-leaf-muted',
-      [way, labels.route(kind), labels.length(Math.round(s.length_m))]
-        .filter(Boolean)
-        .join(' · '),
+    ...streetTitle(
+      s,
+      labels,
+      [labels.route(kind), labels.length(Math.round(s.length_m))],
+      ROUTE_COLORS[kind],
     ),
   )
   for (const row of segmentRows(s, settings, labels)) {
-    const line = el('span', 'flex justify-between gap-3')
-    const value = el('span', 'font-semibold tabular-nums', row.value)
-    if (row.tone) {
-      value.style.color = FLAG_COLORS[row.tone]
-    }
-    line.append(el('span', 'text-leaf-muted', labels.row(row.key)), value)
-    box.appendChild(line)
+    box.appendChild(popupRow(labels.row(row.key), row.value, row.tone))
   }
   if (action) {
     const button = el(

@@ -13,6 +13,7 @@ from download_data import load_features
 from routing.costs import AIR_HOTSPOT_OFFSET, AIR_PRIOR_RIDES, CAR_HIGHWAYS, DEFAULT_PM_RISK, SNAP_M, air_scores, clean_overtaking, edge_roughness, osm_way_ids, point_risks, way_roughness, way_speed, way_stop_go
 from routing.footways import DROPPED_FOOTWAYS_PATH, footway_collection, save_footways
 from routing.lighting import load_light_density, load_lighting
+from routing.named_roads import load_named_ways
 from routing.rideable_ways import RIDEABLE_WAYS
 from routing.shade import load_way_shade
 from routing.shadow import load_shadow
@@ -162,6 +163,7 @@ def load_graph(path=GRAPH_PATH, footways_path=DROPPED_FOOTWAYS_PATH):
     attach_bike_lanes(G, load_bike_lanes())
     attach_surface(G, load_surface())
     attach_nearby_air(G)
+    G.graph["named_ways"] = load_named_ways()  # to name streets on the map and in stretches (routing.route)
     return G
 
 

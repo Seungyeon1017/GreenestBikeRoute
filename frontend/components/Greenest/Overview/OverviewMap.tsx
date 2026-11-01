@@ -1,12 +1,19 @@
 'use client'
 
-import type { Map as MapLibreMap } from 'maplibre-gl'
+import type { Feature, FeatureCollection } from 'geojson'
+import maplibregl, { type Map as MapLibreMap } from 'maplibre-gl'
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import BaseMap from '@/components/Greenest/Map'
-import type { OverlayState } from '@/hooks/useOverlays'
+import { segmentLabels } from '@/components/Greenest/PlanTrip/routeSegments'
+import { type OverlayState, SHADE_HOUR } from '@/hooks/useOverlays'
 import type { OverviewData } from '@/services/mapData'
 import type { EnvironmentLayerId } from '@/types/greenest'
-import { OVERLAY_STYLES, PM_RISK_STEPS, ROUGHNESS_STEPS } from './layers'
+import { OVERLAY_STYLES, PM_RISK_STEPS, stepColor } from './layers'
+import { type StreetLabels, streetPopup } from './streetPopup'
+
+/** What the map picks: a grid cell, or a street of the street layer that is switched on. */
+export type PickMode = 'area' | 'street'
 
 type OverviewMapProps = {
   ariaLabel: string
@@ -16,29 +23,38 @@ type OverviewMapProps = {
   enabled: Set<EnvironmentLayerId>
   selectedCell: string | null
   onSelectCell: (_cell: string | null) => void
+  pickMode: PickMode
 }
 
 /** MapLibre layer ids drawn for each environmental layer. */
 const MAP_LAYERS: Partial<Record<EnvironmentLayerId, string[]>> = {
   'air-quality': ['areas-pm'],
-  'surface-roughness': ['roughness-lines'],
 }
 
-/** MapLibre `step` expression from legend steps with an upper bound per class. */
-function stepColor(
-  property: string,
-  steps: Array<{ color: string; max: number }>,
+/** Street layers that can be pointed at: the line layers, each with an invisible, wider hit line. */
+const STREET_IDS = (Object.keys(OVERLAY_STYLES) as EnvironmentLayerId[]).filter(
+  id => OVERLAY_STYLES[id]?.type === 'line',
+)
+const HIT_PREFIX = 'street-hit-'
+const EMPTY: FeatureCollection = { type: 'FeatureCollection', features: [] }
+
+/** The invisible, wide line that hovers and clicks on a street layer hit; shown by the pick-mode effect. */
+function addStreetHit(
+  map: MapLibreMap,
+  id: EnvironmentLayerId,
+  source: string,
 ) {
-  const expression: unknown[] = ['step', ['get', property], steps[0].color]
-  steps.slice(1).forEach((step, i) => {
-    expression.push(steps[i].max, step.color)
+  map.addLayer({
+    id: HIT_PREFIX + id,
+    type: 'line',
+    source,
+    layout: { 'line-cap': 'round', visibility: 'none' },
+    paint: { 'line-color': 'rgba(0, 0, 0, 0)', 'line-width': 14 },
   })
-  return expression as never
 }
 
 function addLayers(map: MapLibreMap, data: OverviewData) {
   map.addSource('areas', { type: 'geojson', data: data.areas })
-  map.addSource('roughness', { type: 'geojson', data: data.roughness })
 
   map.addLayer({
     id: 'areas-pm',
@@ -49,16 +65,6 @@ function addLayers(map: MapLibreMap, data: OverviewData) {
       'fill-color': stepColor('pm_risk', PM_RISK_STEPS),
       'fill-opacity': 0.4,
       'fill-outline-color': 'rgba(255,255,255,0.6)',
-    },
-  })
-  map.addLayer({
-    id: 'roughness-lines',
-    type: 'line',
-    source: 'roughness',
-    paint: {
-      'line-color': stepColor('roughness', ROUGHNESS_STEPS),
-      'line-width': ['interpolate', ['linear'], ['zoom'], 12, 1.5, 16, 4],
-      'line-opacity': 0.85,
     },
   })
   // Invisible fill so every area can be clicked, whichever layers are on.
@@ -75,6 +81,30 @@ function addLayers(map: MapLibreMap, data: OverviewData) {
     filter: ['==', ['get', 'cell'], ''],
     paint: { 'line-color': '#065f46', 'line-width': 3 },
   })
+  // The pointed-at street, outlined like a stretch on Plan a trip.
+  map.addSource('street-active', { type: 'geojson', data: EMPTY })
+  const round = { 'line-cap': 'round', 'line-join': 'round' } as const
+  map.addLayer({
+    id: 'street-active-casing',
+    type: 'line',
+    source: 'street-active',
+    layout: round,
+    paint: { 'line-color': '#ffffff', 'line-width': 9 },
+  })
+  map.addLayer({
+    id: 'street-active',
+    type: 'line',
+    source: 'street-active',
+    layout: round,
+    paint: { 'line-color': '#1f3d2b', 'line-width': 5 },
+  })
+}
+
+/** Outlines the pointed-at street, or clears it. */
+function markStreet(map: MapLibreMap, feature: Feature | null) {
+  map
+    .getSource<maplibregl.GeoJSONSource>('street-active')
+    ?.setData(feature ?? EMPTY)
 }
 
 export default function OverviewMap({
@@ -84,9 +114,39 @@ export default function OverviewMap({
   enabled,
   selectedCell,
   onSelectCell,
+  pickMode,
 }: OverviewMapProps) {
+  const { t, i18n } = useTranslation()
   const [map, setMap] = useState<MapLibreMap | null>(null)
   const [layersAdded, setLayersAdded] = useState(false)
+
+  // Read by the map's event handlers, which are bound once.
+  const pickModeRef = useRef(pickMode)
+  pickModeRef.current = pickMode
+  const overlaysRef = useRef(overlays)
+  overlaysRef.current = overlays
+  const labels: StreetLabels = {
+    ...segmentLabels(t, i18n.language),
+    layer: id => t(`greenest.layers.${id}.label`),
+    shadeNote: t('greenest.layers.shade.unit', { hour: SHADE_HOUR }),
+    ridden: t('greenest.overview.street.ridden'),
+    lightsPer100m: t('greenest.overview.street.lightsPer100m'),
+  }
+  const labelsRef = useRef(labels)
+  labelsRef.current = labels
+  // The street popup: follows the mouse while hovering a street, stays put once clicked.
+  const streetRef = useRef<{
+    popup: maplibregl.Popup
+    pinned: boolean
+    layer: EnvironmentLayerId
+    key: string
+  } | null>(null)
+
+  function closeStreet(target: MapLibreMap) {
+    streetRef.current?.popup.remove()
+    streetRef.current = null
+    markStreet(target, null)
+  }
 
   // Add sources and layers once both the map and the data are ready.
   useEffect(() => {
@@ -95,13 +155,115 @@ export default function OverviewMap({
     }
     addLayers(map, data)
     map.on('click', 'areas-hit', event => {
-      onSelectCell(String(event.features?.[0]?.properties?.cell ?? '') || null)
+      if (pickModeRef.current === 'area') {
+        onSelectCell(
+          String(event.features?.[0]?.properties?.cell ?? '') || null,
+        )
+      }
     })
     map.on('mouseenter', 'areas-hit', () => {
-      map.getCanvas().style.cursor = 'pointer'
+      if (pickModeRef.current === 'area') {
+        map.getCanvas().style.cursor = 'pointer'
+      }
     })
     map.on('mouseleave', 'areas-hit', () => {
-      map.getCanvas().style.cursor = ''
+      if (pickModeRef.current === 'area') {
+        map.getCanvas().style.cursor = ''
+      }
+    })
+
+    /** The street under a map point, on a street layer that is shown, with its whole line. */
+    const streetAt = (point: maplibregl.PointLike) => {
+      const layers = STREET_IDS.map(id => HIT_PREFIX + id).filter(
+        id =>
+          map.getLayer(id) &&
+          map.getLayoutProperty(id, 'visibility') === 'visible',
+      )
+      const hit = layers.length
+        ? map.queryRenderedFeatures(point, { layers })[0]
+        : undefined
+      if (hit?.id == null) {
+        return null
+      }
+      const layer = hit.layer.id.slice(HIT_PREFIX.length) as EnvironmentLayerId
+      const overlay = overlaysRef.current[layer]
+      const feature: Feature | undefined =
+        overlay?.status === 'ready'
+          ? overlay.data.features[Number(hit.id)]
+          : undefined
+      return feature ? { layer, key: `${layer}:${hit.id}`, feature } : null
+    }
+
+    /** Shows the street's values: on hover until the mouse leaves it, or (pinned) after a click until closed. */
+    const showStreet = (
+      hit: NonNullable<ReturnType<typeof streetAt>>,
+      at: maplibregl.LngLat,
+      pinned: boolean,
+    ) => {
+      const open = streetRef.current
+      if (open?.pinned && !pinned) {
+        return // a clicked street stays until it's closed
+      }
+      if (open && !open.pinned && !pinned && open.key === hit.key) {
+        open.popup.setLngLat(at)
+        return
+      }
+      open?.popup.remove()
+      const popup = new maplibregl.Popup({
+        className: 'greenest-popup',
+        closeButton: pinned,
+        closeOnClick: false,
+        focusAfterOpen: false,
+        offset: 12,
+        maxWidth: '260px',
+      })
+        .setLngLat(at)
+        .setDOMContent(
+          streetPopup(
+            hit.layer,
+            hit.feature.properties ?? {},
+            labelsRef.current,
+          ),
+        )
+        .addTo(map)
+      const entry = { popup, pinned, layer: hit.layer, key: hit.key }
+      popup.on('close', () => {
+        if (streetRef.current === entry) {
+          streetRef.current = null
+          markStreet(map, null)
+        }
+      })
+      streetRef.current = entry
+      markStreet(map, hit.feature)
+    }
+
+    map.on('mousemove', event => {
+      if (pickModeRef.current !== 'street') {
+        return
+      }
+      const hit = streetAt(event.point)
+      map.getCanvas().style.cursor = hit ? 'pointer' : ''
+      if (hit) {
+        showStreet(hit, event.lngLat, false)
+      } else if (!streetRef.current?.pinned) {
+        closeStreet(map)
+      }
+    })
+    map.on('mouseout', () => {
+      if (!streetRef.current?.pinned) {
+        closeStreet(map)
+      }
+    })
+    map.on('click', event => {
+      if (pickModeRef.current !== 'street') {
+        return
+      }
+      const hit = streetAt(event.point)
+      if (hit) {
+        showStreet(hit, event.lngLat, true)
+      } else {
+        closeStreet(map)
+      }
     })
     setLayersAdded(true)
   }, [map, data, layersAdded, onSelectCell])
@@ -132,10 +294,18 @@ export default function OverviewMap({
         continue
       }
       if (!map.getSource(id)) {
-        map.addSource(id, { type: 'geojson', data: overlay.data })
+        // generateId: a hit street's id is its index in the data, to look up its whole line.
+        map.addSource(id, {
+          type: 'geojson',
+          data: overlay.data,
+          generateId: true,
+        })
         // Below the invisible click layer, so areas stay clickable and the selection stays on top.
         const before = map.getLayer('areas-hit') ? 'areas-hit' : undefined
         map.addLayer({ id, source: id, ...style } as never, before)
+        if (style.type === 'line') {
+          addStreetHit(map, id, id)
+        }
       }
       map.setLayoutProperty(
         id,
@@ -144,6 +314,30 @@ export default function OverviewMap({
       )
     }
   }, [map, overlays, enabled])
+
+  // Streets can be pointed at only in street mode, on the street layer that is shown.
+  useEffect(() => {
+    if (!map) {
+      return
+    }
+    const street = pickMode === 'street'
+    for (const id of STREET_IDS) {
+      if (map.getLayer(HIT_PREFIX + id)) {
+        map.setLayoutProperty(
+          HIT_PREFIX + id,
+          'visibility',
+          street && enabled.has(id) ? 'visible' : 'none',
+        )
+      }
+    }
+    const open = streetRef.current
+    if (open && (!street || !enabled.has(open.layer))) {
+      closeStreet(map)
+    }
+    if (!street) {
+      map.getCanvas().style.cursor = ''
+    }
+  }, [map, layersAdded, overlays, enabled, pickMode])
 
   useEffect(() => {
     if (map && layersAdded) {

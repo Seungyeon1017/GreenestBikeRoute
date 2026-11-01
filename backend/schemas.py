@@ -80,6 +80,24 @@ def collection_example(feature):
     return {"json_schema_extra": {"example": {"type": "FeatureCollection", "features": [feature]}}}
 
 
+WayKind = Literal["crossing", "sidewalk", "cycleway", "footway", "path", "track", "service", "pedestrian"]
+
+
+class StreetName(BaseModel):
+    """How a street line is named on the map, as a route stretch (routing.route.street_label / way_label)."""
+    name: Optional[str] = Field(description=(
+        "Its OSM street name; a line merged from several OSM ways takes the name of the way covering most of it. A way "
+        "without one (a sidewalk, a bike path) takes the name of the road it runs beside or, for a crossing, crosses "
+        "(then `along` is true), also a road bikes may not ride. Null if there is neither (a park path, a farm track)"))
+    way: Optional[WayKind] = Field(description=(
+        "The kind of way, from highway=* and footway=* in OSM: service is an access road or car park; null for an "
+        "ordinary road"))
+    along: bool = Field(description="True if `name` is that of the road the way runs beside or crosses, not its own")
+
+
+NAMED_EXAMPLE = {"name": "Schaeuffelenstraße", "way": None, "along": False}
+
+
 class LineString(BaseModel):
     type: Literal["LineString"]
     coordinates: list[LonLat] = Field(description="[lon, lat] pairs from start to end, following the streets")
@@ -111,7 +129,7 @@ class RouteSegment(BaseModel):
     name: Optional[str] = Field(description=(
         "Street name from OpenStreetMap. A way without a name takes the name of the road it runs beside (along), e.g. "
         "a sidewalk or bike path, or for a crossing the road it crosses; null if there is none (a park path, a farm track)"))
-    way: Optional[Literal["crossing", "sidewalk", "cycleway", "footway", "path", "track", "service", "pedestrian"]] = Field(
+    way: Optional[WayKind] = Field(
         description=("The kind of way, from highway=* and footway=* in OSM: service is an access road or car park; null "
                      "for an ordinary road, or for a stretch that is partly road and partly the sidewalk beside it"))
     along: bool = Field(description="True if `name` is that of the road the way runs beside or crosses, not its own")
@@ -281,10 +299,14 @@ class GradeCollection(BaseModel):
     model_config = {"json_schema_extra": {"example": GRADE_EXAMPLE}}
 
 
+class RoughnessProperties(StreetName):
+    roughness: float = Field(description="Normalized Roughness 0-100")
+
+
 class RoughnessFeature(BaseModel):
     type: Literal["Feature"]
     geometry: LineString
-    properties: dict[Literal["roughness"], float] = Field(description="Normalized Roughness 0-100")
+    properties: RoughnessProperties
 
 
 class RoughnessCollection(BaseModel):
@@ -293,7 +315,7 @@ class RoughnessCollection(BaseModel):
     features: list[RoughnessFeature]
 
     model_config = collection_example({"type": "Feature", "geometry": {"type": "LineString", "coordinates": [
-        [9.2213487, 49.1495941], [9.2212358, 49.1495259]]}, "properties": {"roughness": 22.14}})
+        [9.2213487, 49.1495941], [9.2212358, 49.1495259]]}, "properties": {"roughness": 22.14, **NAMED_EXAMPLE}})
 
 
 class DangerFeature(BaseModel):
@@ -330,11 +352,15 @@ class AirCollection(BaseModel):
         {"type": "Feature", "geometry": {"type": "Point", "coordinates": [9.2294581, 49.1331402]}, "properties": {"air": 0.998}})
 
 
+class FlowProperties(StreetName):
+    stop_go: float = Field(
+        description="1 - avg_traffic_flow, 0-1: near 0 = bikes roll freely, near 1 = slow or stop-and-go (traffic lights, congestion)")
+
+
 class FlowFeature(BaseModel):
     type: Literal["Feature"]
     geometry: LineString
-    properties: dict[Literal["stop_go"], float] = Field(
-        description="1 - avg_traffic_flow, 0-1: near 0 = bikes roll freely, near 1 = slow or stop-and-go (traffic lights, congestion)")
+    properties: FlowProperties
 
 
 class FlowCollection(BaseModel):
@@ -343,14 +369,18 @@ class FlowCollection(BaseModel):
     features: list[FlowFeature]
 
     model_config = collection_example({"type": "Feature", "geometry": {"type": "LineString", "coordinates": [
-        [9.2213487, 49.1495941], [9.2212358, 49.1495259]]}, "properties": {"stop_go": 0.662}})
+        [9.2213487, 49.1495941], [9.2212358, 49.1495259]]}, "properties": {"stop_go": 0.662, **NAMED_EXAMPLE}})
+
+
+class SpeedProperties(StreetName):
+    speed_kmh: float = Field(
+        description="Mean speed bikes were measured at in km/h, waits at lights included; higher = faster")
 
 
 class SpeedFeature(BaseModel):
     type: Literal["Feature"]
     geometry: LineString
-    properties: dict[Literal["speed_kmh"], float] = Field(
-        description="Mean speed bikes were measured at in km/h, waits at lights included; higher = faster")
+    properties: SpeedProperties
 
 
 class SpeedCollection(BaseModel):
@@ -359,17 +389,21 @@ class SpeedCollection(BaseModel):
     features: list[SpeedFeature]
 
     model_config = collection_example({"type": "Feature", "geometry": {"type": "LineString", "coordinates": [
-        [9.2213487, 49.1495941], [9.2212358, 49.1495259]]}, "properties": {"speed_kmh": 12.8}})
+        [9.2213487, 49.1495941], [9.2212358, 49.1495259]]}, "properties": {"speed_kmh": 12.8, **NAMED_EXAMPLE}})
 
 
 LINE_EXAMPLE = {"type": "LineString", "coordinates": [[9.2213487, 49.1495941], [9.2212358, 49.1495259]]}
 
 
+class ShadeProperties(StreetName):
+    shade: list[float] = Field(
+        description="Share of the street in building or tree shade, 0-1, one value per entry of the collection's `slots`")
+
+
 class ShadeFeature(BaseModel):
     type: Literal["Feature"]
     geometry: LineString
-    properties: dict[Literal["shade"], list[float]] = Field(
-        description="Share of the street in building or tree shade, 0-1, one value per entry of the collection's `slots`")
+    properties: ShadeProperties
 
 
 class ShadeCollection(BaseModel):
@@ -382,16 +416,21 @@ class ShadeCollection(BaseModel):
     model_config = {"json_schema_extra": {"example": {
         "type": "FeatureCollection",
         "slots": ["2026-07-21T09:00+02:00", "2026-07-21T12:00+02:00", "2026-07-21T15:00+02:00", "2026-07-21T18:00+02:00"],
-        "features": [{"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"shade": [0.42, 0.1, 0.05, 0.31]}}]}}}
+        "features": [{"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"shade": [0.42, 0.1, 0.05, 0.31], **NAMED_EXAMPLE}}]}}}
+
+
+class LightingProperties(StreetName):
+    lit: float = Field(description=(
+        "Chance the street is lit at night, 0-1: 1/0 from OSM lit=*, else from Mapillary street lights or a road-type rule"))
+    lights_per_100m: Optional[float] = Field(None, description=(
+        "Only where Mapillary saw at least one: street lights seen per 100 m, about half the real number as Mapillary "
+        "misses lamps; a lit street under 1 counts as dimly lit"))
 
 
 class LightingFeature(BaseModel):
     type: Literal["Feature"]
     geometry: LineString
-    properties: dict[Literal["lit", "lights_per_100m"], float] = Field(
-        description="`lit`: chance the street is lit at night, 0-1: 1/0 from OSM lit=*, else from Mapillary street lights "
-                    "or a road-type rule. `lights_per_100m` (only where Mapillary saw at least one): street lights seen per "
-                    "100 m, about half the real number as Mapillary misses lamps; a lit street under 1 counts as dimly lit")
+    properties: LightingProperties
 
 
 class LightingCollection(BaseModel):
@@ -400,13 +439,17 @@ class LightingCollection(BaseModel):
     type: Literal["FeatureCollection"]
     features: list[LightingFeature]
 
-    model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"lit": 0.96, "lights_per_100m": 2.4}})
+    model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"lit": 0.96, "lights_per_100m": 2.4, **NAMED_EXAMPLE}})
+
+
+class BikeFriendlyProperties(StreetName):
+    osm_id: int = Field(description="OpenStreetMap way id")
 
 
 class BikeFriendlyFeature(BaseModel):
     type: Literal["Feature"]
     geometry: LineString
-    properties: dict[Literal["osm_id"], int] = Field(description="OpenStreetMap way id")
+    properties: BikeFriendlyProperties
 
 
 class BikeFriendlyCollection(BaseModel):
@@ -416,7 +459,7 @@ class BikeFriendlyCollection(BaseModel):
     type: Literal["FeatureCollection"]
     features: list[BikeFriendlyFeature]
 
-    model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"osm_id": 4087087}})
+    model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"osm_id": 4087087, **NAMED_EXAMPLE}})
 
 
 class GreenStreetProperties(BaseModel):
@@ -497,7 +540,7 @@ class TourCollection(BaseModel):
             "streets": ["Am Neckaruferpark", "Untere Neckarstraße", "Neckarhalde", "Schleusenbrücke Horkheim"]}}]}}}
 
 
-class ScoreProperties(BaseModel):
+class ScoreProperties(StreetName):
     score: float = Field(description=(
         "Overall score 0-100 (higher = better): 100 / how many times its length the street feels to ride. 100 = a calm "
         "street (car-free, 30 km/h or a bike path) measured typical or better, 50 = feels twice its length, 25 = four "
@@ -521,7 +564,7 @@ class ScoreCollection(BaseModel):
     type: Literal["FeatureCollection"]
     features: list[ScoreFeature]
 
-    model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"score": 72.4}})
+    model_config = collection_example({"type": "Feature", "geometry": LINE_EXAMPLE, "properties": {"score": 72.4, "ridden": True, **NAMED_EXAMPLE}})
 
 
 class VehicleProperties(BaseModel):

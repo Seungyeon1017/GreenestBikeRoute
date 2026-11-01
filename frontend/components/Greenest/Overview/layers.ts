@@ -3,7 +3,6 @@ import type {
   LineLayerSpecification,
 } from 'maplibre-gl'
 import type { EnvironmentLayer, EnvironmentLayerId } from '@/types/greenest'
-import { SHADE_HOUR } from '@/hooks/useOverlays'
 
 /**
  * Environmental layers on the Overview map. Labels and descriptions live in
@@ -55,6 +54,18 @@ const LINE_WIDTH = [
 const DIM_LIGHTS_PER_100M = 1
 const DIM = '#8f7a2e'
 
+/** MapLibre `step` expression from legend steps with an upper bound per class. */
+export function stepColor(
+  property: string,
+  steps: Array<{ color: string; max: number }>,
+) {
+  const expression: unknown[] = ['step', ['get', property], steps[0].color]
+  steps.slice(1).forEach((step, i) => {
+    expression.push(steps[i].max, step.color)
+  })
+  return expression as never
+}
+
 /** Colour along a value range, e.g. [0, RED, 100, GREEN]. */
 const ramp = (property: string, ...stops: Array<number | string>) =>
   ['interpolate', ['linear'], ['get', property], ...stops] as never
@@ -89,6 +100,22 @@ export const OVERLAY_STYLES: Partial<
       'line-width': LINE_WIDTH,
       // Streets no sensor bike rode: scored from OpenStreetMap and nearby air only.
       'line-opacity': ['case', ['get', 'ridden'], 1, 0.4] as never,
+    },
+  },
+  'surface-roughness': {
+    type: 'line',
+    paint: {
+      'line-color': stepColor('roughness', ROUGHNESS_STEPS),
+      'line-width': [
+        'interpolate',
+        ['linear'],
+        ['zoom'],
+        12,
+        1.5,
+        16,
+        4,
+      ] as never,
+      'line-opacity': 0.85,
     },
   },
   'bike-friendly': {
@@ -178,6 +205,7 @@ export const ENVIRONMENT_LAYERS: EnvironmentLayer[] = [
   {
     id: 'surface-roughness',
     colorsStreets: true,
+    overlay: 'roughness',
     source: 'ATRAI senseBox:bike (bumpy_roads)',
     availability: 'measured',
     legend: legendOf(ROUGHNESS_STEPS),

@@ -13,7 +13,7 @@ from routing.costs import BAD_AIR_RISK, BUMPY_ROUGHNESS, DARK_EXPONENT, DEFAULT_
     DEFAULT_SHADE_PENALTY, DEFAULT_STOP_GO, DEFAULT_STOP_PENALTY, DEFAULT_UNPAVED_PENALTY, LIFT_WAIT_M, MEDIAN_SPEED_KMH, POINT, SNAP_M, \
     STOP_GO_HEAVY
 from routing.highlights import ridden
-from routing.route import _dark, _roughness, _shade, _speed_kmh, _stop_go, edge_coords, sky
+from routing.route import _dark, _roughness, _shade, _speed_kmh, _stop_go, edge_coords, sky, street_label
 
 # Level of traffic stress (LTS, Mekuria, Furth & Nixon 2012), from 1 (car-free or calm, fine for children) to 4
 # (fast, busy roads with no room for bikes), and how much longer each makes a street feel. Riders' route choice
@@ -125,7 +125,8 @@ def street_scores(G, bump_penalty=DEFAULT_BUMP_PENALTY, danger_penalty=DEFAULT_D
     100 / feel_factor, at most 100. 100 = rides like a calm, typical street (or better), 50 = feels twice its length,
     25 = four times. The same in every city and for every street, not a rank: a good street doesn't lose points
     because others are better. `ridden` says whether ATRAI bikes measured it (routing.highlights.ridden); without,
-    the score comes from OSM (traffic stress), nearby air and estimates only."""
+    the score comes from OSM (traffic stress), nearby air and estimates only. `name`, `way` and `along` as
+    routing.route.street_label."""
     slot, dark = sky(G, depart_time)
     weights = (bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty,
                prefer_bike_friendly, unpaved_penalty, slot, dark)
@@ -138,7 +139,7 @@ def street_scores(G, bump_penalty=DEFAULT_BUMP_PENALTY, danger_penalty=DEFAULT_D
     features = [
         {"type": "Feature",
          "geometry": {"type": "LineString", "coordinates": [[round(x, 6), round(y, 6)] for x, y in edge_coords(G, u, v, d)]},
-         "properties": {"score": round(min(100.0, 100 / f), 1), "ridden": ridden(d)}}
+         "properties": {"score": round(min(100.0, 100 / f), 1), "ridden": ridden(d), **street_label(G, u, v, d)}}
         for f, u, v, d in sorted(streets.values(), key=lambda s: s[0])
     ]
     return {"type": "FeatureCollection", "features": features}

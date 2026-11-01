@@ -27,6 +27,7 @@ export type EnvironmentLayerId =
 /** Map overlays served by the backend, by their endpoint name (GET /<name>). */
 export type OverlayName =
   | 'score'
+  | 'roughness'
   | 'bike-friendly-streets'
   | 'danger'
   | 'flow'

@@ -7,7 +7,7 @@ from routing import graph
 from routing.calories import DEFAULT_WEIGHT_KG, ride_kcal, walk_kcal
 from routing.costs import AIR_HOTSPOT_OFFSET, AIR_PRIOR_RIDES
 from routing.graph import AIR_NEAR_M, AIR_NEAR_PRIOR, attach_bike_friendly, attach_bike_lanes, attach_danger, attach_nearby_air, attach_surface, attach_lighting, attach_roughness, attach_shade, attach_speed, attach_stop_go
-from routing.route import WALK_KMH, RouteError, compare_routes, day_routes, find_route, sky
+from routing.route import WALK_KMH, RouteError, compare_routes, day_routes, find_route, sky, street_label, way_label
 from tests.conftest import COORDS, A, B, C
 
 
@@ -457,7 +457,8 @@ def test_stretches_name_the_street_segments_they_ride(toy_graph):
     assert [s["segments"] for s in part] == [[f"{A}-{B}"]]
 
 
-def test_a_sidewalk_without_a_name_is_named_after_the_road_beside_it():
+def sidewalk_graph():
+    """A named road with an unnamed sidewalk beside it and two paths away from it."""
     G = nx.MultiDiGraph(crs="epsg:4326")
     points = {"r1": (49.1400, 9.2100), "r2": (49.1400, 9.2120), "s1": (49.14009, 9.2100), "s2": (49.14009, 9.2120),
               "p1": (49.1420, 9.2100), "p2": (49.1420, 9.2120)}
@@ -469,6 +470,11 @@ def test_a_sidewalk_without_a_name_is_named_after_the_road_beside_it():
                               ("s2", "p2", 4, {"highway": "path"})):  # leaves the road at a right angle
         for u, v in ((a, b), (b, a)):
             G.add_edge(u, v, osmid=osmid, length=146.0, roughness=None, **tags)
+    return G, points
+
+
+def test_a_sidewalk_without_a_name_is_named_after_the_road_beside_it():
+    G, points = sidewalk_graph()
 
     def segments(start, end):
         f = find_route(G, points[start], points[end], 0)["features"][0]
@@ -476,3 +482,38 @@ def test_a_sidewalk_without_a_name_is_named_after_the_road_beside_it():
 
     assert segments("s1", "s2") == [("Allee", "sidewalk", True)]
     assert segments("s1", "p1") == [("Allee", "sidewalk", True), (None, "path", False)]
+
+
+def test_map_lines_are_named_like_route_stretches():
+    G, _ = sidewalk_graph()
+    G.edges["r1", "r2", 0]["name"] = ["Allee", "Brücke"]  # merged from two ways: the first name
+    assert street_label(G, "r1", "r2", G.edges["r1", "r2", 0]) == {"name": "Allee", "way": None, "along": False}
+    assert street_label(G, "s1", "s2", G.edges["s1", "s2", 0]) == {"name": "Allee", "way": "sidewalk", "along": True}
+    # Another dataset's line on a graph way takes that way's kind; ATRAI writes merged ids and names as strings.
+    sidewalk = [(9.2100, 49.14009), (9.2120, 49.14009)]
+    assert way_label(G, "[99, 2]", sidewalk) == {"name": "Allee", "way": "sidewalk", "along": True}
+    # A way the graph leaves out keeps the dataset's own name.
+    far = [(9.2100, 49.1500), (9.2120, 49.1500)]
+    assert way_label(G, 99, far, "['Bahnhofstraße', 'Brücke']") == {"name": "Bahnhofstraße", "way": None, "along": False}
+    assert way_label(G, 99, far) == {"name": None, "way": None, "along": False}
+
+
+def test_a_line_merged_from_several_ways_takes_the_name_of_the_way_covering_most_of_it():
+    G, _ = sidewalk_graph()
+    # r1 -> r2 is 146 m: its first 29 m are way 1 "Allee", the rest way 5 "Brücke"; the list's order means nothing.
+    G.graph["named_ways"] = {1: ("Allee", {"highway": "residential"}, [(9.2100, 49.1400), (9.2104, 49.1400)]),
+                             5: ("Brücke", {"highway": "residential"}, [(9.2104, 49.1400), (9.2120, 49.1400)])}
+    for u, v in (("r1", "r2"), ("r2", "r1")):
+        G.edges[u, v, 0].update(osmid=[1, 5], name=["Allee", "Brücke"])
+    assert street_label(G, "r1", "r2", G.edges["r1", "r2", 0])["name"] == "Brücke"
+    road = [(9.2100, 49.1400), (9.2120, 49.1400)]
+    assert way_label(G, "[1, 5]", road, "['Allee', 'Brücke']")["name"] == "Brücke"
+    assert way_label(G, 1, road[:1] + [(9.2104, 49.1400)])["name"] == "Allee"
+
+
+def test_a_sidewalk_takes_the_name_of_a_road_bikes_may_not_ride():
+    G, _ = sidewalk_graph()
+    G.remove_edges_from([("r1", "r2"), ("r2", "r1")])  # the bike graph leaves the road out
+    G.graph["named_ways"] = {7: ("Mannheimer Straße", {"highway": "primary"}, [(9.2100, 49.1400), (9.2120, 49.1400)])}
+    assert street_label(G, "s1", "s2", G.edges["s1", "s2", 0]) == {"name": "Mannheimer Straße", "way": "sidewalk",
+                                                                   "along": True}

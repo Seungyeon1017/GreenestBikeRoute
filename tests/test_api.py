@@ -116,7 +116,8 @@ def test_roughness_overlay(client):
     assert r.headers["content-type"] == "application/geo+json"
     features = r.json()["features"]
     assert len(features) > 9000
-    assert set(features[0]["properties"]) == {"roughness"}
+    assert set(features[0]["properties"]) == {"roughness", "name", "way", "along"}
+    assert not any(f["properties"]["name"].startswith("[") for f in features if f["properties"]["name"])
     RoughnessCollection.model_validate(r.json())
 
 
@@ -187,7 +188,8 @@ def test_lighting_overlay(lit_client):
     r = lit_client.get("/lighting")
     assert r.status_code == 200
     features = r.json()["features"]
-    assert [f["properties"] for f in features] == [{"lit": 0.96, "lights_per_100m": 0.7}, {"lit": 0.0}]
+    unnamed = {"name": None, "way": None, "along": False}  # the toy streets have no names
+    assert [f["properties"] for f in features] == [{"lit": 0.96, "lights_per_100m": 0.7, **unnamed}, {"lit": 0.0, **unnamed}]
     assert features[0]["geometry"]["type"] == "LineString"
     LightingCollection.model_validate(r.json())
 
