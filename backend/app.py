@@ -165,78 +165,15 @@ DEFAULT_PENALTIES = (DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_PM_PE
 
 API_DESCRIPTION = """
 Bike routes through **Heilbronn** that avoid bumpy streets, close-overtaking spots, bad air and stop-and-go,
-based on ATRAI bike sensor data, optionally the fastest one by measured cyclist speed.
+based on ATRAI bike sensor data.
 
 **Quick start:** call `/route/compare` with the example trip (pre-filled under *Try it out*) and draw
-`route` and `shortest` on a map. `/route` returns just the route as GeoJSON.
+`route` and `shortest` on a map.
 
-### For every endpoint
-- **Coordinate order:** the query takes `lat` and `lon` separately, but every GeoJSON response is in
-  **[lon, lat]** order (Leaflet's `L.geoJSON` handles this; raw `L.polyline` needs `[lat, lon]`).
-- **Errors:** 422 when a parameter is missing or out of range; 503 with a readable `detail` when a source the
-  endpoint needs (sharing feed, place search, timetable, elevation data) can't be read. Each endpoint lists its own.
-
-### Routing
-- **Penalties:** 0 ignores a factor; all four at 0 give the shortest route. Higher values accept longer detours.
-- **prefer_time:** weighs each street by its riding time at the speed bikes were measured at (`speed_map`) instead
-  of its length. Every route reports its expected `duration_s` either way.
-- **depart_time:** when the trip starts (local Heilbronn time unless it has a time zone). If the sun is up then,
-  `shade_penalty` makes sunny streets cost more, using the shade slot nearest that time of day. If the sun has set
-  (or not yet risen) on that date, `dark_penalty` makes streets that are probably unlit cost more instead.
-  Without `depart_time`, neither applies. Shade is computed for a summer day (21 July, 09/12/15/18 h), so in other
-  seasons it shows where buildings and trees shade a street, not the exact shadow of that day.
-- **Errors:** 400 with a readable `detail` when a point is more than 500 m from a Heilbronn street or no
-  route exists; 503 from `/route/grade` when the server has no elevation data (`python -m routing.elevation`).
-- **Grade:** `/route/grade` returns the route split into pieces coloured by how steep they are (display only: grade
-  doesn't change which route is picked). Each piece has `grade_pct` (positive uphill in the travel direction),
-  `severity` (flat < 2 %, gentle 2-4, noticeable 4-6, steep 6-10, very_steep 10 % and more) and a suggested `color`;
-  `summary` has climb, descent and the steepest pieces. Very short steep pieces can be terrain-model noise.
-
-### Places
-Routes take coordinates only. For a landmark, address or street, search it with `/geocode`, let the rider pick one
-of the candidates ("did you mean …") and route with its coordinates. Search on Enter, not while typing: Nominatim
-allows 1 search a second for everyone, so results are cached and searches queue.
-
-### Map overlays
-- **Layers:** `/roughness`, `/danger`, `/air` and `/flow` are static GeoJSON layers. Each
-  value is 0-1 (roughness 0-100), and higher is always worse. `/speed` gives km/h, where higher is faster.
-  `/shade` (share in shade per time slot) and `/lighting` (chance a street is lit at night) are 0-1 where higher
-  is better. `/bike-friendly-streets` shows the bike paths, bike lanes and bike routes `prefer_bike_friendly` favours.
-- **Overall score:** `/score` puts every street on one absolute 0-100 scale (higher = better): 100 / how many times its
-  length it feels to ride, so 50 = twice. Its own formula, not routing's cost: it adds traffic stress from OSM (road
-  type, speed limit, lanes, bike lane), so streets no bike rode still get a fair score (`ridden` false), lets
-  measured values better than typical earn credit, and takes air from measured streets within 300 m where no sensor
-  passed. It takes the same penalties, `prefer_time`, `prefer_bike_friendly`, `unpaved_penalty` and `depart_time` as
-  `/route`.
-- **Street names:** naming every street takes ~30 s after the server starts. Until then the street overlays come at
-  once without names (`named` false, one line per street); `/street-names` says when the names are ready, so a map
-  can fetch the overlays again.
-
-### Highlights
-`/highlights/greenest-streets` ranks named streets by street trees, clean air and bike paths (`green_score` 0-100).
-Only streets ATRAI bikes have ridden qualify, and only their ridden stretches count.
-
-### Trains
-`/transit/stops` lists every Stadtbahn and train station of the region (also outside Heilbronn, e.g. Mosbach) with a
-`stop_id`; `/transit/departures?stop_id=…&to=…` gives the next trains between two of them, so a rider knows when to
-start riding to the station. Bikes ride free on HNV trains except Monday to Friday 06:00-09:00 (`bike_ticket_needed`).
-The timetable has no live delays.
-
-### Reports
-- **Closures:** riders report closed streets with `POST /reports/closures`, optionally with `until` (the last day,
-  e.g. from the sign; else the report counts for 24 h, at most 30 days). Three live independent reports close the
-  street segment for every route; with fewer, routes avoid it if the detour is at most 4x its length, and
-  `reported_closures` counts the ones a route still rides. Since nobody reports a closure they already see, riders
-  answer with one tap instead: `POST /reports/closures/{segment}/confirm` (still closed, or open again: two such
-  answers lift it). When all reports lapse it stays `unconfirmed` for 3 days (routes still avoid it): ask riders
-  whose trip starts or ends near it. `GET /reports/closures` shows them on a map.
-- **Mapping mistakes:** `POST /reports/mapping` with `kind=rideable` reports a footway bikes ride on that routing
-  leaves out (OSM lacks bicycle=yes). A maintainer checks it (`python -m backend.reports`); approved ways are routed
-  from the next server start.
-
-### Accounts
-Create one with `POST /users`, then press **Authorize** (top right) with its email and password: the endpoints with a
-lock then send its token. Saved routes and publishing riders' routes need it; browsing riders' routes doesn't.
+- **Coordinates:** queries take `lat` and `lon`; every GeoJSON response is **[lon, lat]** (Leaflet's `L.geoJSON`
+  handles this; `L.polyline` needs `[lat, lon]`).
+- **Errors:** 422 for a missing or out-of-range parameter; 503 with a readable `detail` when a source an endpoint needs
+  can't be read. Each endpoint lists its own.
 
 ### Data credits
 - Heights for `/route/grade`: Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0 (DGM1).
@@ -266,7 +203,8 @@ def penalty_query(
         "bump_penalty. 0 = ignore. Each lift costs this x 25 m")),
     prefer_time: bool = Query(False, description=(
         "Time matters, not distance: weigh each street by its riding time at the measured cyclist speed "
-        "(unmeasured streets at the median, 15.7 km/h) instead of its length. The penalties still apply")),
+        "(unmeasured streets at the median, 15.7 km/h) instead of its length. The penalties still apply. Every "
+        "route reports its `duration_s` either way")),
     shade_penalty: float = Query(DEFAULT_SHADE_PENALTY, ge=0, le=MAX_POINTS, description=(
         "By day: how much do you hate riding in the sun, in points 0-10: each point makes a fully sunny street cost 25% "
         "more. 0 = ignore. "
@@ -285,7 +223,8 @@ def penalty_query(
         "1.75x, 1.375x). From OSM surface and tracktype; paved farm roads count as paved. 0 = ignore")),
     depart_time: Optional[datetime] = Query(None, description=(
         "When the trip starts, e.g. 2026-07-21T15:00 (Heilbronn local time) or with a time zone. Sun up: "
-        "shade_penalty applies; sun down: dark_penalty applies. Leave out to ignore both"),
+        "shade_penalty applies; sun down: dark_penalty applies. Leave out to ignore both. Shade is computed for "
+        "21 July, so in other seasons it shows where buildings and trees shade a street, not that day's shadow"),
         openapi_examples={"afternoon": {"summary": "Summer afternoon (shade counts)", "value": "2026-07-21T15:00"},
                           "night": {"summary": "Autumn evening after sunset (lighting counts)", "value": "2026-10-28T19:30"}}),
 ):
@@ -326,7 +265,7 @@ def rider_query(
 SCORE_CACHE_SIZE = 8
 
 
-ROUTE_ERRORS = {400: {"description": "Start or end is outside Heilbronn, or no route exists",
+ROUTE_ERRORS = {400: {"description": "Start or end is more than 500 m from a Heilbronn street, or no route exists",
                       "content": {"application/json": {"schema": Error.model_json_schema(), "example": {
                           "detail": "start point is 812 m from the nearest Heilbronn street"}}}}}
 
@@ -334,11 +273,13 @@ ROUTE_ERRORS = {400: {"description": "Start or end is outside Heilbronn, or no r
 ROUTING, PLACES, OVERLAYS, HIGHLIGHTS, SHARING, TRANSIT, REPORTS = "Routing", "Places", "Map overlays", "Highlights", "Sharing", "Trains", "Reports"
 TAGS_METADATA = [
     {"name": ROUTING, "description": "Plan a bike route from A to B, compare it with the shortest one, "
-                                       "or show its grade."},
+                                       "or show its grade. A penalty of 0 ignores its factor; all at 0 give the "
+                                       "shortest route."},
     {"name": PLACES, "description": "Find a landmark, address or street in Heilbronn, to route to its coordinates "
                                      "(OpenStreetMap via Nominatim)."},
-    {"name": OVERLAYS, "description": "Static GeoJSON layers of the measured data, to draw on a map, and whether "
-                                        "the street layers have their street names yet (`/street-names`)."},
+    {"name": OVERLAYS, "description": "GeoJSON layers of the measured data, to draw on a map. Higher is worse, "
+                                        "except `/speed`, `/shade`, `/lighting` and `/score`. The street layers come "
+                                        "without names for ~30 s after a server start (`/street-names`)."},
     {"name": HIGHLIGHTS, "description": "Rankings for the app's Highlights tab, e.g. the greenest streets bikes have ridden and suggested tours."},
     {"name": SHARING, "description": "Shared e-bikes and e-scooters free to rent right now and their parking zones, "
                                        "live from MobiData BW (Heilbronn: Dott). Each vehicle links to the provider's app. "
@@ -452,6 +393,8 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
                                               "model": Error}},
              response_description="LineStrings with `grade_pct`, `severity` and `color`, plus route totals in `summary`")
     def route_grade_pieces(query=Depends(route_query), rider=Depends(rider_query)):
+        """Display only: grade doesn't change which route is picked. Very short steep pieces can be terrain-model
+        noise."""
         try:
             return GeoJSONResponse(routed(route_grade, query, **rider))
         except NoElevationError as e:
@@ -571,6 +514,10 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
              response_class=GeoJSONResponse, response_model=ScoreCollection,
              response_description="LineStrings with `score` 0-100 (higher = better); every street of the bike graph")
     def score(penalties=Depends(penalty_query)):
+        """One absolute scale: 100 / how many times its length the street feels to ride, so 50 = twice. Its own formula,
+        not routing's cost: it adds traffic stress from OSM (road type, speed limit, lanes, bike lane), so streets no
+        bike rode still get a fair score (`ridden` false), lets measured values better than typical earn credit, and
+        takes air from measured streets within 300 m where no sensor passed. The parameters are those of /route."""
         return GeoJSONResponse(scored(penalties, app.state.named.is_set()))
 
     @app.get("/street-names", tags=[OVERLAYS], summary="Whether the street overlays come with street names yet",
@@ -633,6 +580,8 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
             openapi_examples={"landmark": {"summary": "Landmark", "value": "Rathaus"},
                               "address": {"summary": "Address", "value": "Allee 40"}}),
                 limit: int = Query(5, ge=1, le=10, description="Return at most this many candidates")):
+        """Let the rider pick a candidate ("did you mean …") and route with its coordinates. Search on Enter, not while
+        typing: Nominatim allows 1 search a second for everyone, so results are cached and searches queue."""
         if len(normalize(q)) < 3:
             raise HTTPException(status_code=422, detail="type at least 3 characters to search")
         try:
@@ -726,6 +675,10 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
               responses={400: {"description": "No street within 50 m of the point, or `until` is in the past", "model": Error}},
               response_description="The street segment the report went to, with how many reports it has now")
     def report_closure(report: ClosureReport, request: Request):
+        """Three live independent reports close the segment for every route; with fewer, routes avoid it if the detour
+        is at most 4x its length (`reported_closures` counts the ones a route still rides). Riders passing by answer
+        with one tap instead (`/confirm`). When all reports lapse it stays `unconfirmed` for 3 days (routes still
+        avoid it): ask riders whose trip starts or ends near it."""
         G = app.state.graph
         if report.segment is not None:
             u, v, d = graph_segment(report.segment)
@@ -782,6 +735,8 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
     @app.post("/reports/mapping", tags=[REPORTS], summary="Report a mapping mistake, e.g. a footway bikes ride on",
               status_code=201, response_model=MappingFeature, response_description="The stored report, pending")
     def report_mapping(report: MappingReport, request: Request):
+        """`kind=rideable`: a footway bikes ride on that routing leaves out (OSM lacks bicycle=yes). A maintainer checks
+        it (`python -m backend.reports`); approved ways are routed from the next server start."""
         stored = reports.report_mapping(report.kind, (report.lon, report.lat), report.reporter_id, client(request),
                                         report.osm_way_id, report.note)
         return mapping_feature(stored)
