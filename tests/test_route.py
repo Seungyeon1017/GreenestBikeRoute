@@ -8,9 +8,9 @@ from shapely import LineString
 
 from routing import graph
 from routing.calories import DEFAULT_WEIGHT_KG, ride_kcal, walk_kcal
-from routing.costs import AIR_HOTSPOT_OFFSET, AIR_PRIOR_RIDES
+from routing.costs import AIR_HOTSPOT_OFFSET, AIR_PRIOR_RIDES, MEDIAN_SPEED_KMH
 from routing.graph import AIR_NEAR_M, AIR_NEAR_PRIOR, attach_bike_friendly, attach_bike_lanes, attach_danger, attach_nearby_air, attach_surface, attach_lighting, attach_roughness, attach_shade, attach_speed, attach_stop_go
-from routing.route import WALK_KMH, RouteError, compare_routes, day_routes, find_route, sky, street_label, street_parts, \
+from routing.route import WALK_KMH, RouteError, _cost, _cost_floor, _plan, _road_size, _straight_m, _turn_s, compare_routes, day_routes, find_route, sky, street_label, street_parts, \
     way_label, way_lines
 from tests.conftest import COORDS, A, B, C
 
@@ -118,6 +118,80 @@ def test_prefer_time_takes_the_faster_detour(toy_graph):
     # 100 m at 5 km/h takes longer than 140 m at 20 km/h
     p = find_route(toy_graph, COORDS[A], COORDS[B], 0, 0, 0, 0, prefer_time=True)["features"][0]["properties"]
     assert (p["length_m"], p["prefer_time"], p["duration_s"], p["speed_measured_share"]) == (140, True, 25, 1.0)
+
+
+def grid():
+    """3 x 3 junctions 100 m apart, (east, north) from (0, 0), streets both ways at the median speed, except the
+    staircase N-E-N-E from (0, 0) to (2, 2) at 17 km/h."""
+    G = nx.MultiDiGraph(crs="epsg:4326")
+    for i in range(3):
+        for j in range(3):
+            G.add_node((i, j), y=49.14 + j * 0.0009, x=9.21 + i * 0.00137)
+    fast = {((0, 0), (0, 1)), ((0, 1), (1, 1)), ((1, 1), (1, 2)), ((1, 2), (2, 2))}
+    way = 0
+    for i in range(3):
+        for j in range(3):
+            for nxt in ((i + 1, j), (i, j + 1)):
+                if nxt in G:
+                    way += 1
+                    for u, v in (((i, j), nxt), (nxt, (i, j))):
+                        G.add_edge(u, v, osmid=way, length=100.0, roughness=0.0,
+                                   speed_kmh=17.0 if ((i, j), nxt) in fast else None)
+    return G
+
+
+def test_prefer_time_counts_turns_at_junctions():
+    G = grid()
+    corner = lambda n: (G.nodes[n]["y"], G.nodes[n]["x"])
+    p = find_route(G, corner((0, 0)), corner((2, 2)), 0, 0, 0, 0, prefer_time=True)["features"][0]
+    # The staircase rides at 17 km/h (85 s) but turns right, left, right at junctions (+5 s); north then east, half
+    # of it fast (88 s), turns only at the corner (0, 2), which is no junction.
+    assert p["geometry"]["coordinates"] == [[G.nodes[n]["x"], G.nodes[n]["y"]]
+                                            for n in ((0, 0), (0, 1), (0, 2), (1, 2), (2, 2))]
+    assert p["properties"]["duration_s"] == 88
+
+
+def test_free_turns_take_the_staircase(monkeypatch):
+    monkeypatch.setattr("routing.route.TURN_S", (0, 0, 0))
+    monkeypatch.setattr("routing.route.LEFT_TURN_S", (0, 0, 0))
+    G = grid()
+    corner = lambda n: (G.nodes[n]["y"], G.nodes[n]["x"])
+    p = find_route(G, corner((0, 0)), corner((2, 2)), 0, 0, 0, 0, prefer_time=True)["features"][0]
+    assert p["geometry"]["coordinates"] == [[G.nodes[n]["x"], G.nodes[n]["y"]]
+                                            for n in ((0, 0), (0, 1), (1, 1), (1, 2), (2, 2))]
+    assert p["properties"]["duration_s"] == 85
+
+
+def test_a_star_estimate_never_exceeds_a_street():
+    G = grid()
+    G.edges[(0, 0), (1, 0), 0]["speed_kmh"] = 40.0
+    kx, floor = _cost_floor(G)
+    plan = _plan(G, (0, 0, 0, 0, True, 0, 0, 0, 0, None))
+    assert floor == pytest.approx(MEDIAN_SPEED_KMH / 40.0, rel=0.01)  # the fastest street sets it
+    for u, v, d in G.edges(data=True):
+        assert floor * _straight_m(G, kx, u, v) <= _cost(d, plan) + 1e-9
+
+
+def test_turns_cost_by_angle():
+    assert _turn_s(20, 0, 0) == 0  # a bend, not a turn
+    assert (_turn_s(-45, 0, 0), _turn_s(-90, 0, 0)) == (0.75, 1.5)  # right
+    assert (_turn_s(90, 0, 0), _turn_s(180, 0, 0), _turn_s(-180, 0, 0)) == (2, 4, 4)  # left, back
+    assert _turn_s(90 + 360, 0, 0) == 2
+
+
+def test_turns_cost_by_road_size():
+    assert (_turn_s(-90, 2, 0), _turn_s(-90, 0, 2)) == (1.5, 3)  # right: by the road turned into
+    assert (_turn_s(90, 2, 0), _turn_s(90, 0, 2), _turn_s(90, 1, 0)) == (4, 4, 3)  # left: across the bigger one
+
+
+def test_a_bike_path_is_as_big_as_the_road_it_runs_beside():
+    G = nx.MultiDiGraph(crs="epsg:4326")
+    for n, (x, y) in {1: (9.2100, 49.1400), 2: (9.2130, 49.1400), 3: (9.2100, 49.14006), 4: (9.2130, 49.14006)}.items():
+        G.add_node(n, x=x, y=y)
+    G.add_edge(1, 2, osmid=1, length=220.0, name="Allee", highway="primary")
+    G.add_edge(3, 4, osmid=2, length=220.0, highway="cycleway")  # ~7 m north of it
+    G.add_edge(1, 3, osmid=3, length=7.0, highway="residential")
+    assert [_road_size(G, u, v, G[u][v][0]) for u, v in ((1, 2), (3, 4), (1, 3))] == [2, 2, 0]
 
 
 def test_climb_m_is_null_without_elevation(toy_graph):

@@ -203,8 +203,13 @@ def penalty_query(
         "bump_penalty. 0 = ignore. Each lift costs this x 25 m")),
     prefer_time: bool = Query(False, description=(
         "Time matters, not distance: weigh each street by its riding time at the measured cyclist speed "
-        "(unmeasured streets at the median, 15.7 km/h) instead of its length. The penalties still apply. Every "
-        "route reports its `duration_s` either way")),
+        "(unmeasured streets at the median, 15.7 km/h) instead of its length. Turns at junctions count as riding time, so "
+        "the route doesn't zig-zag through side streets to save a few seconds: the time lost slowing to ~10 km/h and "
+        "back, at 90° 1.5 s to the right and 2 s to the left, across oncoming traffic; more at a bigger road, where "
+        "riders more often give way, up to ~3.6 s for stopping and setting off at once (right: by the road turned "
+        "into, 2 s at a tertiary and 3 s at a main road; left: by the bigger of the two, 3 s / 4 s; a bike path counts "
+        "as the road it runs beside), in proportion to the angle, nothing under 30°. Traffic lights aren't counted. "
+        "The penalties still apply. Every route reports its `duration_s` either way, from the street speeds only")),
     shade_penalty: float = Query(DEFAULT_SHADE_PENALTY, ge=0, le=MAX_POINTS, description=(
         "By day: how much do you hate riding in the sun, in points 0-10: each point makes a fully sunny street cost 25% "
         "more. 0 = ignore. "

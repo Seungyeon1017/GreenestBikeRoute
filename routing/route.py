@@ -20,6 +20,7 @@ from routing.costs import BAD_AIR_RISK, BUMPY_ROUGHNESS, DARK_EXPONENT, DEFAULT_
     DIM_SHARE, LIFT_WAIT_M, MEDIAN_SPEED_KMH, \
     STOP_GO_HEAVY, edge_cost, osm_way_ids
 from routing.lighting import DIM_LIGHTS_PER_100M
+from routing.search import cheapest_path
 from routing.shadow import sun_position
 
 # Start/end points further than this from any street are treated as outside Heilbronn.
@@ -42,6 +43,21 @@ WALK_KMH = 4.8
 UNPAVED_LINE = 0.25
 # day_routes tries departure times this many minutes apart.
 DAY_STEP_MIN = 15
+# With prefer_time, turning at a junction (a node with 3+ neighbours) costs riding time (see _turn_s): at 90 degrees
+# TURN_S to the right and LEFT_TURN_S to the left, across oncoming traffic, by road size (ROAD_SIZES: small, tertiary,
+# main road). Without it, small speed differences between streets send the fastest route zig-zagging through side
+# streets to save seconds, with a corner to find at every turn. A street's heading at a junction is taken over its
+# TURN_HEADING_M nearest it.
+# The time lost against riding on at the median 15.7 km/h, braking at 1.5 m/s^2 and speeding up at 1 m/s^2: taking a
+# 90-degree corner of 5 m radius at 10 km/h loses ~1.5 s, stopping and setting off again at once ~3.6 s. A small street
+# is the first; a bigger road, where the rider more often gives way, nears the second; a left turn, across oncoming
+# traffic, more so. Waiting at traffic lights isn't counted.
+TURN_DEG = 30
+TURN_S = (1.5, 2, 3)
+LEFT_TURN_S = (2, 3, 4)
+ROAD_SIZES = (set(), {"tertiary", "tertiary_link"},
+              {"motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link", "secondary", "secondary_link"})
+TURN_HEADING_M = 10
 
 
 class RouteError(ValueError):
@@ -642,6 +658,13 @@ def _parts(G, d, ids, coords):
 _PARTS = weakref.WeakKeyDictionary()
 
 
+def _street_key(u, v, d):
+    """An edge's key in _PARTS: once per street, from its lower node to its higher one (a two-way street is two edges,
+    the same line reversed); with the tags it is named from, so a renamed street isn't served its old name."""
+    return (min(u, v), max(u, v), str(d["osmid"]), round(float(d["length"]), 1),
+            *(str(d.get(k)) for k in ("name", "highway", "footway", "bridge", "tunnel", "layer")))
+
+
 def street_parts(G, u, v, d):
     """How the map names edge (u, v), as route stretches: [(first vertex, last vertex, label)] of edge_coords, one
     part per name. A label has `name`, its OSM name; `way`, its kind (way_kind); and `along`: a way without a name (a
@@ -652,10 +675,7 @@ def street_parts(G, u, v, d):
     if isinstance(u, str) or isinstance(v, str):
         return _parts(G, d, osm_way_ids(d["osmid"]), coords)
     cache = _PARTS.setdefault(G, {})
-    # Once per street, from its lower node to its higher one (a two-way street is two edges, the same line reversed);
-    # with the tags it is named from, so a renamed street isn't served its old name.
-    street = (min(u, v), max(u, v), str(d["osmid"]), round(float(d["length"]), 1),
-              *(str(d.get(k)) for k in ("name", "highway", "footway", "bridge", "tunnel", "layer")))
+    street = _street_key(u, v, d)
     forward = u < v
     if street not in cache:
         cache[street] = _parts(G, d, osm_way_ids(d["osmid"]), coords if forward else coords[::-1])
@@ -1012,9 +1032,171 @@ def _path(G, a, b, plan):
         return min((c for d in parallel.values() if (c := _route_cost(u, v, d, plan)) is not None), default=None)
 
     try:
+        if plan[4]:  # prefer_time
+            return _turning_path(G, a, b, plan)
         return nx.shortest_path(G, a, b, weight=weight)
     except nx.NetworkXNoPath:
         raise RouteError("no bike route between these points") from None
+
+
+def _end_heading(G, u, v, d, at_end):
+    """Direction in degrees in which edge u->v leaves u (or, `at_end`, reaches v), over TURN_HEADING_M."""
+    # Plain maths, not shapely: a search computes this for a lot of edges. Towards the first point of the line at least
+    # TURN_HEADING_M away (or its other end), in equirectangular metres.
+    coords = list(d["geometry"].coords) if "geometry" in d else [(G.nodes[n]["x"], G.nodes[n]["y"]) for n in (u, v)]
+    if at_end:
+        coords = coords[::-1]
+    (x0, y0), kx = coords[0], math.cos(math.radians(coords[0][1]))
+    for x, y in coords[1:]:
+        dx, dy = (x - x0) * kx, y - y0
+        if math.hypot(dx, dy) * 111_320 >= TURN_HEADING_M:
+            break
+    heading = math.degrees(math.atan2(dy, dx))
+    return heading + 180 if at_end else heading  # measured from v backwards
+
+
+# Per graph: {road name: its ROAD_SIZES size, the biggest along it}.
+_NAME_SIZES = weakref.WeakKeyDictionary()
+
+
+def _highway_size(highways):
+    return max((size for size, kinds in enumerate(ROAD_SIZES) if highways & kinds), default=0)
+
+
+def _road_size(G, u, v, d, wait=True):
+    """How big the road of edge (u, v) is, 0-2 (see ROAD_SIZES): its own highway or that of a road of its name; for a
+    bike path, sidewalk or crossing without a name, the road it runs beside or crosses (street_label). Not `wait`: None
+    for one of those that isn't named yet (name_streets), as naming them all takes ~15 s."""
+    names = _tags(d, "name") - {"None"}
+    if not names and (way_kind(d) in PATH_KINDS or way_kind(d) == "crossing"):
+        if not wait and (_snapped(u) or _snapped(v) or _street_key(u, v, d) not in _PARTS.get(G, {})):
+            return None
+        names = {street_label(G, u, v, d)["name"]}
+    if G not in _NAME_SIZES:
+        sizes = {}
+        for name, highways in [(d["name"], _tags(d, "highway")) for *_, d in G.edges(data=True) if isinstance(d.get("name"), str)] \
+                + [(name, _tags(tags, "highway")) for name, tags, _ in G.graph.get("named_ways", {}).values()]:
+            sizes[name] = max(sizes.get(name, 0), _highway_size(highways))
+        _NAME_SIZES[G] = sizes
+    return max([_highway_size(_tags(d, "highway")), *(_NAME_SIZES[G].get(name, 0) for name in names)])
+
+
+def _turn_s(angle, size_in, size_out):
+    """Riding time in s a turn by `angle` degrees (> 0: to the left) costs at a junction, from a road of size_in into one
+    of size_out: TURN_S / LEFT_TURN_S at 90 degrees, in proportion to the angle (twice as much to turn back), nothing
+    under TURN_DEG. A right turn by the road it turns into; a left turn, across the traffic, by the bigger road."""
+    angle = 180 - (180 - angle) % 360  # -180 < angle <= 180: turning back counts as to the left
+    if abs(angle) < TURN_DEG:
+        return 0.0
+    if angle > 0:
+        return LEFT_TURN_S[max(size_in, size_out)] * abs(angle) / 90
+    return TURN_S[size_out] * -angle / 90
+
+
+# Per graph: {node: _turn_streets}, kept across searches, as the streets don't change; not for the temporary start
+# and end points and their neighbours, whose streets they split, nor before their bike paths are named.
+_TURN_STREETS = weakref.WeakKeyDictionary()
+
+
+def _is_junction(G, n):
+    return not _snapped(n) and len(set(G.successors(n)) | set(G.predecessors(n))) >= 3
+
+
+def _turn_streets(G, n):
+    """The streets leaving n, as [(v, whether v is a junction, [(data, heading leaving n, heading reaching v, road
+    size) of each parallel edge n->v])], and whether that is final: False while a bike path or crossing among them
+    isn't named yet (_road_size), which counts as its own size until then."""
+    streets, final = [], True
+    for v, parallel in G[n].items():
+        edges = []
+        for d in parallel.values():
+            size = _road_size(G, n, v, d, wait=False)
+            if size is None:
+                size, final = _highway_size(_tags(d, "highway")), False
+            edges.append((d, _end_heading(G, n, v, d, False), _end_heading(G, n, v, d, True), size))
+        streets.append((v, _is_junction(G, v), edges))
+    return streets, final
+
+
+# Per graph: (metres per degree of longitude, the lowest _cost per straight-line metre of its edges at the measured
+# speeds), for _turning_path's A* estimate.
+_COST_FLOORS = weakref.WeakKeyDictionary()
+
+
+def _straight_m(G, kx, u, v):
+    """Straight-line metres from node u to v, on one plane for the whole graph (kx metres per degree of longitude),
+    so they obey the triangle inequality, which the A* estimate needs."""
+    a, b = G.nodes[u], G.nodes[v]
+    return math.hypot((b["x"] - a["x"]) * kx, (b["y"] - a["y"]) * 111_320)
+
+
+def _edge_floor(G, kx, u, v, d):
+    """What edge (u, v) costs at least per straight-line metre with prefer_time: its length at its measured speed, as
+    every other part of _cost and the turns only add to it."""
+    straight = _straight_m(G, kx, u, v)
+    return float(d["length"]) * MEDIAN_SPEED_KMH / _speed_kmh(d) / straight if straight > 0 else math.inf
+
+
+def _cost_floor(G):
+    """(kx, floor): the lowest _edge_floor of the graph's streets, not of the temporary pieces at a route's ends. Its
+    fastest streets (some measured at 40 km/h) and the few a bit shorter than the straight line between their ends
+    set it, at about 0.4: a weak estimate, but one that never overestimates."""
+    if G not in _COST_FLOORS:
+        kx = 111_320 * math.cos(math.radians(sum(y for _, y in G.nodes(data="y")) / G.number_of_nodes()))
+        _COST_FLOORS[G] = kx, min(_edge_floor(G, kx, u, v, d) for u, v, d in G.edges(data=True)
+                                  if not (_snapped(u) or _snapped(v)))
+    return _COST_FLOORS[G]
+
+
+def _turning_path(G, a, b, plan):
+    """_path for prefer_time, in which each turn at a junction can cost riding time (see _turn_s), as metres at
+    MEDIAN_SPEED_KMH like _cost; by A* towards b (see _cost_floor). A state (routing.search) is (junction, the node the rider came from), as the turn
+    depends on it, but (node, None) elsewhere: turning costs nothing there, so how the rider got there doesn't matter."""
+    static = _TURN_STREETS.setdefault(G, {})
+    snaps = [n for n in ("snap-start", "snap-end") if n in G]
+    split = {m for n in snaps for m in (*G.successors(n), *G.predecessors(n), n)}
+    m_per_s = MEDIAN_SPEED_KMH / 3.6
+    leaving = {}
+
+    def streets_from(n):
+        """(v, cost, heading leaving n, heading reaching v, road size, whether v is a junction) of the cheapest
+        parallel edge to each neighbour v that can be ridden."""
+        if n not in leaving:
+            if n in static and n not in split:
+                streets = static[n]
+            else:
+                streets, final = _turn_streets(G, n)
+                if final and n not in split:
+                    static[n] = streets
+            out = []
+            for v, junction, parallel in streets:
+                costs = [(c, e) for e in parallel if (c := _route_cost(n, v, e[0], plan)) is not None]
+                if costs:
+                    c, (_, start, end, size) = min(costs, key=lambda ce: ce[0])
+                    out.append((v, c, start, end, size, junction))
+            leaving[n] = out
+        return leaving[n]
+
+    def steps(state, arrival):  # arrival: heading and road size on arrival at a junction
+        n = state[0]
+        for v, c, start, end, size, junction in streets_from(n):
+            if arrival is not None:
+                c += _turn_s(start - arrival[0], arrival[1], size) * m_per_s
+            yield ((v, n), c, (end, size)) if junction else ((v, None), c, None)
+
+    # A*: what is left costs at least the straight line to b at the floor; the pieces of the streets split for the
+    # ends count too.
+    kx, floor = _cost_floor(G)
+    floor = min([floor, *(_edge_floor(G, kx, u, v, d) for n in snaps
+                          for u, v, d in (*G.in_edges(n, data=True), *G.out_edges(n, data=True)))])
+    estimates = {}
+
+    def estimate(n):
+        if n not in estimates:
+            estimates[n] = floor * _straight_m(G, kx, n, b)
+        return estimates[n]
+
+    return cheapest_path(a, b, steps, estimate)
 
 
 def _edge(G, u, v, plan):
