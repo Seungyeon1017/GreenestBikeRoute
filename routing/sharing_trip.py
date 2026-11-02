@@ -24,7 +24,8 @@ from shapely.geometry import shape
 from routing.calories import DEFAULT_WEIGHT_KG, walk_kcal
 from routing.costs import MEDIAN_SPEED_KMH
 from routing.graph import CACHE_DIR, PLACE
-from routing.route import _GRAPH_LOCK, WALK_KMH, RouteError, edge_coords, find_route
+from routing.edges import _GRAPH_LOCK, edge_coords
+from routing.route import WALK_KMH, RouteError, find_route
 
 WALK_GRAPH_PATH = CACHE_DIR / "heilbronn_walk.graphml"
 WALK_MAX_M = 1000  # furthest walk to a vehicle, and from the parking zone to the end

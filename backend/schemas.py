@@ -84,7 +84,7 @@ WayKind = Literal["crossing", "sidewalk", "cycleway", "footway", "path", "track"
 
 
 class StreetName(BaseModel):
-    """How a street line is named on the map, as a route stretch (routing.route.street_label / way_label). Left out
+    """How a street line is named on the map, as a route stretch (routing.naming.street_label / way_label). Left out
     while the collection isn't `named` yet."""
     name: Optional[str] = Field(None, description=(
         "Its OSM street name; a street merged from several OSM ways with different names is one line per name. Only a "

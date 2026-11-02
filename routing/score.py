@@ -11,17 +11,17 @@ import re
 
 from routing.costs import BAD_AIR_RISK, BUMPY_ROUGHNESS, DARK_EXPONENT, DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, \
     DEFAULT_DARK_PENALTY, DEFAULT_PM_PENALTY, DEFAULT_PM_RISK, DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_ROUGHNESS, \
-    DEFAULT_SHADE_PENALTY, DEFAULT_STOP_GO, DEFAULT_STOP_PENALTY, DEFAULT_UNPAVED_PENALTY, LIFT_WAIT_M, MEDIAN_SPEED_KMH, POINT, SNAP_M, \
-    STOP_GO_HEAVY
+    DEFAULT_SHADE_PENALTY, DEFAULT_STOP_GO, DEFAULT_STOP_PENALTY, DEFAULT_UNPAVED_PENALTY, LIFT_WAIT_M, MAIN_ROAD_HIGHWAYS, \
+    MEDIAN_SPEED_KMH, POINT, SNAP_M, STOP_GO_HEAVY, TERTIARY_HIGHWAYS
 from routing.highlights import ridden
-from routing.route import _dark, _roughness, _shade, _speed_kmh, _stop_go, sky, street_lines
+from routing.naming import street_lines
+from routing.route import _dark, _roughness, _shade, _speed_kmh, _stop_go, sky
 
 # Level of traffic stress (LTS, Mekuria, Furth & Nixon 2012), from 1 (car-free or calm, fine for children) to 4
 # (fast, busy roads with no room for bikes), and how much longer each makes a street feel. Riders' route choice
 # (e.g. Broach, Dill & Gliebe 2012) puts a busy road without a bike lane at very roughly twice its length.
 STRESS_FACTOR = {1: 1.0, 2: 1.15, 3: 1.5, 4: 2.0}
 CAR_FREE = {"cycleway", "path", "footway", "pedestrian", "track", "bridleway", "steps"}
-MAIN_ROADS = {"trunk", "primary", "secondary", "trunk_link", "primary_link", "secondary_link"}
 # Speed limit where OSM has none: 30 km/h on residential and smaller streets (most tagged ones in Heilbronn
 # are), else 50 km/h, the urban limit.
 CALM_ROADS = {"residential", "unclassified", "service", "living_street", "road"}
@@ -65,9 +65,9 @@ def traffic_stress(d):
         return 1
     kmh = maxspeed_kmh(d)
     lanes = max((int(x) for x in _tags(d.get("lanes")) if x.isdigit()), default=0)
-    if highways & MAIN_ROADS:
+    if highways & MAIN_ROAD_HIGHWAYS:
         stress = 2 if kmh <= 30 else 4 if kmh > 50 or lanes >= WIDE_ROAD_LANES else 3
-    elif highways & {"tertiary", "tertiary_link"}:
+    elif highways & TERTIARY_HIGHWAYS:
         stress = 2 if kmh <= 30 else 3 if kmh <= 50 else 4
     else:
         stress = 1 if kmh <= 30 else 2 if kmh <= 50 else 3
@@ -166,7 +166,7 @@ def street_scores(G, bump_penalty=DEFAULT_BUMP_PENALTY, danger_penalty=DEFAULT_D
     25 = four times. The same in every city and for every street, not a rank: a good street doesn't lose points
     because others are better. `ridden` says whether ATRAI bikes measured it (routing.highlights.ridden); without,
     the score comes from OSM (traffic stress), nearby air and estimates only. `name`, `way` and `along` as
-    routing.route.street_lines: one line per name, so a street merged from ways with different names is several lines
+    routing.naming.street_lines: one line per name, so a street merged from ways with different names is several lines
     with the same score; not `named`, one line per street without them. `why`: the factors behind the score
     (feel_factors, see why()) and the values behind them (street_facts)."""
     slot, dark = sky(G, depart_time)

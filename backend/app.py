@@ -22,16 +22,17 @@ from backend.users.saved_routes import TAG as SAVED_ROUTES_TAG
 from download_data import DATA_DIR, load_features
 from routing.calories import DEFAULT_WEIGHT_KG
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_PM_PENALTY, \
-    DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, DEFAULT_UNPAVED_PENALTY, MAX_DARK_POINTS, MAX_POINTS, air_scores, clean_overtaking, \
-    osm_way_ids
+    DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, DEFAULT_UNPAVED_PENALTY, MAX_DARK_POINTS, MAX_POINTS, Penalties, air_scores, \
+    clean_overtaking, osm_way_ids
 from routing.elevation import attach_elevation, load_crests, load_elevation
 from routing.grade import NoElevationError, route_grade
 from routing.graph import load_graph
 from routing.highlights import greenest_streets
 from routing.tours import plan_tours
 from routing.footways import Footways
-from routing.route import RouteError, compare_routes, day_routes, edge_coords, find_route, nearest_street, segment_id, set_closures, \
-    name_streets, street_lines, street_name, sky, way_label, way_lines
+from routing.edges import edge_coords
+from routing.naming import name_streets, street_lines, street_name, way_label, way_lines
+from routing.route import RouteError, compare_routes, day_routes, find_route, nearest_street, segment_id, set_closures, sky
 from routing.score import street_scores
 from routing.sharing_trip import WalkNetwork, load_walk_graph, plan_sharing_trip
 
@@ -42,7 +43,7 @@ class GeoJSONResponse(JSONResponse):
 
 def atrai_streets(G, name, key, value, convert=lambda x: x, named=True):
     """The street segments of ATRAI dataset `name` that have property `key`, trimmed to geometry + `value`: convert(it)
-    + the street's name, way and along (routing.route.way_lines, from its OSM way): one line per name, so a segment
+    + the street's name, way and along (routing.naming.way_lines, from its OSM way): one line per name, so a segment
     merged from ways with different names is several lines with the same value. Not `named`: one line per segment,
     without them."""
     features = [
@@ -97,7 +98,7 @@ BIKE_FRIENDLY_PATH = DATA_DIR / "custom" / "bike_friendly_streets_heilbronn.geoj
 
 def bike_friendly_collection(G, named=True):
     """Bike paths, bike lanes and bike routes from OSM (Overpass query next to the file), trimmed to geometry + osm_id
-    + name (routing.route.way_label)."""
+    + name (routing.naming.way_label)."""
     data = json.loads(BIKE_FRIENDLY_PATH.read_text(encoding="utf-8"))
     features = [
         {"type": "Feature", "geometry": f["geometry"], "properties": {
@@ -130,7 +131,7 @@ def mapping_feature(report):
 def street_collection(G, key, *extra, named=True):
     """The graph's streets with a value for edge attribute `key`, each street once (a two-way street is two edges),
     trimmed to geometry + that value (+ the `extra` attributes the edge has a value for) + name, way and along
-    (routing.route.street_lines): one line per name; not `named`, one per street without them."""
+    (routing.naming.street_lines): one line per name; not `named`, one per street without them."""
     features, seen = [], set()
     for u, v, d in G.edges(data=True):
         street = (min(u, v), max(u, v), str(d["osmid"]), round(float(d["length"]), 1))
@@ -233,10 +234,9 @@ def penalty_query(
         openapi_examples={"afternoon": {"summary": "Summer afternoon (shade counts)", "value": "2026-07-21T15:00"},
                           "night": {"summary": "Autumn evening after sunset (lighting counts)", "value": "2026-10-28T19:30"}}),
 ):
-    """The penalties, prefer_time, prefer_bike_friendly, unpaved_penalty and depart_time, shared by the routes and
-    /score."""
-    return bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty, \
-        prefer_bike_friendly, unpaved_penalty, depart_time
+    """The Penalties (and depart_time) shared by the routes and /score."""
+    return Penalties(bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty,
+                     prefer_bike_friendly, unpaved_penalty, depart_time)
 
 
 def route_query(
@@ -442,8 +442,8 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
 
     def scored(penalties, named):
         """The /score collection for `penalties` (penalty_query), kept for the last SCORE_CACHE_SIZE of them."""
-        *weights, depart_time = penalties
-        key = (*weights, *sky(app.state.graph, depart_time), named)  # departure times in the same shade slot score alike
+        # Departure times in the same shade slot score alike.
+        key = (penalties._replace(depart_time=None), *sky(app.state.graph, penalties.depart_time), named)
         scores = app.state.scores
         if key not in scores:
             if len(scores) >= SCORE_CACHE_SIZE:
@@ -452,7 +452,7 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
         return scores[key]
 
     def name_overlays():
-        """At startup, in the background: name every street (routing.route.name_streets, ~15 s), then build the street
+        """At startup, in the background: name every street (routing.naming.name_streets, ~15 s), then build the street
         overlays and the map's /score with their names, so no request waits for them."""
         try:
             name_streets(app.state.graph)

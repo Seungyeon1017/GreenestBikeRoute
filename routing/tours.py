@@ -4,16 +4,17 @@ avoids on the way."""
 import math
 from datetime import datetime
 
-from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_PM_PENALTY, \
-    DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, DEFAULT_UNPAVED_PENALTY
+from routing.costs import Penalties
 from routing.calories import ride_kcal, total_climb
-from routing.route import LOCAL_TZ, edge_coords, route_duration, route_edges, street_name
+from routing.edges import edge_coords
+from routing.naming import street_name
+from routing.route import LOCAL_TZ, route_duration, route_edges
 
 # Shade counts only by day, so the green tour is planned for a summer afternoon: then street trees and park crowns
 # make a street cheaper (buildings too, but the stops keep it in the parks).
 SUMMER_AFTERNOON = datetime(2026, 7, 1, 15, 0, tzinfo=LOCAL_TZ)
 
-# id: (stops as (name, lat, lon), the penalties that differ from DEFAULTS). A tour that ends where it
+# id: (stops as (name, lat, lon), the penalties that differ from the Penalties defaults). A tour that ends where it
 # started is a loop. Each stop sits on the line of the finished tour (a loop's start on its ring), so the stops shape
 # the route and the tour has no spurs to cut.
 TOURS = {
@@ -58,12 +59,6 @@ TOURS = {
     ], {"bump_penalty": 1, "prefer_bike_friendly": 2, "unpaved_penalty": 2}),
 }
 
-# The route penalties in route_edges' order, at their defaults.
-DEFAULTS = {"bump_penalty": DEFAULT_BUMP_PENALTY, "danger_penalty": DEFAULT_DANGER_PENALTY,
-            "pm_penalty": DEFAULT_PM_PENALTY, "stop_penalty": DEFAULT_STOP_PENALTY, "prefer_time": False,
-            "shade_penalty": DEFAULT_SHADE_PENALTY, "dark_penalty": DEFAULT_DARK_PENALTY,
-            "prefer_bike_friendly": DEFAULT_PREFER_BIKE_FRIENDLY, "unpaved_penalty": DEFAULT_UNPAVED_PENALTY,
-            "depart_time": None}
 
 def _steps(G, a, b, penalties):
     """The route from a to b, both (lat, lon), as steps from one point of its line to the next, each with its share
@@ -127,7 +122,7 @@ def plan_tour(G, tour_id):
     share under street-tree crowns), `bike_friendly_share` and the streets it follows in order (`streets`, each once;
     paths beside a road count for that road, other unnamed paths are left out)."""
     stops, penalties = TOURS[tour_id]
-    penalties, loop = tuple({**DEFAULTS, **penalties}.values()), stops[0] == stops[-1]
+    penalties, loop = Penalties(**penalties), stops[0] == stops[-1]
     steps = _without_spurs([step for (_, *a), (_, *b) in zip(stops[:-1], stops[1:])
                             for step in _steps(G, tuple(a), tuple(b), penalties)], loop)
     coords = [list(steps[0]["coords"][0])] + [list(step["coords"][1]) for step in steps]

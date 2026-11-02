@@ -1,7 +1,8 @@
 """The greenest streets of Heilbronn (Grünste Straßen) for the Highlights tab: named streets bikes have ridden,
 ranked by street trees, clean air and bike paths."""
 from routing.costs import DEFAULT_PM_RISK
-from routing.route import edge_coords, street_name
+from routing.edges import edge_coords
+from routing.naming import street_name
 
 # A street counts only where ATRAI bikes rode it: its edges with a bike measurement (roughness, speed, stop-and-go or
 # air), and only with at least MIN_RIDDEN_M of them, so a few metres of a crossing street don't rank.

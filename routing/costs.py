@@ -1,6 +1,7 @@
 """Helpers for turning the ATRAI bumpy_roads, danger_zones, air_quality, traffic_flow and speed_map data, plus shade
 and street lighting, into routing costs on the OSM graph."""
 import ast
+from typing import NamedTuple
 
 import numpy as np
 import pandas as pd
@@ -38,6 +39,12 @@ SNAP_M = 25.0
 CAR_HIGHWAYS = {"trunk", "primary", "secondary", "tertiary", "unclassified", "residential", "living_street", "service",
                 "trunk_link", "primary_link", "secondary_link", "tertiary_link", "road"}
 DANGER_MOVE_M = 15.0
+# OSM highway classes by size, one road class each with its slip roads: main roads (secondary and up) and tertiary
+# roads; everything else is small. For traffic stress (routing.score), turns (routing.turns) and how far a sidewalk
+# runs from a road's centre line (routing.naming).
+MAIN_ROAD_HIGHWAYS = {"motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link", "secondary",
+                      "secondary_link"}
+TERTIARY_HIGHWAYS = {"tertiary", "tertiary_link"}
 
 # danger_zones_raw: points where a car overtook a bike, Risk Index Overtaking 0-1. They add up,
 # so this is the detour in metres you'd ride to pass one fewer full-risk overtaking spot.
@@ -137,6 +144,26 @@ DEFAULT_PREFER_BIKE_FRIENDLY = 0
 # 1.5-5 km, 6 rides 75% less soil and grass than 0 (1.9 km -> 0.5 km of 168 km) for 0.5 points more detour; 3 only
 # 43% less, 8 96% less but compacted park paths then cost 1.5x.
 DEFAULT_UNPAVED_PENALTY = 6
+
+
+class Penalties(NamedTuple):
+    """A route request's penalties and preferences, at their defaults (see routing.route.find_route), plus its
+    depart_time (a datetime, or None), in the order find_route takes them."""
+    bump_penalty: float = DEFAULT_BUMP_PENALTY
+    danger_penalty: float = DEFAULT_DANGER_PENALTY
+    pm_penalty: float = DEFAULT_PM_PENALTY
+    stop_penalty: float = DEFAULT_STOP_PENALTY
+    prefer_time: bool = False
+    shade_penalty: float = DEFAULT_SHADE_PENALTY
+    dark_penalty: float = DEFAULT_DARK_PENALTY
+    prefer_bike_friendly: float = DEFAULT_PREFER_BIKE_FRIENDLY
+    unpaved_penalty: float = DEFAULT_UNPAVED_PENALTY
+    depart_time: object = None
+
+
+# The shortest route: nothing but length counts.
+SHORTEST = Penalties(bump_penalty=0, danger_penalty=0, pm_penalty=0, stop_penalty=0, shade_penalty=0, dark_penalty=0,
+                     prefer_bike_friendly=0, unpaved_penalty=0)
 
 
 def osm_way_ids(osmid):

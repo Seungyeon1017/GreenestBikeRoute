@@ -9,8 +9,9 @@ import math
 
 from routing.calories import DEFAULT_WEIGHT_KG, route_kcal
 from routing.costs import DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_PM_PENALTY, \
-    DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, DEFAULT_UNPAVED_PENALTY
-from routing.route import edge_coords, route_duration, route_edges
+    DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_SHADE_PENALTY, DEFAULT_STOP_PENALTY, DEFAULT_UNPAVED_PENALTY, Penalties
+from routing.edges import edge_coords
+from routing.route import route_duration, route_edges
 
 # Severity on the absolute grade in %: (upper bound, name, colour). Bounds belong to the steeper class.
 SEVERITIES = [
@@ -155,8 +156,8 @@ def route_grade(G, origin, destination, bump_penalty=DEFAULT_BUMP_PENALTY, dange
                 weight_kg=DEFAULT_WEIGHT_KG, e_bike=False):
     """The route find_route picks, as a FeatureCollection of pieces coloured by grade, plus route totals
     (and the kcal of the ride for a rider of weight_kg)."""
-    penalties = (bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty, dark_penalty,
-                 prefer_bike_friendly, unpaved_penalty, depart_time)
+    penalties = Penalties(bump_penalty, danger_penalty, pm_penalty, stop_penalty, prefer_time, shade_penalty,
+                          dark_penalty, prefer_bike_friendly, unpaved_penalty, depart_time)
     with route_edges(G, origin, destination, penalties) as edges:
         summary = grade_summary(G, edges)
         summary["kcal"] = round(route_kcal(G, edges, route_duration(G, edges), weight_kg, e_bike), 1)

@@ -1,7 +1,7 @@
 """Named ways in Heilbronn from OSM, to name streets on the map and in route stretches.
 
 - The bike graph leaves out roads bikes may not ride (e.g. most of Mannheimer Straße), but their sidewalks are in it
-  and should still take the road's name (routing.route._NamedRoads).
+  and should still take the road's name (routing.naming._NamedRoads).
 - A graph edge or ATRAI segment merged from several ways has several names, in no particular order: the way that
   covers most of the line names it (routing.route._main_way).
 

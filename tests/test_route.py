@@ -8,10 +8,11 @@ from shapely import LineString
 
 from routing import graph
 from routing.calories import DEFAULT_WEIGHT_KG, ride_kcal, walk_kcal
-from routing.costs import AIR_HOTSPOT_OFFSET, AIR_PRIOR_RIDES, MEDIAN_SPEED_KMH
+from routing.costs import AIR_HOTSPOT_OFFSET, AIR_PRIOR_RIDES, MEDIAN_SPEED_KMH, SHORTEST
 from routing.graph import AIR_NEAR_M, AIR_NEAR_PRIOR, attach_bike_friendly, attach_bike_lanes, attach_danger, attach_nearby_air, attach_surface, attach_lighting, attach_roughness, attach_shade, attach_speed, attach_stop_go
-from routing.route import WALK_KMH, RouteError, _cost, _cost_floor, _plan, _road_size, _straight_m, _turn_s, compare_routes, day_routes, find_route, sky, street_label, street_parts, \
-    way_label, way_lines
+from routing.naming import street_label, street_parts, way_label, way_lines
+from routing.route import WALK_KMH, RouteError, _cost, _min_cost_per_m, _plan, compare_routes, day_routes, find_route, sky
+from routing.turns import _cost_floor, _road_size, _straight_m, _turn_s
 from tests.conftest import COORDS, A, B, C
 
 
@@ -152,8 +153,8 @@ def test_prefer_time_counts_turns_at_junctions():
 
 
 def test_free_turns_take_the_staircase(monkeypatch):
-    monkeypatch.setattr("routing.route.TURN_S", (0, 0, 0))
-    monkeypatch.setattr("routing.route.LEFT_TURN_S", (0, 0, 0))
+    monkeypatch.setattr("routing.turns.TURN_S", (0, 0, 0))
+    monkeypatch.setattr("routing.turns.LEFT_TURN_S", (0, 0, 0))
     G = grid()
     corner = lambda n: (G.nodes[n]["y"], G.nodes[n]["x"])
     p = find_route(G, corner((0, 0)), corner((2, 2)), 0, 0, 0, 0, prefer_time=True)["features"][0]
@@ -165,8 +166,8 @@ def test_free_turns_take_the_staircase(monkeypatch):
 def test_a_star_estimate_never_exceeds_a_street():
     G = grid()
     G.edges[(0, 0), (1, 0), 0]["speed_kmh"] = 40.0
-    kx, floor = _cost_floor(G)
-    plan = _plan(G, (0, 0, 0, 0, True, 0, 0, 0, 0, None))
+    kx, floor = _cost_floor(G, _min_cost_per_m)
+    plan = _plan(G, SHORTEST._replace(prefer_time=True))
     assert floor == pytest.approx(MEDIAN_SPEED_KMH / 40.0, rel=0.01)  # the fastest street sets it
     for u, v, d in G.edges(data=True):
         assert floor * _straight_m(G, kx, u, v) <= _cost(d, plan) + 1e-9
