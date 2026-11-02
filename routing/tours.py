@@ -1,6 +1,9 @@
 """Suggested rides (Vorgeschlagene Radtouren) for the Highlights tab: four themed tours through Heilbronn, each a chain
 of hand-picked stops routed leg by leg with its own penalties, so the theme comes from both where it goes and what it
-avoids on the way."""
+avoids on the way.
+
+Group: features on top.
+"""
 import math
 from datetime import datetime
 

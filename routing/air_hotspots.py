@@ -12,6 +12,8 @@ routing.graph.attach_danger then starts bike streets that run along these roads 
 included, cross streets not) a little above typical air (routing.costs.AIR_HOTSPOT_OFFSET).
 
 Needs the OSM car network: downloaded on the first run into cache/ (~1 min).
+
+Group: building the graph (data -> edge attributes).
 """
 import argparse
 import json

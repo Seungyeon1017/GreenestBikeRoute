@@ -1,5 +1,8 @@
 """The greenest streets of Heilbronn (Grünste Straßen) for the Highlights tab: named streets bikes have ridden,
-ranked by street trees, clean air and bike paths."""
+ranked by street trees, clean air and bike paths.
+
+Group: features on top.
+"""
 from routing.costs import DEFAULT_PM_RISK
 from routing.edges import edge_coords
 from routing.naming import street_name

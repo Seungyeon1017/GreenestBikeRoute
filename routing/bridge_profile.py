@@ -25,6 +25,8 @@ prints how far DOM1 and today's heights differ at the abutments.
 
 Data: LGL Baden-Württemberg, Digitales Oberflächenmodell DOM1 (opengeodata.lgl-bw.de),
 "Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0".
+
+Group: building the graph (data -> edge attributes).
 """
 import argparse
 import io

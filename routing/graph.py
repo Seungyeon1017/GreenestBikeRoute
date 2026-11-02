@@ -1,5 +1,8 @@
 """The Heilbronn bike graph from OSM (via OSMnx), with ATRAI roughness, stop-and-go, speed and danger, shade and
-street lighting on every edge."""
+street lighting on every edge.
+
+Group: building the graph (data -> edge attributes).
+"""
 import json
 import math
 import sys

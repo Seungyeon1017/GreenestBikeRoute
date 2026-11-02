@@ -19,6 +19,8 @@ an edge is saved with the heights so routing.grade can show that edge as up, the
 
 Data: LGL Baden-Württemberg, Digitales Geländemodell DGM1 (opengeodata.lgl-bw.de),
 "Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0".
+
+Group: building the graph (data -> edge attributes).
 """
 import argparse
 import heapq

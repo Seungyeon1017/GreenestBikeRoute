@@ -13,6 +13,8 @@ to disk.
 Data: Mapillary map features, CC BY-SA 4.0 (https://www.mapillary.com/developer).
 Caveats: a light the AI missed (hidden by trees, bad photo) is not in the data, and photos can
 be several years old.
+
+Group: building the graph (data -> edge attributes).
 """
 import argparse
 import json

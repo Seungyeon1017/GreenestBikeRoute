@@ -1,5 +1,8 @@
 """Turns for the fastest route (prefer_time): what a turn at a junction costs in riding time, by angle and road size,
-and the search that counts them."""
+and the search that counts them.
+
+Group: route search.
+"""
 import math
 import weakref
 

@@ -1,4 +1,7 @@
-"""Cheapest-path search over states, for routing.route: Dijkstra, or A* with an estimate of the cost still to go."""
+"""Cheapest-path search over states, for routing.route: Dijkstra, or A* with an estimate of the cost still to go.
+
+Group: route search.
+"""
 import heapq
 import math
 

@@ -5,6 +5,8 @@ Its own formula, apart from routing's cost (routing.costs.edge_cost), so the map
 - measured values better than typical earn credit, not only worse ones cost: sensors are noisy, and with costs only,
   a typical street that bikes measured looks worse than one no bike rode (where everything counts as typical).
 - air of nearby measured streets (routing.graph.attach_nearby_air) where no sensor passed.
+
+Group: features on top.
 """
 import math
 import re

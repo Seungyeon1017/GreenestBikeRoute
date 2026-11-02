@@ -9,6 +9,8 @@ Where to leave it: Dott is free-floating, so at the destination unless that lies
 there from the start in a straight line): a street corner outside the no-parking zones, or a parking zone. Which
 vehicle: the one that gets you there soonest (walk to it, plus riding from it in a straight line), with enough battery.
 The CANDIDATES best vehicles are then routed for real and the quickest trip wins.
+
+Group: features on top.
 """
 import weakref
 from itertools import islice

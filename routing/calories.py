@@ -26,6 +26,8 @@ Walking (the walks of a trip with a shared vehicle, and pushing an e-scooter whe
 
 An estimate, not a measurement: it ignores wind, stops, tyre pressure and fitness, and the MET
 value is an average across people. Show it rounded ("about 80 kcal"), and mark e-bike values as rough.
+
+Group: features on top.
 """
 G_MS2 = 9.81
 J_PER_KCAL = 4184.0

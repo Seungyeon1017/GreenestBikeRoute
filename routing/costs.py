@@ -1,5 +1,8 @@
 """Helpers for turning the ATRAI bumpy_roads, danger_zones, air_quality, traffic_flow and speed_map data, plus shade
-and street lighting, into routing costs on the OSM graph."""
+and street lighting, into routing costs on the OSM graph.
+
+Group: route search; its ATRAI data helpers also serve building the graph (routing.graph).
+"""
 import ast
 from typing import NamedTuple
 

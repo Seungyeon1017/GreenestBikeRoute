@@ -4,6 +4,8 @@ Grade of an edge = rise in the travel direction / edge length, from the node hei
 routing.elevation. A two-way street is two edges, so it is uphill one way and downhill the other.
 An edge with a bridge crest inside it (edge attribute `crest`, see routing.elevation) is two parts:
 up to the crest, then down from it.
+
+Group: features on top.
 """
 import math
 

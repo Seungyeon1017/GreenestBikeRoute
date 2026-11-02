@@ -13,6 +13,8 @@ grass, sand; grade4-5): slow, and mud after rain.
 
 Input: the OSM ways and tags OSMnx cached in cache/*.json when routing.graph built the graph (run the API once
 first).
+
+Group: building the graph (data -> edge attributes).
 """
 import argparse
 import json

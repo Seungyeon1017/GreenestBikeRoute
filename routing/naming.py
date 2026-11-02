@@ -1,5 +1,8 @@
 """How the map names streets: a sidewalk, bike path or crossing without a name takes the road's it runs beside or
-crosses, for routes' stretches, the street overlays and turns."""
+crosses, for routes' stretches, the street overlays and turns.
+
+Group: route search.
+"""
 import ast
 import math
 import weakref

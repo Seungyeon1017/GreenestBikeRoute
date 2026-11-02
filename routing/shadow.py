@@ -22,6 +22,8 @@ No dependencies beyond the standard library.
 
 Data: LGL Baden-Württemberg, 3D-Gebäudemodell LoD2 (opengeodata.lgl-bw.de), dl-de/by-2-0;
 Stadt Heilbronn, Baumkataster 01.01.2026, dl-de/by-2-0.
+
+Group: building the graph (data -> edge attributes).
 """
 import argparse
 import json

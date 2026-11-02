@@ -4,6 +4,8 @@ ride on: the report then names the OSM way, which is what `python -m backend.rep
 routing/rideable_ways.py's list.
 
 Written by routing.graph whenever it builds the bike graph, so it always matches the graph in cache/.
+
+Group: building the graph (data -> edge attributes).
 """
 import json
 import math

@@ -3,6 +3,8 @@
 Checked by hand, one per entry with why, in data/custom/rideable_ways.json. Routing treats them like footways tagged
 bicycle=yes. Users report such ways in the app (POST /reports/mapping); once checked, `python -m backend.reports
 approve` adds them here. The graph in cache/ is rebuilt on the next start when the list changed (routing.graph).
+
+Group: building the graph (data -> edge attributes).
 """
 import json
 from pathlib import Path

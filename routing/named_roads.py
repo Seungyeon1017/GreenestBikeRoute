@@ -7,6 +7,8 @@
 
 Run `python -m routing.named_roads` to download them again (data/custom/named_roads_heilbronn.overpassql via the
 Overpass API).
+
+Group: building the graph (data -> edge attributes).
 """
 import json
 from pathlib import Path

@@ -14,6 +14,8 @@ Data: Stadt Heilbronn, Baumkataster, Stand 01.01.2026, dl-de/by-2-0
 https://opendata.heilbronn.de/dataset/baumkataster
 Caveat: trees not maintained by the city often only have a default 2 m crown,
 so shade is underestimated there.
+
+Group: building the graph (data -> edge attributes).
 """
 import ast
 import json

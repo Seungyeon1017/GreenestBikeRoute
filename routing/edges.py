@@ -1,5 +1,8 @@
-"""What routing.route, routing.naming and routing.turns share about the graph's edges: the lock on the shared graph,
-a plane in metres, edge lines and tags."""
+"""What routing.route, routing.snap, routing.naming and routing.turns share about the graph's edges: the lock on the
+shared graph, the error a route request can fail with, a plane in metres, edge lines and tags.
+
+Group: route search.
+"""
 import math
 import threading
 
@@ -7,6 +10,10 @@ from shapely import LineString
 
 # Routing temporarily splits streets in the shared graph, so one request at a time may use it.
 _GRAPH_LOCK = threading.Lock()
+
+
+class RouteError(ValueError):
+    """The request can't be routed (point off the map, no connection, ...)."""
 
 
 class _Plane:

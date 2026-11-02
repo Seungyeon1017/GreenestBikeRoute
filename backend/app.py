@@ -32,8 +32,9 @@ from routing.tours import plan_tours
 from routing.footways import Footways
 from routing.edges import edge_coords
 from routing.naming import name_streets, street_lines, street_name, way_label, way_lines
-from routing.route import RouteError, compare_routes, day_routes, find_route, nearest_street, segment_id, set_closures, sky
+from routing.route import RouteError, compare_routes, day_routes, find_route, set_closures, sky
 from routing.score import street_scores
+from routing.snap import nearest_street, segment_id
 from routing.sharing_trip import WalkNetwork, load_walk_graph, plan_sharing_trip
 
 
