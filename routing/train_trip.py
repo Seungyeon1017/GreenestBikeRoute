@@ -34,11 +34,11 @@ def _iso(when):
     return when.isoformat(timespec="minutes")
 
 
-_REACHABLE = weakref.WeakKeyDictionary()  # timetable -> (its graph, _reachable): neither changes while the API runs
+_REACHABLE = weakref.WeakKeyDictionary()  # timetable -> (its graph, rideable_stations): neither changes while the API runs
 
 
-def _reachable(G, timetable):
-    """The stations the bike graph reaches: [(id, (lat, lon))]."""
+def rideable_stations(G, timetable):
+    """The stations the bike graph reaches (in Heilbronn): [(id, (lat, lon))]."""
     if timetable not in _REACHABLE or _REACHABLE[timetable][0]() is not G:
         near = [(sid, (s["lat"], s["lon"])) for sid, s in timetable.stations.items()
                 if nearest_street(G, s["lat"], s["lon"])[3] <= STATION_SNAP_M]
@@ -109,7 +109,7 @@ def plan_train_trip(G, timetable, penalties, after, origin=None, to_stop=None, f
         return options[0]["arrive_at"], ride_s
 
     guesses = []
-    for sid, at in _reachable(G, timetable):
+    for sid, at in rideable_stations(G, timetable):
         if sid == far:
             continue
         ride_s = _straight_s(point, at)

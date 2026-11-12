@@ -227,6 +227,73 @@ function endpointPin(
   return marker
 }
 
+/** A station picked in the Start or Destination field, and where it put the pin. */
+type PickedStation = { station: TransitStopProperties; point: LngLat }
+
+/** The picked station while the pin is still on it; a map click or drag makes it a plain point. */
+function stationAt(picked: PickedStation | null, point: LngLat | null) {
+  return picked && point === picked.point ? picked.station : null
+}
+
+/**
+ * What the start and destination ask for: a bike route, a bike + train trip, or nothing that
+ * can be planned (why); null until both are set. A station outside Heilbronn is reached only
+ * by train; with "Combine with trains" on, the station end is the train's end of the trip.
+ */
+type TripPlan =
+  | { kind: 'bike' }
+  | {
+      kind: 'train'
+      direction: TrainDirection
+      station: TransitStopProperties
+      point: LngLat
+    }
+  | {
+      kind: 'problem'
+      problem: 'needTrain' | 'bothOutside' | 'needStation'
+      station?: string
+    }
+
+function tripPlan(
+  trainOn: boolean,
+  start: LngLat | null,
+  end: LngLat | null,
+  startStop: TransitStopProperties | null,
+  endStop: TransitStopProperties | null,
+): TripPlan | null {
+  if (!start || !end) {
+    return null
+  }
+  const startOut = startStop?.rideable === false
+  const endOut = endStop?.rideable === false
+  if (startOut && endOut) {
+    return { kind: 'problem', problem: 'bothOutside' }
+  }
+  if (!trainOn) {
+    const outside = startOut ? startStop : endOut ? endStop : null
+    return outside
+      ? { kind: 'problem', problem: 'needTrain', station: outside.name }
+      : { kind: 'bike' }
+  }
+  if (startStop && (startOut || !endStop)) {
+    return {
+      kind: 'train',
+      direction: 'from_train',
+      station: startStop,
+      point: end,
+    }
+  }
+  if (endStop) {
+    return {
+      kind: 'train',
+      direction: 'to_train',
+      station: endStop,
+      point: start,
+    }
+  }
+  return { kind: 'problem', problem: 'needStation' }
+}
+
 export default function PlanTripView() {
   const { t, i18n } = useTranslation()
 
@@ -236,6 +303,19 @@ export default function PlanTripView() {
   // Text in the Start and Destination search fields.
   const [startLabel, setStartLabel] = useState('')
   const [endLabel, setEndLabel] = useState('')
+  // "Combine with trains", and the stations picked as start or destination.
+  const [trainOn, setTrainOn] = useState(false)
+  const [startStation, setStartStation] = useState<PickedStation | null>(null)
+  const [endStation, setEndStation] = useState<PickedStation | null>(null)
+  const plan = tripPlan(
+    trainOn,
+    start,
+    end,
+    stationAt(startStation, start),
+    stationAt(endStation, end),
+  )
+  // Only a plain bike route has the comparison, the hills and the rental trip.
+  const bikeRoute = plan?.kind === 'bike'
   const [options, setOptions] = useState<RouteOptions>(DEFAULT_ROUTE_OPTIONS)
   const [result, setResult] = useState<RouteResult | null>(null)
   // True once the map has loaded, so a saved route opened from the Profile gets its pins.
@@ -301,22 +381,18 @@ export default function PlanTripView() {
   const sharingTrip = useSharingTrip(
     tripOn,
     tripVehicle,
-    start,
-    end,
+    bikeRoute ? start : null,
+    bikeRoute ? end : null,
     tripOptions,
   )
 
   // Bike + train: ride to a station and take the train, or get off the train and ride on.
-  const [trainOn, setTrainOn] = useState(false)
-  const [trainDirection, setTrainDirection] =
-    useState<TrainDirection>('to_train')
-  const [trainStation, setTrainStation] =
-    useState<TransitStopProperties | null>(null)
+  const trainPlan = plan?.kind === 'train' ? plan : null
   const trainTrip = useTrainTrip(
-    trainOn,
-    trainDirection,
-    trainStation,
-    trainDirection === 'to_train' ? start : end,
+    Boolean(trainPlan),
+    trainPlan?.direction ?? 'to_train',
+    trainPlan?.station ?? null,
+    trainPlan?.point ?? null,
     tripOptions,
   )
   // Which of the trip's trains the card and the map show; a new trip starts with the first.
@@ -438,6 +514,14 @@ export default function PlanTripView() {
     if (!start || !end) {
       return
     }
+    if (!bikeRoute) {
+      // A bike + train trip, or no trip at all: no plain route to show.
+      setResult(null)
+      setDay(null)
+      setError(null)
+      setLoading(false)
+      return
+    }
     const controller = new AbortController()
     setLoading(true)
     const request = { from: start, to: end, options }
@@ -468,11 +552,11 @@ export default function PlanTripView() {
       controller.abort()
     }
     // routeVersion: a closure was reported or answered, so the route may change.
-  }, [start, end, options, dayMode, reports.routeVersion])
+  }, [start, end, bikeRoute, options, dayMode, reports.routeVersion])
 
   // Ask for the route's hills when "Show hills" is on and the points or options change.
   useEffect(() => {
-    if (!showHills || !start || !end) {
+    if (!showHills || !start || !end || !bikeRoute) {
       setGrade(null)
       return
     }
@@ -503,12 +587,12 @@ export default function PlanTripView() {
       clearTimeout(timer)
       controller.abort()
     }
-  }, [showHills, start, end, tripOptions, t])
+  }, [showHills, start, end, bikeRoute, tripOptions, t])
 
-  // The stations change only with the timetable: load them once, the first time the layer is on
-  // or the bike + train card needs them for its search field.
+  // The stations change only with the timetable: load them once, for the Start and Destination
+  // search (stations are suggested there) and the stations layer.
   useEffect(() => {
-    if (!(showStations || trainOn) || stations) {
+    if (stations) {
       return
     }
     const controller = new AbortController()
@@ -528,7 +612,7 @@ export default function PlanTripView() {
         )
       })
     return () => controller.abort()
-  }, [showStations, trainOn, stations, t])
+  }, [stations, t])
 
   // Draw (or clear) the stations.
   useEffect(() => {
@@ -1254,6 +1338,16 @@ export default function PlanTripView() {
     }
   }
 
+  /** A station picked in the Start or Destination field: a place that may be outside Heilbronn. */
+  function pickStation(
+    which: 'start' | 'end',
+    station: TransitStopProperties,
+    point: LngLat,
+  ) {
+    ;(which === 'start' ? setStartStation : setEndStation)({ station, point })
+    pickPlace(which, point, station.name)
+  }
+
   /** "Use my location": the device's position becomes the start, if it is in Heilbronn. */
   function locateStart() {
     const l = (key: string) => t(`greenest.planTrip.locate.${key}`)
@@ -1363,7 +1457,7 @@ export default function PlanTripView() {
         onToggle: flag =>
           setPinnedFlag(current => (current === flag ? null : flag)),
       }}
-      paused={sharingTrip.trip ? 'sharing' : trainTrip.trip ? 'train' : false}
+      paused={Boolean(sharingTrip.trip)}
       result={shown}
     />
   )
@@ -1396,7 +1490,7 @@ export default function PlanTripView() {
           <TripForm
             dayMode={dayMode}
             daySlider={
-              start && end ? (
+              bikeRoute ? (
                 <DaySlider
                   index={stopIndex}
                   onIndexChange={pickStop}
@@ -1409,19 +1503,38 @@ export default function PlanTripView() {
               )
             }
             endLabel={endLabel}
+            endStation={stationAt(endStation, end)}
             loading={loading}
             locateError={locateError}
             locating={locating}
+            notice={
+              plan?.kind === 'problem'
+                ? t(`greenest.planTrip.train.problem.${plan.problem}`, {
+                    station: plan.station,
+                  })
+                : null
+            }
             onDayModeChange={setDayMode}
             onEndLabelChange={setEndLabel}
             onLocate={locateStart}
             onOptionsChange={setOptions}
             onPickEnd={(point, label) => pickPlace('end', point, label)}
+            onPickEndStation={(station, point) =>
+              pickStation('end', station, point)
+            }
             onPickStart={(point, label) => pickPlace('start', point, label)}
+            onPickStartStation={(station, point) =>
+              pickStation('start', station, point)
+            }
             onReset={handleReset}
             onStartLabelChange={setStartLabel}
+            onTrainOnChange={setTrainOn}
             options={options}
             startLabel={startLabel}
+            startStation={stationAt(startStation, start)}
+            stations={stations}
+            stationsError={stationsError}
+            trainOn={trainOn}
           />
           {error && (
             <p
@@ -1431,7 +1544,18 @@ export default function PlanTripView() {
               {error}
             </p>
           )}
-          {!wide && comparison}
+          {trainPlan && (
+            <TrainCard
+              departTime={tripOptions.departTime}
+              error={trainTrip.error}
+              loading={trainTrip.loading}
+              onOptionChange={setTrainOptionIndex}
+              onRentFromStation={rentFromStation}
+              optionIndex={trainOptionIndex}
+              trip={trainTrip.trip}
+            />
+          )}
+          {!wide && !trainPlan && comparison}
           <SaveRouteButton
             end={end}
             endLabel={endLabel}
@@ -1441,28 +1565,9 @@ export default function PlanTripView() {
             start={start}
             startLabel={startLabel}
           />
-          <TrainCard
-            departTime={tripOptions.departTime}
-            direction={trainDirection}
-            error={trainTrip.error}
-            hasEnd={Boolean(end)}
-            hasStart={Boolean(start)}
-            loading={trainTrip.loading}
-            on={trainOn}
-            onDirectionChange={setTrainDirection}
-            onOnChange={setTrainOn}
-            onOptionChange={setTrainOptionIndex}
-            onRentFromStation={rentFromStation}
-            onStationChange={setTrainStation}
-            optionIndex={trainOptionIndex}
-            station={trainStation}
-            stations={stations}
-            stationsError={stationsError}
-            trip={trainTrip.trip}
-          />
           <SharingCard
             error={sharing.error}
-            hasRoute={Boolean(start && end)}
+            hasRoute={bikeRoute}
             hasStart={Boolean(start)}
             onShowChange={setShowSharing}
             onTripOnChange={setTripOn}
@@ -1579,7 +1684,7 @@ export default function PlanTripView() {
               <HillsLegend
                 error={gradeError}
                 grade={grade}
-                hasRoute={Boolean(start && end)}
+                hasRoute={bikeRoute}
               />
             )}
             {showStations && <StationsLegend error={stationsError} />}

@@ -4,14 +4,8 @@ import { cx } from 'class-variance-authority'
 import { Bike, TrainFront } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import Card, { CardTitle } from '@/components/Greenest/ui/Card'
-import type {
-  TrainDirection,
-  TrainOption,
-  TrainTrip,
-  TransitStopCollection,
-  TransitStopProperties,
-} from '@/types/greenest'
-import StationSearch from './StationSearch'
+import InfoTip from '@/components/Greenest/ui/InfoTip'
+import type { TrainOption, TrainTrip } from '@/types/greenest'
 import { TRAIN_RIDE_COLOR, trainLineColor } from './trainLayers'
 
 const TIME_ZONE = 'Europe/Berlin'
@@ -42,17 +36,6 @@ const km = (metres: number, language: string) =>
   })
 
 type TrainCardProps = {
-  on: boolean
-  onOnChange: (_on: boolean) => void
-  direction: TrainDirection
-  onDirectionChange: (_direction: TrainDirection) => void
-  /** Every station, for the search field; null while they load. */
-  stations: TransitStopCollection | null
-  stationsError: string | null
-  station: TransitStopProperties | null
-  onStationChange: (_station: TransitStopProperties | null) => void
-  hasStart: boolean
-  hasEnd: boolean
   /** The earliest start as "YYYY-MM-DDTHH:mm", or '' for now. */
   departTime: string
   trip: TrainTrip | null
@@ -65,103 +48,54 @@ type TrainCardProps = {
   onRentFromStation: (_trip: TrainTrip) => void
 }
 
-/** Bike + train: ride to a station and take the train, or get off the train and ride on. */
+/**
+ * Bike + train: the trip for the start and destination of the form, when "Combine with trains"
+ * is on and one of them is a station.
+ */
 export default function TrainCard(props: TrainCardProps) {
   const { t, i18n } = useTranslation()
-  const { on, direction, station, trip } = props
+  const { trip } = props
   const s = (key: string, values?: Record<string, unknown>) =>
     t(`greenest.planTrip.train.${key}`, values)
-  const hasPoint = direction === 'to_train' ? props.hasStart : props.hasEnd
   const option = trip?.options[props.optionIndex] ?? trip?.options[0]
 
   return (
     <Card>
       <div className="flex flex-col gap-3">
-        <CardTitle>{s('title')}</CardTitle>
-        <label className="flex cursor-pointer items-start gap-2 text-sm text-leaf-ink/80">
-          <input
-            checked={on}
-            className="mt-0.5 h-4 w-4 accent-leaf-forest"
-            onChange={e => props.onOnChange(e.target.checked)}
-            type="checkbox"
+        {/* relative: the info panel spans this row. */}
+        <div className="relative flex items-center gap-1.5">
+          <CardTitle>{s('title')}</CardTitle>
+          <InfoTip
+            label={t('greenest.planTrip.info.about', { name: s('title') })}
+          >
+            {s('note')}
+          </InfoTip>
+        </div>
+        <p className="text-xs text-leaf-muted">
+          {props.departTime
+            ? s('earliest.at', {
+                time: trainTime(props.departTime, i18n.language),
+              })
+            : s('earliest.now')}
+        </p>
+        {props.loading && (
+          <p className="text-xs text-leaf-muted" role="status">
+            {s('loading')}
+          </p>
+        )}
+        {props.error && (
+          <p className="text-xs text-red-700" role="alert">
+            {props.error}
+          </p>
+        )}
+        {trip && option && (
+          <TrainSteps
+            onOptionChange={props.onOptionChange}
+            onRentFromStation={props.onRentFromStation}
+            option={option}
+            optionIndex={props.optionIndex}
+            trip={trip}
           />
-          <span>{s('toggle')}</span>
-        </label>
-
-        {on && (
-          <>
-            <div
-              aria-label={s('direction.label')}
-              className="grid grid-cols-2 gap-1 rounded-xl bg-leaf-cream p-1 text-xs"
-              role="group"
-            >
-              {(['to_train', 'from_train'] as const).map(d => (
-                <button
-                  aria-pressed={direction === d}
-                  className={cx(
-                    'rounded-lg px-2 py-1.5 font-medium',
-                    direction === d
-                      ? 'bg-white text-leaf-forest shadow-soft'
-                      : 'text-leaf-ink/70 hover:text-leaf-ink',
-                  )}
-                  key={d}
-                  onClick={() => props.onDirectionChange(d)}
-                  type="button"
-                >
-                  {s(`direction.${d}`)}
-                </button>
-              ))}
-            </div>
-
-            <StationSearch
-              label={s(`station.${direction}`)}
-              onChange={props.onStationChange}
-              stations={props.stations}
-              value={station}
-            />
-            {props.stationsError && (
-              <p className="text-xs text-red-700" role="alert">
-                {props.stationsError}
-              </p>
-            )}
-
-            <p className="text-xs text-leaf-muted">
-              {props.departTime
-                ? s('earliest.at', {
-                    time: trainTime(props.departTime, i18n.language),
-                  })
-                : s('earliest.now')}
-            </p>
-
-            {!hasPoint && (
-              <p className="text-xs text-leaf-muted">
-                {s(direction === 'to_train' ? 'need.start' : 'need.end')}
-              </p>
-            )}
-            {hasPoint && !station && (
-              <p className="text-xs text-leaf-muted">{s('need.station')}</p>
-            )}
-            {props.loading && (
-              <p className="text-xs text-leaf-muted" role="status">
-                {s('loading')}
-              </p>
-            )}
-            {props.error && (
-              <p className="text-xs text-red-700" role="alert">
-                {props.error}
-              </p>
-            )}
-
-            {trip && option && (
-              <TrainSteps
-                onOptionChange={props.onOptionChange}
-                onRentFromStation={props.onRentFromStation}
-                option={option}
-                optionIndex={props.optionIndex}
-                trip={trip}
-              />
-            )}
-          </>
         )}
       </div>
     </Card>
@@ -364,7 +298,6 @@ function TrainSteps({
         {s('kcal', { kcal: Math.round(ride.kcal) })}
       </p>
       <p className="text-[11px] text-leaf-muted">
-        {s('note')}{' '}
         {trip.valid_until &&
           s('validUntil', {
             date: new Date(`${trip.valid_until}T12:00`).toLocaleDateString(

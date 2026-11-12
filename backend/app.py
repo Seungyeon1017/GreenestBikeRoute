@@ -37,7 +37,7 @@ from routing.route import RouteError, compare_routes, day_routes, find_route, se
 from routing.score import street_scores
 from routing.snap import nearest_street, segment_id
 from routing.sharing_trip import WalkNetwork, load_walk_graph, plan_sharing_trip
-from routing.train_trip import plan_train_trip
+from routing.train_trip import plan_train_trip, rideable_stations
 
 
 class GeoJSONResponse(JSONResponse):
@@ -666,14 +666,18 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
                       limit: Optional[int] = Query(None, ge=1, le=500, description=(
                           "Return at most this many (closest first if near_lat/near_lon is given)"))):
         """Every station a Stadtbahn (S4, S41, S42) or train line (RE, RB, MEX) of the HNV timetable calls at, also
-        outside Heilbronn. Sorted by name, or closest first with near_lat/near_lon. The first call after a server start
-        reads the timetable (a few seconds)."""
+        outside Heilbronn. Sorted by name, or closest first with near_lat/near_lon; `rideable` tells the ones in
+        Heilbronn. The first call after a server start reads the timetable (a few seconds)."""
         if (near_lat is None) != (near_lon is None):
             raise HTTPException(status_code=422, detail="give both near_lat and near_lon, or neither")
         try:
-            return GeoJSONResponse(transit.stops(q, None if near_lat is None else (near_lat, near_lon), limit))
+            stops = transit.stops(q, None if near_lat is None else (near_lat, near_lon), limit)
+            rideable = {sid for sid, _ in rideable_stations(app.state.graph, transit.timetable())}
         except TransitUnavailable as e:
             raise HTTPException(status_code=503, detail=str(e))
+        for f in stops["features"]:
+            f["properties"]["rideable"] = f["properties"]["stop_id"] in rideable
+        return GeoJSONResponse(stops)
 
     @app.get("/transit/departures", tags=[TRANSIT], summary="The next trains from a station, optionally only those to another one",
              response_model=TransitDepartures,

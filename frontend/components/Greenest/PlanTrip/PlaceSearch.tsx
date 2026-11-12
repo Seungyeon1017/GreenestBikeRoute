@@ -2,15 +2,23 @@
 
 import { cx } from 'class-variance-authority'
 import { LocateFixed, MapPin, Search } from 'lucide-react'
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchPlaces } from '@/services/greenestApi'
-import type { LngLat, PlaceCollection } from '@/types/greenest'
+import type {
+  LngLat,
+  PlaceCollection,
+  TransitStopCollection,
+  TransitStopProperties,
+} from '@/types/greenest'
 import PlaceIcon from './PlaceIcon'
+import { matchStations, StationBadge } from './stations'
 
 /** The backend answers 422 below this many characters. */
 const MIN_CHARS = 3
 const DEBOUNCE_MS = 400
+/** Station suggestions above the places, from the timetable (also outside Heilbronn). */
+const MAX_STATIONS = 3
 
 type PlaceSearchProps = {
   label: string
@@ -25,11 +33,17 @@ type PlaceSearchProps = {
   onLocate?: () => void
   /** The browser is still looking up the location: the button pulses and is disabled. */
   locating?: boolean
+  /** Every train station: matching ones are suggested first; picking one calls onPickStation. */
+  stations?: TransitStopCollection | null
+  onPickStation?: (_station: TransitStopProperties, _point: LngLat) => void
+  /** The field holds a picked station: its badge replaces the pin. */
+  station?: TransitStopProperties | null
 }
 
 /**
- * Search field with a "did you mean" list from `/geocode`, like a map app's search box.
- * Only searches after the rider typed (not when the field is filled by a pick or a map click).
+ * Search field with a "did you mean" list from `/geocode`, like a map app's search box, and the
+ * train stations whose name matches on top. Only searches after the rider typed (not when the
+ * field is filled by a pick or a map click).
  */
 export default function PlaceSearch({
   label,
@@ -40,6 +54,9 @@ export default function PlaceSearch({
   pinClassName,
   onLocate,
   locating = false,
+  stations,
+  onPickStation,
+  station,
 }: PlaceSearchProps) {
   const { t } = useTranslation()
   const id = useId()
@@ -49,21 +66,46 @@ export default function PlaceSearch({
   const [typing, setTyping] = useState(false)
   const [places, setPlaces] = useState<PlaceCollection | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  // The place search is slow (Nominatim, up to ~10 s) while stations match at once: say it's still looking.
+  const [searching, setSearching] = useState(false)
   const [active, setActive] = useState(-1)
 
   const query = value.trim()
-  const open = typing && (places !== null || message !== null)
+  const stationMatches = useMemo(
+    () =>
+      typing && stations && onPickStation
+        ? matchStations(stations.features, query, MAX_STATIONS)
+        : [],
+    [typing, stations, onPickStation, query],
+  )
+  const placeCount = places?.features.length ?? 0
+  // One list for the arrow keys: the stations, then the places.
+  const count = stationMatches.length + placeCount
+  const open =
+    typing &&
+    (stationMatches.length > 0 ||
+      places !== null ||
+      message !== null ||
+      searching)
+  // "No place found" next to matching stations would read as if nothing was found.
+  const noMatch = t('greenest.planTrip.search.noMatch')
+  const showMessage =
+    message !== null && !(stationMatches.length > 0 && message === noMatch)
 
   useEffect(() => {
+    // A new query: the places of the last one no longer apply.
+    setPlaces(null)
+    setMessage(null)
     if (!typing || query.length < MIN_CHARS) {
-      setPlaces(null)
-      setMessage(null)
+      setSearching(false)
       return
     }
+    setSearching(true)
     const controller = new AbortController()
     const timer = setTimeout(() => {
       fetchPlaces(query, controller.signal)
         .then(data => {
+          setSearching(false)
           setPlaces(data)
           setActive(-1)
           setMessage(
@@ -74,6 +116,7 @@ export default function PlaceSearch({
           if (err.name === 'AbortError') {
             return
           }
+          setSearching(false)
           setPlaces(null)
           setMessage(
             err.status === 503
@@ -89,7 +132,14 @@ export default function PlaceSearch({
   }, [typing, query, t])
 
   function pick(index: number) {
-    const feature = places?.features[index]
+    const hit = stationMatches[index]
+    if (hit) {
+      const [lng, lat] = hit.geometry.coordinates
+      setTyping(false)
+      onPickStation?.(hit.properties, [lng, lat])
+      return
+    }
+    const feature = places?.features[index - stationMatches.length]
     if (!feature) {
       return
     }
@@ -100,7 +150,6 @@ export default function PlaceSearch({
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    const count = places?.features.length ?? 0
     if (e.key === 'ArrowDown' && count) {
       e.preventDefault()
       setActive(i => (i + 1) % count)
@@ -119,7 +168,14 @@ export default function PlaceSearch({
     <div className="relative flex flex-col gap-1 text-sm text-leaf-ink/80">
       <label htmlFor={id}>{label}</label>
       <div className="flex items-center gap-2 rounded-xl border border-leaf-sand bg-white px-3 py-2 focus-within:ring-2 focus-within:ring-leaf-moss">
-        <MapPin aria-hidden className={cx('h-4 w-4 shrink-0', pinClassName)} />
+        {station && !typing ? (
+          <StationBadge lines={station.lines} />
+        ) : (
+          <MapPin
+            aria-hidden
+            className={cx('h-4 w-4 shrink-0', pinClassName)}
+          />
+        )}
         <input
           aria-activedescendant={
             open && active >= 0 ? `${listId}-${active}` : undefined
@@ -162,9 +218,9 @@ export default function PlaceSearch({
 
       {open && (
         <div className="absolute inset-x-0 top-full z-20 mt-1 overflow-hidden rounded-xl border border-leaf-sand bg-white shadow-soft">
-          {places && places.features.length > 0 && (
+          {count > 0 && (
             <ul id={listId} role="listbox">
-              {places.features.map((f, i) => (
+              {stationMatches.map((f, i) => (
                 <li
                   aria-selected={i === active}
                   className={cx(
@@ -172,36 +228,76 @@ export default function PlaceSearch({
                     i === active ? 'bg-leaf-mint' : 'hover:bg-leaf-cream',
                   )}
                   id={`${listId}-${i}`}
-                  key={`${f.properties.label}-${i}`}
-                  // mousedown, not click: it fires before the input's blur.
+                  key={f.properties.stop_id}
                   onMouseDown={e => {
                     e.preventDefault()
                     pick(i)
                   }}
                   role="option"
                 >
-                  <PlaceIcon
-                    category={f.properties.category}
-                    type={f.properties.type}
-                  />
+                  <StationBadge lines={f.properties.lines} />
                   <span className="flex min-w-0 flex-col">
                     <span className="font-medium text-leaf-ink">
-                      {f.properties.name ?? f.properties.label.split(',')[0]}
+                      {f.properties.name}
                     </span>
                     <span className="truncate text-xs text-leaf-muted">
-                      {f.properties.label}
+                      {f.properties.rideable === false
+                        ? t('greenest.planTrip.search.stationOutside', {
+                            lines: f.properties.lines.join(' · '),
+                          })
+                        : t('greenest.planTrip.search.station', {
+                            lines: f.properties.lines.join(' · '),
+                          })}
                     </span>
                   </span>
                 </li>
               ))}
+              {places?.features.map((f, j) => {
+                const i = stationMatches.length + j
+                return (
+                  <li
+                    aria-selected={i === active}
+                    className={cx(
+                      'flex cursor-pointer items-center gap-2.5 px-3 py-2',
+                      i === active ? 'bg-leaf-mint' : 'hover:bg-leaf-cream',
+                    )}
+                    id={`${listId}-${i}`}
+                    key={`${f.properties.label}-${j}`}
+                    // mousedown, not click: it fires before the input's blur.
+                    onMouseDown={e => {
+                      e.preventDefault()
+                      pick(i)
+                    }}
+                    role="option"
+                  >
+                    <PlaceIcon
+                      category={f.properties.category}
+                      type={f.properties.type}
+                    />
+                    <span className="flex min-w-0 flex-col">
+                      <span className="font-medium text-leaf-ink">
+                        {f.properties.name ?? f.properties.label.split(',')[0]}
+                      </span>
+                      <span className="truncate text-xs text-leaf-muted">
+                        {f.properties.label}
+                      </span>
+                    </span>
+                  </li>
+                )
+              })}
             </ul>
           )}
-          {message && (
+          {searching && (
+            <p className="px-3 py-2 text-xs text-leaf-muted" role="status">
+              {t('greenest.planTrip.search.searching')}
+            </p>
+          )}
+          {showMessage && (
             <p className="px-3 py-2 text-xs text-leaf-muted" role="status">
               {message}
             </p>
           )}
-          {places && places.features.length > 0 && (
+          {places && placeCount > 0 && (
             <p className="border-t border-leaf-sand/70 px-3 py-1.5 text-[11px] text-leaf-muted">
               {places.attribution}
             </p>

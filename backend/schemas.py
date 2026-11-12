@@ -961,6 +961,9 @@ class TransitStopProperties(BaseModel):
     name: str = Field(description="Station name as in the timetable, e.g. \"Mosbach, Bahnhof\"")
     lines: list[str] = Field(description="Stadtbahn and train lines calling here, e.g. [\"S4\", \"S41\", \"S42\"]")
     distance_m: Optional[int] = Field(None, description="Metres from the near_lat/near_lon point, when one was given")
+    rideable: Optional[bool] = Field(None, description=(
+        "In /transit/stops: true in Heilbronn, where the bike graph reaches it, so it can be the start or end of a "
+        "plain bike route; false outside, reached only with /route/train"))
 
 
 class TransitStopFeature(BaseModel):
@@ -983,7 +986,8 @@ class TransitStopCollection(BaseModel):
         "attribution": "NVBW / MobiData BW (ODbL), timetable of the Heilbronner Hohenloher Haller Nahverkehr (HNV)",
         "features": [{"type": "Feature", "geometry": {"type": "Point", "coordinates": [9.2084503, 49.1427624]},
                       "properties": {"stop_id": "de:08121:1114", "name": "Heilbronn Hbf/Willy-Brandt-Pl.",
-                                     "lines": ["S4", "S41", "S42"], "distance_m": 178}}]}}}
+                                     "lines": ["S4", "S41", "S42"], "distance_m": 178,
+                                     "rideable": True}}]}}}
 
 
 class TransitDeparture(BaseModel):

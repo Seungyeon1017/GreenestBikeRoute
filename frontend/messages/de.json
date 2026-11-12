@@ -392,7 +392,6 @@
       "destinationPlaceholder": "z. B. Pfühlpark",
       "comparisonTitle": "Routenvergleich",
       "comparisonPaused": "Auf der Karte siehst du gerade die Fahrt mit Leihfahrzeug. Dieser Vergleich gilt für die Fahrt mit deinem eigenen Rad und ist ausgegraut, bis du die Leihfahrt ausschaltest.",
-      "comparisonPausedTrain": "Auf der Karte siehst du gerade die Fahrt mit Rad + Bahn. Dieser Vergleich gilt für die ganze Strecke mit dem Rad und ist ausgegraut, bis du Rad + Bahn ausschaltest.",
       "routes": {
         "shortest": "Kürzeste Route",
         "shortestHint": "Der direkteste Weg, ohne Rücksicht auf Komfort.",
@@ -460,6 +459,7 @@
       "search": {
         "noMatch": "Kein Ort in Heilbronn gefunden. Versuche eine andere Schreibweise oder klicke auf die Karte.",
         "unavailable": "Die Ortssuche ist gerade nicht erreichbar. Klicke stattdessen auf die Karte.",
+        "searching": "Orte werden gesucht …",
         "kind": {
           "sbahn": "S-Bahn-Haltestelle",
           "train": "Bahnhof",
@@ -478,7 +478,9 @@
           "hotel": "Unterkunft",
           "area": "Ort oder Stadtteil",
           "place": "Ort"
-        }
+        },
+        "station": "Bahnhof · {{lines}}",
+        "stationOutside": "Bahnhof außerhalb Heilbronns, nur mit der Bahn · {{lines}}"
       },
       "locate": {
         "button": "Meinen Standort als Start nehmen",
@@ -814,24 +816,12 @@
       },
       "train": {
         "title": "Rad + Bahn",
-        "toggle": "Die Fahrt mit der Bahn verbinden (S-Bahn, Regionalzüge)",
-        "direction": {
-          "label": "Richtung",
-          "to_train": "Zum Zug radeln",
-          "from_train": "Vom Zug weiterradeln"
-        },
-        "station": {
-          "to_train": "Mit der Bahn nach",
-          "from_train": "Mit der Bahn ab",
-          "placeholder": "Bahnhof, z. B. Mosbach",
-          "noMatch": "Kein Bahnhof mit diesem Namen.",
-          "loading": "Bahnhöfe werden geladen …",
-          "clear": "Bahnhof löschen"
-        },
-        "need": {
-          "station": "Wähle den Bahnhof.",
-          "start": "Lege zuerst den Start deiner Fahrt fest (suchen oder auf die Karte klicken).",
-          "end": "Lege zuerst das Ziel deiner Fahrt fest (suchen oder auf die Karte klicken)."
+        "toggle": "Mit der Bahn kombinieren (S-Bahn, Regionalzüge)",
+        "toggleHint": "Wähle einen Bahnhof als Start oder Ziel, auch außerhalb Heilbronns (z. B. Mosbach). Du radelst hin und fährst mit dem Zug weiter, oder kommst mit dem Zug an und radelst weiter.",
+        "problem": {
+          "needTrain": "{{station}} liegt außerhalb Heilbronns, dorthin gibt es keine Radroute. Hake „Mit der Bahn kombinieren“ an, um mit Rad und Bahn hinzukommen.",
+          "bothOutside": "Start und Ziel liegen beide außerhalb Heilbronns. Einer davon muss in Heilbronn liegen, wo du radelst.",
+          "needStation": "Zum Kombinieren mit der Bahn wähle einen Bahnhof als Start oder Ziel (tippe seinen Namen, z. B. Mosbach)."
         },
         "loading": "Züge werden gesucht …",
         "earliest": {

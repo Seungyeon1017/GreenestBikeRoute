@@ -245,6 +245,7 @@ def test_api_stops(client):
     r = client.get("/transit/stops", params={"q": "mosbach"})
     assert r.status_code == 200 and r.headers["content-type"] == "application/geo+json"
     assert names(TransitStopCollection.model_validate(r.json()).model_dump()) == ["Mosbach, Bahnhof"]
+    assert r.json()["features"][0]["properties"]["rideable"] is False  # outside Heilbronn: no bike route there
     r = client.get("/transit/stops", params={"near_lat": 49.15, "near_lon": 9.22, "limit": 1})
     assert [f["properties"]["stop_id"] for f in r.json()["features"]] == [SUELMERTOR]
     assert client.get("/transit/stops", params={"near_lat": 49.15}).status_code == 422

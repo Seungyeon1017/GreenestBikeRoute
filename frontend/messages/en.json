@@ -392,7 +392,6 @@
       "destinationPlaceholder": "e.g. Pfühlpark",
       "comparisonTitle": "Route comparison",
       "comparisonPaused": "Showing the trip with a rented vehicle on the map. This comparison is for riding your own bike, so it is greyed out until you switch the rental trip off.",
-      "comparisonPausedTrain": "Showing the bike + train trip on the map. This comparison is for riding the whole way, so it is greyed out until you switch Bike + train off.",
       "routes": {
         "shortest": "Shortest route",
         "shortestHint": "The most direct path, ignoring comfort.",
@@ -460,6 +459,7 @@
       "search": {
         "noMatch": "No place found in Heilbronn. Try another spelling, or click the map.",
         "unavailable": "Place search is not available right now. Click the map instead.",
+        "searching": "Searching places…",
         "kind": {
           "sbahn": "S-Bahn stop",
           "train": "Train station",
@@ -478,7 +478,9 @@
           "hotel": "Accommodation",
           "area": "Town or district",
           "place": "Place"
-        }
+        },
+        "station": "Station · {{lines}}",
+        "stationOutside": "Station outside Heilbronn, by train only · {{lines}}"
       },
       "locate": {
         "button": "Use my location as start",
@@ -814,24 +816,12 @@
       },
       "train": {
         "title": "Bike + train",
-        "toggle": "Combine the ride with a train (S-Bahn, regional trains)",
-        "direction": {
-          "label": "Which way",
-          "to_train": "Ride to the train",
-          "from_train": "Ride on from the train"
-        },
-        "station": {
-          "to_train": "Train to",
-          "from_train": "Train from",
-          "placeholder": "Station, e.g. Mosbach",
-          "noMatch": "No station with this name.",
-          "loading": "Loading stations…",
-          "clear": "Clear the station"
-        },
-        "need": {
-          "station": "Pick the station.",
-          "start": "Set the start of your ride first (search or click the map).",
-          "end": "Set the destination of your ride first (search or click the map)."
+        "toggle": "Combine with trains (S-Bahn, regional trains)",
+        "toggleHint": "Pick a station as start or destination, also outside Heilbronn (e.g. Mosbach). You ride to it and take the train, or take the train from it and ride on.",
+        "problem": {
+          "needTrain": "{{station}} is outside Heilbronn, so there is no bike route to or from it. Tick “Combine with trains” to go there by bike and train.",
+          "bothOutside": "Start and destination are both outside Heilbronn. One of them must be in Heilbronn, where you ride.",
+          "needStation": "To combine with trains, pick a station as start or destination (type its name, e.g. Mosbach)."
         },
         "loading": "Looking up trains…",
         "earliest": {

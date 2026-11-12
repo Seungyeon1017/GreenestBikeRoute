@@ -4,7 +4,12 @@ import { cx } from 'class-variance-authority'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import Card, { CardTitle } from '@/components/Greenest/ui/Card'
-import type { LngLat, RouteOptions } from '@/types/greenest'
+import type {
+  LngLat,
+  RouteOptions,
+  TransitStopCollection,
+  TransitStopProperties,
+} from '@/types/greenest'
 import InfoTip from '@/components/Greenest/ui/InfoTip'
 import { isSunUp } from '@/lib/sun'
 import PlaceSearch from './PlaceSearch'
@@ -18,6 +23,20 @@ type TripFormProps = {
   /** A place was picked from the search list. */
   onPickStart: (_point: LngLat, _label: string) => void
   onPickEnd: (_point: LngLat, _label: string) => void
+  /** Train stations, suggested in both fields; null while they load. */
+  stations: TransitStopCollection | null
+  stationsError: string | null
+  /** A station was picked from the list (it may be outside Heilbronn). */
+  onPickStartStation: (_station: TransitStopProperties, _point: LngLat) => void
+  onPickEndStation: (_station: TransitStopProperties, _point: LngLat) => void
+  /** The station in each field, while its pin is still on it. */
+  startStation: TransitStopProperties | null
+  endStation: TransitStopProperties | null
+  /** "Combine with trains": a station as start or destination is reached by train. */
+  trainOn: boolean
+  onTrainOnChange: (_on: boolean) => void
+  /** Why the start and destination give no trip, shown under the fields. */
+  notice: string | null
   /** "Use my location" in the Start field: the device's position becomes the start. */
   onLocate: () => void
   locating: boolean
@@ -104,7 +123,11 @@ function SliderInfo({
   const isDanger = sliderKey === 'danger'
   const rows = Array.from(
     new Set([
-      ...(isDanger ? DANGER_ROWS : sliderKey === 'dark' ? DARK_ROWS : POINT_ROWS),
+      ...(isDanger
+        ? DANGER_ROWS
+        : sliderKey === 'dark'
+          ? DARK_ROWS
+          : POINT_ROWS),
       value,
     ]),
   ).sort((a, b) => a - b)
@@ -159,6 +182,15 @@ export default function TripForm({
   onEndLabelChange,
   onPickStart,
   onPickEnd,
+  stations,
+  stationsError,
+  onPickStartStation,
+  onPickEndStation,
+  startStation,
+  endStation,
+  trainOn,
+  onTrainOnChange,
+  notice,
   onLocate,
   locating,
   locateError,
@@ -242,22 +274,60 @@ export default function TripForm({
             locating={locating}
             onLocate={onLocate}
             onPick={onPickStart}
+            onPickStation={onPickStartStation}
             onValueChange={onStartLabelChange}
             pinClassName="text-[#1a7f37]"
             placeholder={t('greenest.planTrip.startPlaceholder')}
+            station={startStation}
+            stations={stations}
             value={startLabel}
           />
           <PlaceSearch
             label={t('greenest.planTrip.destination')}
             onPick={onPickEnd}
+            onPickStation={onPickEndStation}
             onValueChange={onEndLabelChange}
             pinClassName="text-[#b3261e]"
             placeholder={t('greenest.planTrip.destinationPlaceholder')}
+            station={endStation}
+            stations={stations}
             value={endLabel}
           />
           {locateError && (
             <p className="text-xs text-red-800" role="alert">
               {locateError}
+            </p>
+          )}
+          {/* relative: the info panel spans this row. */}
+          <span className="relative flex items-center gap-1.5 text-sm text-leaf-ink/80">
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                checked={trainOn}
+                className="h-4 w-4 accent-leaf-forest"
+                onChange={e => onTrainOnChange(e.target.checked)}
+                type="checkbox"
+              />
+              {t('greenest.planTrip.train.toggle')}
+            </label>
+            <InfoTip
+              label={t('greenest.planTrip.info.about', {
+                name: t('greenest.planTrip.train.toggle'),
+              })}
+            >
+              {t('greenest.planTrip.train.toggleHint')}
+            </InfoTip>
+          </span>
+          {trainOn && stationsError && (
+            <p className="text-xs text-red-800" role="alert">
+              {stationsError}
+            </p>
+          )}
+          {notice && (
+            <p
+              className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900"
+              role="alert"
+            >
+              {notice}
             </p>
           )}
         </div>

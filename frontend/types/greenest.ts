@@ -377,7 +377,11 @@ export type TransitStopProperties = {
   lines: string[]
   /** Metres from near_lat/near_lon, when given. */
   distance_m?: number
+  /** In Heilbronn, so a plain bike route can start or end there; false: only by train. */
+  rideable?: boolean
 }
+
+export type TransitStopFeature = Feature<Point, TransitStopProperties>
 
 export type TransitStopCollection = FeatureCollection<
   Point,
