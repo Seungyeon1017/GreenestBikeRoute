@@ -165,9 +165,10 @@ class Timetable:
         weekly = self._weekly.get(service)
         return weekly is not None and weekly[0] <= day <= weekly[1] and weekly[2][day.weekday()]
 
-    def departures(self, station, after, to=None, limit=10):
+    def departures(self, station, after, to=None, limit=10, with_stops=False):
         """The next `limit` trains leaving `station` at or after `after` (aware datetime), soonest first, within
-        SEARCH_DAYS; with `to`, only trains that go on to station `to`, with their arrival there."""
+        SEARCH_DAYS; with `to`, only trains that go on to station `to`, with their arrival there. `with_stops` (needs
+        `to`) adds `stops`: every station the train calls at from `station` to `to`, with position and times."""
         out = []
         first = after.date() - timedelta(days=1)  # GTFS times run past 24:00 for trips that began the day before
         for trip_index, i in self.calls.get(station, ()):
@@ -177,9 +178,10 @@ class Timetable:
                 continue
             end = None
             if to is not None:
-                end = next((c for c in calls[i + 1:] if c[0] == to and c[5]), None)
-                if end is None:
+                j = next((j for j in range(i + 1, len(calls)) if calls[j][0] == to and calls[j][5]), None)
+                if j is None:
                     continue
+                end = calls[j]
             for offset in range(SEARCH_DAYS + 1):
                 day = first + timedelta(days=offset)
                 leaves = self._at(day, dep_s)
@@ -192,8 +194,24 @@ class Timetable:
                     arrives = self._at(day, end[2])
                     departure.update(arrival=arrives.isoformat(timespec="minutes"), arrival_platform=end[1],
                                      duration_min=round((arrives - leaves).total_seconds() / 60))
+                    if with_stops:
+                        departure["stops"] = [self._call(day, c) for c in calls[i:j + 1]]
                 out.append((leaves, departure))
         return [d for _, d in sorted(out, key=lambda x: x[0])[:limit]]
+
+    def _call(self, day, call):
+        """One stop of a train on service day `day`, for `stops`."""
+        sid, platform, arr_s, dep_s, _, _ = call
+        s = self.stations[sid]
+        return {"stop_id": sid, "name": s["name"], "lon": s["lon"], "lat": s["lat"], "platform": platform,
+                "arrival": self._at(day, arr_s).isoformat(timespec="minutes"),
+                "departure": self._at(day, dep_s).isoformat(timespec="minutes")}
+
+    def stop_feature(self, sid):
+        """Station `sid` as a GeoJSON Feature, as in /transit/stops."""
+        s = self.stations[sid]
+        return {"type": "Feature", "geometry": {"type": "Point", "coordinates": [s["lon"], s["lat"]]},
+                "properties": {"stop_id": sid, "name": s["name"], "lines": sorted(s["lines"])}}
 
     @staticmethod
     def _at(day, seconds):
@@ -247,14 +265,13 @@ class Transit:
         for sid, s in tt.stations.items():
             if q and folded(q) not in folded(s["name"]):
                 continue
-            properties = {"stop_id": sid, "name": s["name"], "lines": sorted(s["lines"])}
+            feature = tt.stop_feature(sid)
             if near is not None:
-                properties["distance_m"] = round(distance_m(*near, s["lat"], s["lon"]))
-            features.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [s["lon"], s["lat"]]},
-                             "properties": properties})
+                feature["properties"]["distance_m"] = round(distance_m(*near, s["lat"], s["lon"]))
+            features.append(feature)
         features.sort(key=lambda f: (f["properties"].get("distance_m", 0), f["properties"]["name"]))
         return {"type": "FeatureCollection", "features": features[:limit] if limit else features,
-                **self._about(tt)}
+                **self.about(tt)}
 
     def departures(self, stop_id, after, to=None, limit=10):
         """The next departures from `stop_id` (see Timetable.departures); KeyError for an unknown stop."""
@@ -264,8 +281,8 @@ class Transit:
                 raise KeyError(sid)
         named = lambda sid: {"stop_id": sid, "name": tt.stations[sid]["name"]}
         return {"stop": named(stop_id), "to": named(to) if to else None,
-                "departures": tt.departures(stop_id, local(after), to, limit), **self._about(tt)}
+                "departures": tt.departures(stop_id, local(after), to, limit), **self.about(tt)}
 
     @staticmethod
-    def _about(tt):
+    def about(tt):
         return {"valid_until": tt.valid_until.isoformat() if tt.valid_until else None, "attribution": ATTRIBUTION}

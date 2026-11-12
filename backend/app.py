@@ -13,9 +13,9 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.reports import SNAP_M, ReportError, Reports
-from backend.schemas import EXAMPLE_TRIP, AirCollection, BikeFriendlyCollection, ClosureAnswer, ClosureCollection, ClosureFeature, ClosureReport,     DangerCollection, DayRoutes, Error, FlowCollection, GeofencingCollection, GradeCollection, GreenStreetCollection, LightingCollection, MappingCollection,     MappingFeature, MappingReport, PlaceCollection, FootwayFeature, StreetSegmentFeature, RouteCollection, RouteComparison, RoughnessCollection, ScoreCollection,     ShadeCollection, SharingTrip, SpeedCollection, StreetNames, TourCollection, TransitDepartures, TransitStopCollection, VehicleCollection, ZoneCollection
+from backend.schemas import EXAMPLE_TRIP, AirCollection, BikeFriendlyCollection, ClosureAnswer, ClosureCollection, ClosureFeature, ClosureReport,     DangerCollection, DayRoutes, Error, FlowCollection, GeofencingCollection, GradeCollection, GreenStreetCollection, LightingCollection, MappingCollection,     MappingFeature, MappingReport, PlaceCollection, FootwayFeature, StreetSegmentFeature, RouteCollection, RouteComparison, RoughnessCollection, ScoreCollection,     ShadeCollection, SharingTrip, SpeedCollection, StreetNames, TourCollection, TrainTrip, TransitDepartures, TransitStopCollection, VehicleCollection, ZoneCollection
 from backend.geocoding import Geocoder, GeocodingUnavailable, normalize
-from backend.sharing import ATTRIBUTION, Sharing, SharingUnavailable
+from backend.sharing import ATTRIBUTION, Sharing, SharingUnavailable, distance_m
 from backend.transit import LOCAL_TZ, Transit, TransitUnavailable
 from backend.users.community_routes import TAG as RIDERS_ROUTES_TAG
 from backend.users.router import TAG as USERS_TAG, router as users_router
@@ -37,6 +37,7 @@ from routing.route import RouteError, compare_routes, day_routes, find_route, se
 from routing.score import street_scores
 from routing.snap import nearest_street, segment_id
 from routing.sharing_trip import WalkNetwork, load_walk_graph, plan_sharing_trip
+from routing.train_trip import plan_train_trip
 
 
 class GeoJSONResponse(JSONResponse):
@@ -315,6 +316,7 @@ def near_query(
 
 SHARING_ERRORS = {503: {"description": "The sharing feed can't be read right now", "model": Error}}
 GEOCODE_ERRORS = {503: {"description": "The place search (Nominatim) can't be reached right now", "model": Error}}
+SHARED_NEAR_M = 300  # /route/train counts the free shared bikes this close to the station
 TRANSIT_ERRORS = {503: {"description": "No timetable: it can't be downloaded and none is cached yet", "model": Error}}
 
 
@@ -435,6 +437,60 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
         except RouteError as e:
             raise HTTPException(status_code=400, detail=str(e))
         return JSONResponse({**trip, "updated": snap["updated"], "attribution": ATTRIBUTION})
+
+    def shared_bikes_near(lat, lon):
+        """Free shared e-bikes within SHARED_NEAR_M of a point, or None when the sharing feed can't be read."""
+        try:
+            vehicles = sharing.snapshot()["vehicles"]
+        except SharingUnavailable:
+            return None
+        return sum(1 for v in vehicles if v["properties"]["vehicle"] == "bike"
+                   and distance_m(lat, lon, *reversed(v["geometry"]["coordinates"])) <= SHARED_NEAR_M)
+
+    @app.get("/route/train", tags=[ROUTING, TRANSIT], summary="Ride to a station and take the train, or get off the train and ride on",
+             response_model=TrainTrip,
+             responses={400: {"description": "No direct train at a station in Heilbronn, or the point is outside Heilbronn",
+                              "model": Error},
+                        404: {"description": "No station with this stop_id", "model": Error}, **TRANSIT_ERRORS},
+             response_description="The station to ride to (or get off at), the bike leg, and the trains to take")
+    def route_train(
+            from_lat: Optional[float] = Query(None, ge=-90, le=90, description=(
+                "Bike then train: where the ride starts (in Heilbronn). Give with from_lon and to_stop"),
+                openapi_examples=trip_example("from_lat")),
+            from_lon: Optional[float] = Query(None, ge=-180, le=180, openapi_examples=trip_example("from_lon")),
+            to_stop: Optional[str] = Query(None, description=(
+                "Bike then train: the station to go to, a `stop_id` from /transit/stops (also outside Heilbronn)"),
+                openapi_examples={"mosbach": {"summary": "Mosbach, Bahnhof", "value": "de:08225:8209"}}),
+            from_stop: Optional[str] = Query(None, description=(
+                "Train then bike: the station the train trip starts at (a `stop_id`). Give with to_lat and to_lon")),
+            to_lat: Optional[float] = Query(None, ge=-90, le=90, description="Train then bike: where the ride ends (in Heilbronn)"),
+            to_lon: Optional[float] = Query(None, ge=-180, le=180),
+            penalties=Depends(penalty_query), rider=Depends(rider_query)):
+        """Give either from_lat, from_lon and to_stop (bike then train), or from_stop, to_lat and to_lon (train then
+        bike). `depart_time` is the earliest start (now if left out): the answer says when to start riding to catch
+        each train, or when the ride ends. Which station in Heilbronn to use is chosen for the soonest arrival.
+        Bikes ride free on HNV trains except Monday to Friday 06:00-09:00 (`bike_ticket_needed`)."""
+        to_train = None not in (from_lat, from_lon, to_stop) and (from_stop, to_lat, to_lon) == (None, None, None)
+        from_train = None not in (from_stop, to_lat, to_lon) and (from_lat, from_lon, to_stop) == (None, None, None)
+        if not (to_train or from_train):
+            raise HTTPException(status_code=422, detail=(
+                "give from_lat, from_lon and to_stop (bike then train), or from_stop, to_lat and to_lon (train then bike)"))
+        after = penalties.depart_time or datetime.now(LOCAL_TZ)
+        after = after.replace(tzinfo=LOCAL_TZ) if after.tzinfo is None else after.astimezone(LOCAL_TZ)
+        set_closures(app.state.graph, reports.closures())
+        try:
+            tt = transit.timetable()
+            ends = ({"origin": (from_lat, from_lon), "to_stop": to_stop} if to_train
+                    else {"from_stop": from_stop, "destination": (to_lat, to_lon)})
+            trip = plan_train_trip(app.state.graph, tt, penalties, after, **ends, **rider)
+        except TransitUnavailable as e:
+            raise HTTPException(status_code=503, detail=str(e))
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=f"no station {e.args[0]}: pick a stop_id from /transit/stops")
+        except RouteError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        near = None if to_train else shared_bikes_near(*reversed(trip["alight"]["geometry"]["coordinates"]))
+        return JSONResponse({**trip, "shared_bikes_near": near, **transit.about(tt)})
 
     def street_overlay(name):
         """Street overlay `name` (STREET_OVERLAYS), built on the first request: with street names once they are ready

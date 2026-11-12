@@ -1024,5 +1024,49 @@ class TransitDepartures(BaseModel):
         "attribution": "NVBW / MobiData BW (ODbL), timetable of the Heilbronner Hohenloher Haller Nahverkehr (HNV)"}}}
 
 
+class TrainStop(BaseModel):
+    stop_id: str
+    name: str
+    lon: float
+    lat: float
+    platform: Optional[str] = Field(description="Platform (Gleis) the train uses here, null if the timetable doesn't say")
+    arrival: str = Field(description="When the train arrives here (ISO 8601, Heilbronn local time)")
+    departure: str = Field(description="When it leaves again")
+
+
+class TrainOption(TransitDeparture):
+    """One train to take between `board` and `alight`, with the times of the whole trip around it."""
+    leave_at: str = Field(description=(
+        "When the trip starts (ISO 8601). Bike then train: start riding now to be at the station 3 minutes before "
+        "the train leaves. Train then bike: the train leaves"))
+    arrive_at: str = Field(description=(
+        "When the trip ends. Bike then train: the train arrives at the station asked for. Train then bike: the ride "
+        "ends, having started 2 minutes after the train arrived"))
+    wait_s: int = Field(description="Seconds at the station before the train leaves (bike then train; else 0)")
+    duration_s: int = Field(description="Seconds from leave_at to arrive_at")
+    stops: list[TrainStop] = Field(description=(
+        "Every station the train calls at from `board` to `alight`, both included: join their positions to draw the "
+        "train on a map (the timetable has no track geometry)"))
+
+
+class TrainTrip(BaseModel):
+    """A trip by bike and train. The rider names the far station; the station to ride to (or to get off at) is the one
+    in Heilbronn that gets them there soonest, every station counting the same. Trains without a change only, as
+    timetabled (no live delays). The bike leg is planned like /route, with the request's penalties."""
+    direction: Literal["to_train", "from_train"] = Field(description=(
+        "to_train: ride to `board`, take the train to `alight`. from_train: take the train from `board`, get off at "
+        "`alight` and ride to the end"))
+    board: TransitStopFeature = Field(description="Where to get on the train")
+    alight: TransitStopFeature = Field(description="Where to get off")
+    ride: RideFeature = Field(description="The bike leg, as the route from /route (mode bike)")
+    options: list[TrainOption] = Field(min_length=1, description=(
+        "The trains to take, the one arriving first first: the bike leg is the same for each"))
+    shared_bikes_near: Optional[int] = Field(description=(
+        "from_train: shared e-bikes free to rent right now within 300 m of `alight`, for riders without a bike "
+        "(plan that trip with /route/sharing from the station); null for to_train or when the sharing feed is down"))
+    valid_until: Optional[str] = Field(description=TRANSIT_VALID_UNTIL)
+    attribution: str = Field(description=TRANSIT_ATTRIBUTION)
+
+
 class Error(BaseModel):
     detail: str = Field(description="What went wrong, readable enough to show to the user")
