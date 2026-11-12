@@ -388,6 +388,57 @@ export type TransitStopCollection = FeatureCollection<
   attribution: string
 }
 
+/** One station a train of `/route/train` calls at. */
+export type TrainStop = {
+  stop_id: string
+  name: string
+  lon: number
+  lat: number
+  platform: string | null
+  /** ISO 8601 with offset, Heilbronn local time. */
+  arrival: string
+  departure: string
+}
+
+/** One train to take between `board` and `alight`, with the times of the whole trip around it. */
+export type TrainOption = {
+  line: string
+  headsign: string
+  departure: string
+  arrival: string
+  platform: string | null
+  arrival_platform: string | null
+  duration_min: number
+  /** Mon-Fri 06:00-09:00 a bike needs a Fahrradkarte on HNV trains. */
+  bike_ticket_needed: boolean
+  /** When the trip starts: start riding (to_train), or the train leaves (from_train). */
+  leave_at: string
+  /** When the trip ends: the train arrives (to_train), or the ride ends (from_train). */
+  arrive_at: string
+  wait_s: number
+  duration_s: number
+  /** Every station from `board` to `alight`, both included. */
+  stops: TrainStop[]
+}
+
+/** to_train: ride to a station, then the train. from_train: the train, then ride to the end. */
+export type TrainDirection = 'to_train' | 'from_train'
+
+/** `/route/train`: a trip by bike and train through the Heilbronn station that gets there soonest. */
+export type TrainTrip = {
+  direction: TrainDirection
+  board: Feature<Point, TransitStopProperties>
+  alight: Feature<Point, TransitStopProperties>
+  /** The bike leg, as the route from `/route`. */
+  ride: Feature<LineString, RouteProperties & { mode: 'bike' }>
+  /** The trains to take, the one arriving first first. */
+  options: TrainOption[]
+  /** from_train: free shared e-bikes within 300 m of `alight`; null if unknown. */
+  shared_bikes_near: number | null
+  valid_until: string | null
+  attribution: string
+}
+
 export type SharingVehicleKind = 'bike' | 'scooter'
 /** Which shared vehicles to show or rent: e-bikes, e-scooters or both. */
 export type SharingVehicleChoice = 'all' | SharingVehicleKind

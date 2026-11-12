@@ -392,6 +392,7 @@
       "destinationPlaceholder": "z. B. Pfühlpark",
       "comparisonTitle": "Routenvergleich",
       "comparisonPaused": "Auf der Karte siehst du gerade die Fahrt mit Leihfahrzeug. Dieser Vergleich gilt für die Fahrt mit deinem eigenen Rad und ist ausgegraut, bis du die Leihfahrt ausschaltest.",
+      "comparisonPausedTrain": "Auf der Karte siehst du gerade die Fahrt mit Rad + Bahn. Dieser Vergleich gilt für die ganze Strecke mit dem Rad und ist ausgegraut, bis du Rad + Bahn ausschaltest.",
       "routes": {
         "shortest": "Kürzeste Route",
         "shortestHint": "Der direkteste Weg, ohne Rücksicht auf Komfort.",
@@ -810,6 +811,77 @@
         "hint": "Wo du mit dem Rad in die Stadtbahn (S4, S41, S42) oder in einen Regionalzug steigen kannst. Ein Bahnhof hält auch Regionalzüge (RE, RB, MEX). Namen erscheinen beim Hineinzoomen.",
         "credit": "Fahrplandaten: NVBW / MobiData BW (ODbL)",
         "unavailable": "Die Bahnhöfe sind gerade nicht verfügbar. Versuche es später noch einmal."
+      },
+      "train": {
+        "title": "Rad + Bahn",
+        "toggle": "Die Fahrt mit der Bahn verbinden (S-Bahn, Regionalzüge)",
+        "direction": {
+          "label": "Richtung",
+          "to_train": "Zum Zug radeln",
+          "from_train": "Vom Zug weiterradeln"
+        },
+        "station": {
+          "to_train": "Mit der Bahn nach",
+          "from_train": "Mit der Bahn ab",
+          "placeholder": "Bahnhof, z. B. Mosbach",
+          "noMatch": "Kein Bahnhof mit diesem Namen.",
+          "loading": "Bahnhöfe werden geladen …",
+          "clear": "Bahnhof löschen"
+        },
+        "need": {
+          "station": "Wähle den Bahnhof.",
+          "start": "Lege zuerst den Start deiner Fahrt fest (suchen oder auf die Karte klicken).",
+          "end": "Lege zuerst das Ziel deiner Fahrt fest (suchen oder auf die Karte klicken)."
+        },
+        "loading": "Züge werden gesucht …",
+        "earliest": {
+          "now": "Frühester Start: jetzt",
+          "at": "Frühester Start: {{time}}"
+        },
+        "headline": {
+          "to_train": "Losradeln um {{leave}}",
+          "from_train": "Der Zug fährt um {{leave}}"
+        },
+        "arrive": {
+          "to_train": "In {{station}} um {{time}} · insgesamt {{duration}}",
+          "from_train": "Am Ziel um {{time}} · insgesamt {{duration}}"
+        },
+        "step": {
+          "rideTo": "{{km}} km ({{min}} Min.) radeln bis {{station}}",
+          "wait": "Sei um {{time}} dort: {{min}} Min. bis zum Bahnsteig",
+          "train": "{{line}} Richtung {{headsign}}",
+          "trainFacts": "{{min}} Min. im Zug",
+          "platform": "Gleis {{platform}}",
+          "rideOn": "In {{station}} aussteigen und {{km}} km ({{min}} Min.) zum Ziel radeln",
+          "stopsBefore_one": "{{count}} Halt vor deinem",
+          "stopsBefore_other": "{{count}} Halte vor deinem"
+        },
+        "ticket": {
+          "needed": "Fahrradkarte nötig: Montag bis Freitag von 6 bis 9 Uhr braucht das Rad in HNV-Zügen eine Fahrradkarte.",
+          "free": "Dein Rad fährt in diesem Zug kostenlos mit (HNV; außerhalb Mo–Fr 6–9 Uhr)."
+        },
+        "others": "Andere Züge",
+        "option": {
+          "to_train": "Start {{leave}} · Zug {{departure}} → {{arrival}}",
+          "from_train": "Zug {{departure}} → {{arrival}} · am Ziel {{arrive}}"
+        },
+        "shared": {
+          "count_one": "Kein Rad dabei? In der Nähe von {{station}} ist gerade {{count}} Leih-E-Bike frei.",
+          "count_other": "Kein Rad dabei? In der Nähe von {{station}} sind gerade {{count}} Leih-E-Bikes frei.",
+          "plan": "Fahrt mit Leihrad planen"
+        },
+        "kcal": "≈ {{kcal}} kcal auf dem Rad",
+        "note": "Züge laut Fahrplan, ohne Echtzeit-Verspätungen. Nur Direktverbindungen; ein Platz fürs Rad ist nicht garantiert.",
+        "validUntil": "Fahrplan bis {{date}}.",
+        "noTrain": {
+          "to_train": "In den nächsten zwei Tagen fährt kein direkter Zug von einem Heilbronner Bahnhof nach {{station}}.",
+          "from_train": "In den nächsten zwei Tagen fährt kein direkter Zug von {{station}} zu einem Heilbronner Bahnhof."
+        },
+        "unavailable": "Der Fahrplan ist gerade nicht verfügbar. Versuche es später noch einmal.",
+        "duration": {
+          "min": "{{min}} Min.",
+          "hours": "{{h}} Std. {{min}} Min."
+        }
       }
     },
     "highlights": {

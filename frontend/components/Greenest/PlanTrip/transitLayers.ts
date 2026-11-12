@@ -51,7 +51,8 @@ function disc(
   return ctx.getImageData(0, 0, px, px)
 }
 
-function addIcons(map: maplibregl.Map) {
+/** The S disc and the train disc as map images `station-sbahn` and `station-train`. */
+export function addStationIcons(map: maplibregl.Map) {
   if (!map.hasImage('station-sbahn')) {
     const image = disc(SBAHN_COLOR, ctx => {
       ctx.fillStyle = '#ffffff'
@@ -86,7 +87,7 @@ export function drawStations(
   stops: TransitStopCollection | null,
 ) {
   if (!map.getSource('stations')) {
-    addIcons(map)
+    addStationIcons(map)
     map.addSource('stations', { type: 'geojson', data: EMPTY })
     map.addLayer({
       id: 'stations',

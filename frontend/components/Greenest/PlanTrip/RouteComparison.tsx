@@ -113,9 +113,7 @@ function MetricTip({
           </span>
         )
       })}
-      <span
-        className={cx('block text-leaf-muted', metric in TIPS && 'mt-1')}
-      >
+      <span className={cx('block text-leaf-muted', metric in TIPS && 'mt-1')}>
         {t(`greenest.planTrip.metrics.tips.${metric}`)}
       </span>
     </>
@@ -125,10 +123,11 @@ function MetricTip({
 type RouteComparisonProps = {
   result: RouteResult | null
   /**
-   * True while the trip with a rented vehicle is shown: these two routes are for
-   * your own bike, so the card fades like their lines on the map.
+   * Set while the trip with a rented vehicle ('sharing') or the bike + train trip
+   * ('train') is shown: these two routes are for riding the whole way on your own
+   * bike, so the card fades like their lines on the map.
    */
-  paused?: boolean
+  paused?: 'sharing' | 'train' | false
   /** Links the "Why this route?" rows to the map. */
   focus?: FlagFocus
   /** On the map: the title folds the card down to your route's distance and time. */
@@ -214,7 +213,11 @@ export default function RouteComparison({
       )}
       {open && paused && (
         <p className="rounded-xl border border-leaf-sand bg-leaf-cream p-3 text-xs text-leaf-ink">
-          {t('greenest.planTrip.comparisonPaused')}
+          {t(
+            paused === 'train'
+              ? 'greenest.planTrip.comparisonPausedTrain'
+              : 'greenest.planTrip.comparisonPaused',
+          )}
         </p>
       )}
       {/* Streets riders reported closed that the route still rides: there was no sensible way round. */}
@@ -232,7 +235,7 @@ export default function RouteComparison({
           </p>
         )}
       <div
-        aria-disabled={paused || undefined}
+        aria-disabled={Boolean(paused) || undefined}
         className={cx(
           'flex flex-col gap-3 transition-opacity',
           paused && 'opacity-40',

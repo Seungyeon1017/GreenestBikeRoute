@@ -1,14 +1,16 @@
 """A trip by bike and train: ride to a station and take the train, or get off the train and ride the rest.
 
 The rider names the far station (any station of the timetable, also outside Heilbronn, e.g. Mosbach); which station
-to ride to, or to get off at, is chosen here: the one that gets the rider there soonest. Every station counts the
-same. Only stations the bike graph reaches (Heilbronn) are ridden to or from, and only trains without a change.
+to ride to, or to get off at, is chosen here: the one that gets the rider there soonest, and of those the one
+with the shortest ride. Every station counts the same. Only stations the bike graph reaches (Heilbronn) are ridden
+to or from, and only trains without a change.
 
 Which station: for each one with a train to (or from) the far station, the ride is first guessed from the straight
 line; the CANDIDATES best are then routed for real, with the request's penalties, as /route.
 
 Group: features on top.
 """
+import weakref
 from datetime import datetime, timedelta
 
 from routing.costs import MEDIAN_SPEED_KMH
@@ -32,16 +34,16 @@ def _iso(when):
     return when.isoformat(timespec="minutes")
 
 
+_REACHABLE = weakref.WeakKeyDictionary()  # timetable -> (its graph, _reachable): neither changes while the API runs
+
+
 def _reachable(G, timetable):
-    """Station ids the bike graph reaches: [(id, (lat, lon))]."""
-    out = []
-    for sid, s in timetable.stations.items():
-        try:
-            if nearest_street(G, s["lat"], s["lon"])[3] <= STATION_SNAP_M:
-                out.append((sid, (s["lat"], s["lon"])))
-        except (ValueError, IndexError):  # no street at all near it
-            continue
-    return out
+    """The stations the bike graph reaches: [(id, (lat, lon))]."""
+    if timetable not in _REACHABLE or _REACHABLE[timetable][0]() is not G:
+        near = [(sid, (s["lat"], s["lon"])) for sid, s in timetable.stations.items()
+                if nearest_street(G, s["lat"], s["lon"])[3] <= STATION_SNAP_M]
+        _REACHABLE[timetable] = (weakref.ref(G), near)
+    return _REACHABLE[timetable][1]
 
 
 def _straight_s(a, b):
@@ -103,8 +105,8 @@ def plan_train_trip(G, timetable, penalties, after, origin=None, to_stop=None, f
                 for t in trains(station, after)]
 
     def rank(options, ride_s):
-        """Soonest there first; then the latest start, then the shortest ride."""
-        return options[0]["arrive_at"], -_time(options[0]["leave_at"]).timestamp(), ride_s
+        """Soonest there first; then the shortest ride (the same train stops at several stations in a row)."""
+        return options[0]["arrive_at"], ride_s
 
     guesses = []
     for sid, at in _reachable(G, timetable):

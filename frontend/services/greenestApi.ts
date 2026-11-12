@@ -27,6 +27,8 @@ import type {
   SharingVehicleChoice,
   StreetSegmentFeature,
   TourCollection,
+  TrainDirection,
+  TrainTrip,
   TransitStopCollection,
   VehicleCollection,
   ZoneCollection,
@@ -229,6 +231,32 @@ export function fetchTransitStops(
   signal?: AbortSignal,
 ): Promise<TransitStopCollection> {
   return getJson('/transit/stops', signal)
+}
+
+/**
+ * GET /route/train: ride from `point` to a station and take the train to station `stopId` (to_train),
+ * or take the train from `stopId` and ride to `point` (from_train). The bike leg uses the same options
+ * as /route; options.departTime is the earliest start (now without one).
+ * 400 when no station in Heilbronn has a direct train, 503 without a timetable.
+ */
+export function fetchTrainTrip(
+  direction: TrainDirection,
+  point: LngLat,
+  stopId: string,
+  options: RouteOptions,
+  signal?: AbortSignal,
+): Promise<TrainTrip> {
+  const params = routeParams({ from: point, to: point, options })
+  if (direction === 'to_train') {
+    params.delete('to_lat')
+    params.delete('to_lon')
+    params.set('to_stop', stopId)
+  } else {
+    params.delete('from_lat')
+    params.delete('from_lon')
+    params.set('from_stop', stopId)
+  }
+  return getJson<TrainTrip>(`/route/train?${params}`, signal)
 }
 
 /** near_lat / near_lon: the backend then sorts by distance and adds `distance_m`. */

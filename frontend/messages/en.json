@@ -392,6 +392,7 @@
       "destinationPlaceholder": "e.g. Pfühlpark",
       "comparisonTitle": "Route comparison",
       "comparisonPaused": "Showing the trip with a rented vehicle on the map. This comparison is for riding your own bike, so it is greyed out until you switch the rental trip off.",
+      "comparisonPausedTrain": "Showing the bike + train trip on the map. This comparison is for riding the whole way, so it is greyed out until you switch Bike + train off.",
       "routes": {
         "shortest": "Shortest route",
         "shortestHint": "The most direct path, ignoring comfort.",
@@ -810,6 +811,77 @@
         "hint": "Where you can take your bike on the Stadtbahn (S4, S41, S42) or a regional train. A train station is also served by regional trains (RE, RB, MEX). Names show when you zoom in.",
         "credit": "Timetable data: NVBW / MobiData BW (ODbL)",
         "unavailable": "Stations aren't available right now. Try again later."
+      },
+      "train": {
+        "title": "Bike + train",
+        "toggle": "Combine the ride with a train (S-Bahn, regional trains)",
+        "direction": {
+          "label": "Which way",
+          "to_train": "Ride to the train",
+          "from_train": "Ride on from the train"
+        },
+        "station": {
+          "to_train": "Train to",
+          "from_train": "Train from",
+          "placeholder": "Station, e.g. Mosbach",
+          "noMatch": "No station with this name.",
+          "loading": "Loading stations…",
+          "clear": "Clear the station"
+        },
+        "need": {
+          "station": "Pick the station.",
+          "start": "Set the start of your ride first (search or click the map).",
+          "end": "Set the destination of your ride first (search or click the map)."
+        },
+        "loading": "Looking up trains…",
+        "earliest": {
+          "now": "Earliest start: now",
+          "at": "Earliest start: {{time}}"
+        },
+        "headline": {
+          "to_train": "Start riding at {{leave}}",
+          "from_train": "Train leaves at {{leave}}"
+        },
+        "arrive": {
+          "to_train": "At {{station}} at {{time}} · {{duration}} in all",
+          "from_train": "At your destination at {{time}} · {{duration}} in all"
+        },
+        "step": {
+          "rideTo": "Ride {{km}} km ({{min}} min) to {{station}}",
+          "wait": "Be there by {{time}}: {{min}} min to reach the platform",
+          "train": "{{line}} towards {{headsign}}",
+          "trainFacts": "{{min}} min on the train",
+          "platform": "Platform {{platform}}",
+          "rideOn": "Get off at {{station}} and ride {{km}} km ({{min}} min) to your destination",
+          "stopsBefore_one": "{{count}} stop before yours",
+          "stopsBefore_other": "{{count}} stops before yours"
+        },
+        "ticket": {
+          "needed": "Bike ticket needed: Monday to Friday 6–9 a.m. a bike needs a Fahrradkarte on HNV trains.",
+          "free": "Your bike rides free on this train (HNV; outside Mon–Fri 6–9 a.m.)."
+        },
+        "others": "Other trains",
+        "option": {
+          "to_train": "Start {{leave}} · train {{departure}} → {{arrival}}",
+          "from_train": "Train {{departure}} → {{arrival}} · there {{arrive}}"
+        },
+        "shared": {
+          "count_one": "No bike with you? {{count}} shared e-bike is free near {{station}} right now.",
+          "count_other": "No bike with you? {{count}} shared e-bikes are free near {{station}} right now.",
+          "plan": "Plan the ride with a rental"
+        },
+        "kcal": "≈ {{kcal}} kcal on the bike",
+        "note": "Trains as timetabled, no live delays. Direct trains only; there is no guaranteed space for bikes.",
+        "validUntil": "Timetable through {{date}}.",
+        "noTrain": {
+          "to_train": "No direct train to {{station}} from a station in Heilbronn in the next two days.",
+          "from_train": "No direct train from {{station}} to a station in Heilbronn in the next two days."
+        },
+        "unavailable": "The timetable isn't available right now. Try again later.",
+        "duration": {
+          "min": "{{min}} min",
+          "hours": "{{h}} h {{min}} min"
+        }
       }
     },
     "highlights": {

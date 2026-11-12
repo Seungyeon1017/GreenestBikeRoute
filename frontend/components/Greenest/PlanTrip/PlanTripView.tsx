@@ -11,6 +11,7 @@ import useMediaQuery from '@/hooks/useMediaQuery'
 import { closureNear, useReports } from '@/hooks/useReports'
 import useSavedRouteFromUrl from '@/hooks/useSavedRouteFromUrl'
 import { useSharedVehicles, useSharingTrip } from '@/hooks/useSharing'
+import { useTrainTrip } from '@/hooks/useTrainTrip'
 import { GRADE_COLOR } from '@/lib/hillColors'
 import { readTripLink } from '@/lib/shareLink'
 import {
@@ -42,7 +43,11 @@ import type {
   SharingTrip,
   SharingVehicleChoice,
   StreetSegmentFeature,
+  TrainDirection,
+  TrainOption,
+  TrainTrip,
   TransitStopCollection,
+  TransitStopProperties,
   VehicleCollection,
   ZoneCollection,
 } from '@/types/greenest'
@@ -60,6 +65,8 @@ import ReportProblem from './ReportProblem'
 import { closureText, ReportsNotice } from './ReportsLegend'
 import RouteComparisonCard, { ROUTE_COLORS } from './RouteComparison'
 import StationsLegend from './StationsLegend'
+import TrainCard from './TrainCard'
+import { drawTrainTrip, trainRideBounds } from './trainLayers'
 import { drawStations } from './transitLayers'
 import SaveRouteButton from './SaveRouteButton'
 import {
@@ -299,6 +306,26 @@ export default function PlanTripView() {
     tripOptions,
   )
 
+  // Bike + train: ride to a station and take the train, or get off the train and ride on.
+  const [trainOn, setTrainOn] = useState(false)
+  const [trainDirection, setTrainDirection] =
+    useState<TrainDirection>('to_train')
+  const [trainStation, setTrainStation] =
+    useState<TransitStopProperties | null>(null)
+  const trainTrip = useTrainTrip(
+    trainOn,
+    trainDirection,
+    trainStation,
+    trainDirection === 'to_train' ? start : end,
+    tripOptions,
+  )
+  // Which of the trip's trains the card and the map show; a new trip starts with the first.
+  const [trainOptionIndex, setTrainOptionIndex] = useState(0)
+  const trainOption: TrainOption | null =
+    trainTrip.trip?.options[trainOptionIndex] ??
+    trainTrip.trip?.options[0] ??
+    null
+
   // Riders' reports: closures and mapping mistakes.
   const reports = useReports()
   const [showReports, setShowReports] = useState(true)
@@ -345,6 +372,11 @@ export default function PlanTripView() {
   plainTripRef.current = sharingTrip.plainTrip
   const fencesRef = useRef<GeofencingCollection | null>(null)
   fencesRef.current = fences
+  const trainRef = useRef<{
+    trip: TrainTrip | null
+    option: TrainOption | null
+  }>({ trip: null, option: null })
+  trainRef.current = { trip: trainTrip.trip, option: trainOption }
   const reportsRef = useRef<{
     closures: ClosureCollection | null
     mapping: MappingCollection | null
@@ -473,9 +505,10 @@ export default function PlanTripView() {
     }
   }, [showHills, start, end, tripOptions, t])
 
-  // The stations change only with the timetable: load them once, the first time the layer is on.
+  // The stations change only with the timetable: load them once, the first time the layer is on
+  // or the bike + train card needs them for its search field.
   useEffect(() => {
-    if (!showStations || stations) {
+    if (!(showStations || trainOn) || stations) {
       return
     }
     const controller = new AbortController()
@@ -495,7 +528,7 @@ export default function PlanTripView() {
         )
       })
     return () => controller.abort()
-  }, [showStations, stations, t])
+  }, [showStations, trainOn, stations, t])
 
   // Draw (or clear) the stations.
   useEffect(() => {
@@ -630,8 +663,26 @@ export default function PlanTripView() {
       return
     }
     drawTrip(map, sharingTrip.trip, fences, sharingTrip.plainTrip)
-    fadeRoutes(map, Boolean(sharingTrip.trip))
-  }, [sharingTrip.trip, sharingTrip.plainTrip, fences])
+    drawTrainTrip(map, trainTrip.trip, trainOption)
+    fadeRoutes(map, Boolean(sharingTrip.trip || trainTrip.trip))
+  }, [
+    sharingTrip.trip,
+    sharingTrip.plainTrip,
+    fences,
+    trainTrip.trip,
+    trainOption,
+  ])
+
+  // A new bike + train trip: back to its first train, and show the bike leg with its station.
+  useEffect(() => {
+    setTrainOptionIndex(0)
+    if (trainTrip.trip) {
+      mapRef.current?.fitBounds(trainRideBounds(trainTrip.trip), {
+        padding: 80,
+        maxZoom: 16,
+      })
+    }
+  }, [trainTrip.trip])
 
   // Pins where to pick the vehicle up (①) and where to leave it (P), each with
   // a popup on hover (mouse) or tap (touch).
@@ -1267,6 +1318,15 @@ export default function PlanTripView() {
     )
   })
 
+  /** No bike on the train: the ride from the station becomes a trip with a rented e-bike. */
+  function rentFromStation(trip: TrainTrip) {
+    const [lng, lat] = trip.alight.geometry.coordinates
+    setTrainOn(false)
+    setTripVehicle('bike')
+    setTripOn(true)
+    pickPlace('start', [lng, lat], trip.alight.properties.name)
+  }
+
   function handleReset() {
     setStart(null)
     setEnd(null)
@@ -1303,7 +1363,7 @@ export default function PlanTripView() {
         onToggle: flag =>
           setPinnedFlag(current => (current === flag ? null : flag)),
       }}
-      paused={Boolean(sharingTrip.trip)}
+      paused={sharingTrip.trip ? 'sharing' : trainTrip.trip ? 'train' : false}
       result={shown}
     />
   )
@@ -1380,6 +1440,25 @@ export default function PlanTripView() {
             result={result}
             start={start}
             startLabel={startLabel}
+          />
+          <TrainCard
+            departTime={tripOptions.departTime}
+            direction={trainDirection}
+            error={trainTrip.error}
+            hasEnd={Boolean(end)}
+            hasStart={Boolean(start)}
+            loading={trainTrip.loading}
+            on={trainOn}
+            onDirectionChange={setTrainDirection}
+            onOnChange={setTrainOn}
+            onOptionChange={setTrainOptionIndex}
+            onRentFromStation={rentFromStation}
+            onStationChange={setTrainStation}
+            optionIndex={trainOptionIndex}
+            station={trainStation}
+            stations={stations}
+            stationsError={stationsError}
+            trip={trainTrip.trip}
           />
           <SharingCard
             error={sharing.error}
@@ -1466,7 +1545,8 @@ export default function PlanTripView() {
                 fencesRef.current,
                 plainTripRef.current,
               )
-              fadeRoutes(map, Boolean(tripRef.current))
+              drawTrainTrip(map, trainRef.current.trip, trainRef.current.option)
+              fadeRoutes(map, Boolean(tripRef.current || trainRef.current.trip))
               setMapReady(true)
             }}
             // On phones, above the "Layers" button in the bottom-left corner.
