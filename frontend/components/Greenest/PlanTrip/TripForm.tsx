@@ -37,6 +37,8 @@ type TripFormProps = {
   onTrainOnChange: (_on: boolean) => void
   /** Why the start and destination give no trip, shown under the fields. */
   notice: string | null
+  /** A tip that stops nothing (the route is planned anyway), shown under the checkbox. */
+  hint: string | null
   /** "Use my location" in the Start field: the device's position becomes the start. */
   onLocate: () => void
   locating: boolean
@@ -191,6 +193,7 @@ export default function TripForm({
   trainOn,
   onTrainOnChange,
   notice,
+  hint,
   onLocate,
   locating,
   locateError,
@@ -320,6 +323,11 @@ export default function TripForm({
           {trainOn && stationsError && (
             <p className="text-xs text-red-800" role="alert">
               {stationsError}
+            </p>
+          )}
+          {hint && !notice && (
+            <p className="text-xs text-leaf-muted" role="status">
+              {hint}
             </p>
           )}
           {notice && (

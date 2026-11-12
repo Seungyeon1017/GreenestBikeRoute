@@ -362,6 +362,8 @@ export type PlaceProperties = {
   name: string | null
   category: string | null
   type: string | null
+  /** From `/geocode/suggest`: a street of the bike graph, whose label is only its name. */
+  local?: boolean
 }
 
 export type PlaceCollection = FeatureCollection<Point, PlaceProperties> & {
@@ -375,6 +377,11 @@ export type TransitStopProperties = {
   name: string
   /** Lines calling here, e.g. ["S4", "S41", "S42"] or ["MEX18", "RE 8"]. */
   lines: string[]
+  /**
+   * Other names of this station: stops a short walk apart are one station (the Stadtbahn
+   * stop "Heilbronn Hbf/Willy-Brandt-Pl." belongs to Heilbronn Hauptbahnhof).
+   */
+  also?: string[]
   /** Metres from near_lat/near_lon, when given. */
   distance_m?: number
   /** In Heilbronn, so a plain bike route can start or end there; false: only by train. */
@@ -423,18 +430,25 @@ export type TrainOption = {
   duration_s: number
   /** Every station from `board` to `alight`, both included. */
   stops: TrainStop[]
+  /** The train's way from `board` to `alight` as [lng, lat]: along the track where it is known. */
+  path: LngLat[]
 }
 
-/** to_train: ride to a station, then the train. from_train: the train, then ride to the end. */
-export type TrainDirection = 'to_train' | 'from_train'
+/**
+ * to_train: ride to a station, then the train. from_train: the train, then ride to the end.
+ * train: from station to station, nothing to ride.
+ */
+export type TrainDirection = 'to_train' | 'from_train' | 'train'
 
 /** `/route/train`: a trip by bike and train through the Heilbronn station that gets there soonest. */
 export type TrainTrip = {
   direction: TrainDirection
   board: Feature<Point, TransitStopProperties>
   alight: Feature<Point, TransitStopProperties>
-  /** The bike leg, as the route from `/route`. */
-  ride: Feature<LineString, RouteProperties & { mode: 'bike' }>
+  /** The bike leg, as the route from `/route`; null for direction train. */
+  ride: Feature<LineString, RouteProperties & { mode: 'bike' }> | null
+  /** Riding all the way instead, when both ends are in Heilbronn: sooner there, the train is a detour. */
+  direct: { length_m: number; duration_s: number; arrive_at: string } | null
   /** The trains to take, the one arriving first first. */
   options: TrainOption[]
   /** from_train: free shared e-bikes within 300 m of `alight`; null if unknown. */

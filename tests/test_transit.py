@@ -10,7 +10,8 @@ from fastapi.testclient import TestClient
 
 from backend.app import create_app
 from backend.schemas import TransitDepartures, TransitStopCollection
-from backend.transit import REFRESH_DAYS, Transit, TransitUnavailable, bike_ticket_needed, easter, is_public_holiday
+from backend.transit import (REFRESH_DAYS, Transit, TransitUnavailable, bike_ticket_needed, easter, is_public_holiday,
+                             merged_name)
 
 HBF, MOSBACH, SUELMERTOR = "de:08121:1114", "de:08225:8209", "de:08121:75"
 
@@ -120,7 +121,8 @@ def test_only_train_stations_are_listed_one_per_station(transit):
     # the bus stop, served by a bus and an unnamed "train" (rail replacement), is left out.
     assert names(stops) == ["Heilbronn Hbf/Willy-Brandt-Pl.", "Heilbronn Sülmertor", "Mosbach, Bahnhof"]
     hbf = stops["features"][0]
-    assert hbf["properties"] == {"stop_id": HBF, "name": "Heilbronn Hbf/Willy-Brandt-Pl.", "lines": ["RE 8", "S41"]}
+    assert hbf["properties"] == {"stop_id": HBF, "name": "Heilbronn Hbf/Willy-Brandt-Pl.", "lines": ["RE 8", "S41"],
+                                 "also": []}
     assert hbf["geometry"]["coordinates"] == [9.2084503, 49.1427624]  # the parent station's position
     assert stops["valid_until"] == "2026-12-12"
 
@@ -266,3 +268,43 @@ def test_api_without_a_timetable_is_503(client, download):
     download.down = True
     r = client.get("/transit/stops")
     assert r.status_code == 503 and "timetable unavailable" in r.json()["detail"]
+
+
+# The train platforms of the Hauptbahnhof (RE 8, RB 83), 40 m from the Stadtbahn stop in front of it (S41).
+BAHNHOF = "de:08121:26"
+NEAR_FEED = {
+    **FEED,
+    "routes.txt": FEED["routes.txt"] + csv_text("rb83,db,RB 83,,2").replace("\r\n", "\n"),
+    "stops.txt": FEED["stops.txt"] + "de:08121:26:1:1,Heilbronn Hauptbahnhof Gleis 1,49.1430,9.2081,0,,1\n",
+    "trips.txt": FEED["trips.txt"] + "re8,weekdays,re_hbf,\nrb83,weekdays,rb,\ns41,weekdays,through,Mosbach\n",
+    "stop_times.txt": FEED["stop_times.txt"] + (
+        "re_hbf,11:00:00,11:00:00,de:08121:26:1:1,1,0,0\nre_hbf,11:07:00,11:07:00,de:08121:75:1:1,2,0,0\n"
+        "rb,12:00:00,12:00:00,de:08121:26:1:1,1,0,0\nrb,12:30:00,12:30:00,de:08225:8209:3:2,2,0,0\n"
+        # A train that stops at both parts in a row: one call, arriving at the first and leaving the second.
+        "through,13:00:00,13:01:00,de:08121:26:1:1,1,0,0\nthrough,13:03:00,13:04:00,de:08121:1114:3:1,2,0,0\n"
+        "through,13:10:00,13:10:00,de:08121:75:1:1,3,0,0\n"),
+}
+
+
+def test_stops_a_short_walk_apart_are_one_station(tmp_path):
+    transit = Transit(path=tmp_path / "gtfs.zip", fetch=lambda: feed_zip(NEAR_FEED))
+    hbf = transit.stops(q="heilbronn h")["features"][0]["properties"]
+    # The part with the most lines gives the id; the name of the other still finds it.
+    assert hbf == {"stop_id": BAHNHOF, "name": "Heilbronn Hauptbahnhof", "lines": ["RB 83", "RE 8", "S41"],
+                   "also": ["Heilbronn Hbf/Willy-Brandt-Pl."]}
+    assert names(transit.stops(q="willy-brandt")) == ["Heilbronn Hauptbahnhof"]
+    assert len(transit.stops()["features"]) == 3
+    # Trains of both parts leave from it, under either id.
+    for sid in (BAHNHOF, HBF):
+        found = transit.departures(sid, datetime(2026, 11, 4, 8, 0), to=SUELMERTOR)
+        assert found["stop"] == {"stop_id": BAHNHOF, "name": "Heilbronn Hauptbahnhof"}
+        assert [(d["line"], d["departure"][11:16]) for d in found["departures"]][:4] == [
+            ("S41", "08:18"), ("RE 8", "10:00"), ("RE 8", "11:00"), ("S41", "13:04")]
+    apart = Transit(path=tmp_path / "apart.zip", fetch=lambda: feed_zip(NEAR_FEED), same_station_m=0)
+    assert len(apart.stops()["features"]) == 4
+
+
+def test_merged_names_drop_the_corner_and_the_kind_of_stop():
+    assert merged_name("HN Harmonie/Hafenmarktpassage") == "Heilbronn Harmonie"
+    assert merged_name("Heilbronn Harmonie (Stadtbahn)") == "Heilbronn Harmonie"
+    assert merged_name("Karlsruhe-Durlach") == "Karlsruhe-Durlach"

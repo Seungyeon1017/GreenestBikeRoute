@@ -20,10 +20,10 @@ export function trainLineColor(line: string) {
 }
 
 /**
- * A bike + train trip: the bike leg (solid green on a white casing), the train as a dashed
- * line from station to station (the timetable has no track geometry) with a dot at each stop
- * on the way, and the S or train disc with the name where to get on and off.
- * Pass null to clear it.
+ * A trip with a train: the bike leg if there is one (solid green on a white casing), the train
+ * as a dashed line along its track (straight between stations whose track the backend doesn't
+ * know) with a dot at each stop on the way, and the S or train disc with the name where to get
+ * on and off. Pass null to clear it.
  */
 export function drawTrainTrip(
   map: maplibregl.Map,
@@ -108,17 +108,18 @@ export function drawTrainTrip(
   const stops: Feature[] = []
   if (trip && option) {
     const color = trainLineColor(option.line)
-    lines.push(
-      {
-        type: 'Feature',
-        geometry: {
-          type: 'LineString',
-          coordinates: option.stops.map(s => [s.lon, s.lat]),
-        },
-        properties: { mode: 'train', color },
+    lines.push({
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        // An older backend sends no path: straight from stop to stop.
+        coordinates: option.path ?? option.stops.map(s => [s.lon, s.lat]),
       },
-      { ...trip.ride, properties: { mode: 'bike' } },
-    )
+      properties: { mode: 'train', color },
+    })
+    if (trip.ride) {
+      lines.push({ ...trip.ride, properties: { mode: 'bike' } })
+    }
     const ends = [trip.board, trip.alight].map(f => f.properties)
     option.stops.forEach((s, i) => {
       const end = i === 0 || i === option.stops.length - 1
@@ -142,9 +143,17 @@ export function drawTrainTrip(
     ?.setData({ type: 'FeatureCollection', features: stops })
 }
 
-/** The bike leg and its station: what the map zooms to (the far station can be 50 km away). */
-export function trainRideBounds(trip: TrainTrip): maplibregl.LngLatBounds {
-  const coords = trip.ride.geometry.coordinates as [number, number][]
+/**
+ * What the map zooms to: the bike leg and its station (the far station can be 50 km away), or
+ * for a trip without one the whole way of the train.
+ */
+export function trainTripBounds(
+  trip: TrainTrip,
+  option: TrainOption,
+): maplibregl.LngLatBounds {
+  const coords = (trip.ride?.geometry.coordinates ??
+    option.path ??
+    option.stops.map(s => [s.lon, s.lat])) as [number, number][]
   return coords.reduce(
     (bounds, c) => bounds.extend(c),
     new maplibregl.LngLatBounds(coords[0], coords[0]),

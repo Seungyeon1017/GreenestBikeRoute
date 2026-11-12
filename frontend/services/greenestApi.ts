@@ -27,7 +27,6 @@ import type {
   SharingVehicleChoice,
   StreetSegmentFeature,
   TourCollection,
-  TrainDirection,
   TrainTrip,
   TransitStopCollection,
   VehicleCollection,
@@ -224,6 +223,19 @@ export function fetchPlaces(
 }
 
 /**
+ * GET /geocode/suggest: places whose name completes `query` ("Wests" → Weststraße), from the
+ * backend's own street names and earlier searches. Answers at once: ask on every keystroke.
+ */
+export function fetchPlaceSuggestions(
+  query: string,
+  signal?: AbortSignal,
+  limit = 5,
+): Promise<PlaceCollection> {
+  const params = new URLSearchParams({ q: query, limit: String(limit) })
+  return getJson<PlaceCollection>(`/geocode/suggest?${params}`, signal)
+}
+
+/**
  * GET /transit/stops: every Stadtbahn and train station of the region. The first call
  * after a backend start reads the timetable (a few seconds); 503 if there is none.
  */
@@ -234,30 +246,39 @@ export function fetchTransitStops(
 }
 
 /**
- * GET /route/train: ride from `point` to a station and take the train to station `stopId` (to_train),
- * or take the train from `stopId` and ride to `point` (from_train). The bike leg uses the same options
- * as /route; options.departTime is the earliest start (now without one).
- * 400 when no station in Heilbronn has a direct train, 503 without a timetable.
+ * GET /route/train: each end is a point to ride from or to, or a station (its stop_id). A point and a
+ * station: ride to a station and take the train there (to_train), or take the train from it and ride on
+ * (from_train). Two stations: the train only. The bike leg uses the same options as /route;
+ * options.departTime is the earliest start (now without one).
+ * 400 when there is no direct train, 503 without a timetable.
  */
 export function fetchTrainTrip(
-  direction: TrainDirection,
-  point: LngLat,
-  stopId: string,
+  from: TrainEnd,
+  to: TrainEnd,
   options: RouteOptions,
   signal?: AbortSignal,
 ): Promise<TrainTrip> {
-  const params = routeParams({ from: point, to: point, options })
-  if (direction === 'to_train') {
-    params.delete('to_lat')
-    params.delete('to_lon')
-    params.set('to_stop', stopId)
-  } else {
+  const anywhere: LngLat = [0, 0]
+  const params = routeParams({
+    from: typeof from === 'string' ? anywhere : from,
+    to: typeof to === 'string' ? anywhere : to,
+    options,
+  })
+  if (typeof from === 'string') {
     params.delete('from_lat')
     params.delete('from_lon')
-    params.set('from_stop', stopId)
+    params.set('from_stop', from)
+  }
+  if (typeof to === 'string') {
+    params.delete('to_lat')
+    params.delete('to_lon')
+    params.set('to_stop', to)
   }
   return getJson<TrainTrip>(`/route/train?${params}`, signal)
 }
+
+/** An end of a train trip: a point to ride from or to, or a station's stop_id. */
+export type TrainEnd = LngLat | string
 
 /** near_lat / near_lon: the backend then sorts by distance and adds `distance_m`. */
 function nearParams(near: LngLat | null, limit?: number): URLSearchParams {

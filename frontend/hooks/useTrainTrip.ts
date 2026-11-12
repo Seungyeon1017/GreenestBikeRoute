@@ -10,24 +10,36 @@ import type {
 } from '@/types/greenest'
 
 /**
- * The bike + train trip (/route/train) while `on` is set, a station is picked and the
- * point of the ride is known: the start for to_train, the destination for from_train.
- * Asked again when the point, the station or the rider's options change.
+ * What a train trip runs between. to_train: ride from `point` to a station and take the
+ * train to `toStation`. from_train: take the train from `fromStation` and ride to `point`.
+ * train: from `fromStation` to `toStation`, nothing to ride.
  */
-export function useTrainTrip(
-  on: boolean,
-  direction: TrainDirection,
-  station: TransitStopProperties | null,
-  point: LngLat | null,
-  options: RouteOptions,
-) {
+export type TrainPlan = {
+  direction: TrainDirection
+  fromStation?: TransitStopProperties
+  toStation?: TransitStopProperties
+  point?: LngLat
+}
+
+/**
+ * The trip with a train (/route/train) for `plan`, or nothing while it is null.
+ * Asked again when the plan or the rider's options change.
+ */
+export function useTrainTrip(plan: TrainPlan | null, options: RouteOptions) {
   const { t } = useTranslation()
   const [trip, setTrip] = useState<TrainTrip | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
+  const direction = plan?.direction
+  const fromStation = plan?.fromStation
+  const toStation = plan?.toStation
+  const point = plan?.point
+
   useEffect(() => {
-    if (!on || !station || !point) {
+    const from = fromStation?.stop_id ?? point
+    const to = toStation?.stop_id ?? point
+    if (!direction || !from || !to) {
       setTrip(null)
       setError(null)
       setLoading(false)
@@ -37,13 +49,7 @@ export function useTrainTrip(
     setLoading(true)
     // Same 300 ms pause as the route, so a slider drag sends one request.
     const timer = setTimeout(() => {
-      fetchTrainTrip(
-        direction,
-        point,
-        station.stop_id,
-        options,
-        controller.signal,
-      )
+      fetchTrainTrip(from, to, options, controller.signal)
         .then(data => {
           setTrip(data)
           setError(null)
@@ -56,11 +62,15 @@ export function useTrainTrip(
           setError(
             err.status === 503
               ? t('greenest.planTrip.train.unavailable')
-              : err.status === 400 && err.message.includes('no direct train')
-                ? t(`greenest.planTrip.train.noTrain.${direction}`, {
-                    station: station.name,
-                  })
-                : err.message,
+              : err.status === 400 && err.message.includes('same station')
+                ? t('greenest.planTrip.train.sameStation')
+                : err.status === 400 && err.message.includes('no direct train')
+                  ? t(`greenest.planTrip.train.noTrain.${direction}`, {
+                      station: (toStation ?? fromStation)?.name,
+                      from: fromStation?.name,
+                      to: toStation?.name,
+                    })
+                  : err.message,
           )
         })
         .finally(() => {
@@ -73,7 +83,7 @@ export function useTrainTrip(
       clearTimeout(timer)
       controller.abort()
     }
-  }, [on, direction, station, point, options, t])
+  }, [direction, fromStation, toStation, point, options, t])
 
   return { trip, error, loading }
 }

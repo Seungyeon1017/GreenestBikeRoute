@@ -1,13 +1,20 @@
 import { TrainFront } from 'lucide-react'
-import type { TransitStopFeature } from '@/types/greenest'
+import type {
+  LngLat,
+  PlaceProperties,
+  TransitStopFeature,
+} from '@/types/greenest'
 import { SBAHN_COLOR, stationKind, TRAIN_COLOR } from './transitLayers'
 
 /** For name search: case, accents and umlauts don't matter (Sülmertor = sulmertor). */
-function folded(text: string) {
+export function folded(text: string) {
   return text.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase()
 }
 
-/** Stations whose name contains `query`; a word starting with it first, then by name. */
+/**
+ * Stations whose name (or the name of a stop merged into it: "Willy-Brandt" finds the
+ * Hauptbahnhof) contains `query`; a word starting with it first, then by name.
+ */
 export function matchStations(
   stations: TransitStopFeature[],
   query: string,
@@ -20,15 +27,72 @@ export function matchStations(
   const starts = (name: string) =>
     name.split(/[\s,/(-]+/).some(word => word.startsWith(q))
   return stations
-    .map(s => ({ s, name: folded(s.properties.name) }))
-    .filter(({ name }) => name.includes(q))
+    .map(s => {
+      const names = [s.properties.name, ...(s.properties.also ?? [])].map(
+        folded,
+      )
+      // Its own name if that matches, else the stop's that does.
+      return { s, name: names.find(n => n.includes(q)) }
+    })
+    .filter((m): m is { s: TransitStopFeature; name: string } =>
+      Boolean(m.name),
+    )
     .sort(
       (a, b) =>
         Number(starts(b.name)) - Number(starts(a.name)) ||
-        a.name.localeCompare(b.name),
+        a.s.properties.name.localeCompare(b.s.properties.name),
     )
     .slice(0, max)
     .map(({ s }) => s)
+}
+
+/** Metres between two points; good enough within a city. */
+export function metresBetween([lng1, lat1]: LngLat, [lng2, lat2]: LngLat) {
+  const y = (lat2 - lat1) * 111_320
+  const x = (lng2 - lng1) * 111_320 * Math.cos((lat1 * Math.PI) / 180)
+  return Math.hypot(x, y)
+}
+
+/**
+ * A place of the search this close to a station is that station: the stops merged into one
+ * station are up to 200 m apart, and OpenStreetMap puts its own point on each platform.
+ */
+const STATION_PLACE_M = 250
+
+/** OSM categories of stops and stations: such a place next to a station is the station itself. */
+function isStop({ category, type }: PlaceProperties) {
+  return (
+    category === 'railway' ||
+    category === 'public_transport' ||
+    (category === 'building' && type === 'train_station')
+  )
+}
+
+/**
+ * The station a place of the search stands for, or null: a railway place (a station, a
+ * platform, a tram stop) within STATION_PLACE_M of one. So "Harmonie" found by the place
+ * search and Harmonie from the timetable are not listed twice, and either one is a station
+ * for "Combine with trains".
+ */
+export function stationOfPlace(
+  stations: TransitStopFeature[],
+  place: PlaceProperties,
+  at: LngLat,
+): TransitStopFeature | null {
+  if (!isStop(place)) {
+    return null
+  }
+  let best: TransitStopFeature | null = null
+  let bestM = STATION_PLACE_M
+  for (const s of stations) {
+    const [lng, lat] = s.geometry.coordinates
+    const m = metresBetween(at, [lng, lat])
+    if (m <= bestM) {
+      best = s
+      bestM = m
+    }
+  }
+  return best
 }
 
 /** The white S on a green disc, or the white train on a blue one, as on the map. */

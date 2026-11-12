@@ -54,7 +54,7 @@ FEED = {
 
 @pytest.fixture
 def timetable():
-    return Timetable(feed_zip(FEED))
+    return Timetable(feed_zip(FEED), same_station_m=0)  # the toy graph's corners are 100 m apart: keep them three stations
 
 
 def at(hour, minute, second=0):
@@ -149,7 +149,7 @@ def bikes():
 
 @pytest.fixture
 def client(toy_graph, tmp_path, bikes):
-    transit = Transit(path=tmp_path / "gtfs.zip", fetch=lambda: feed_zip(FEED))
+    transit = Transit(path=tmp_path / "gtfs.zip", fetch=lambda: feed_zip(FEED), same_station_m=0)
     with TestClient(create_app(graph=toy_graph, transit=transit, sharing=bikes)) as c:
         yield c
 
@@ -185,3 +185,40 @@ def test_api_errors(client):
     r = client.get("/route/train", params={**point, "to_stop": SA, "depart_time": "2026-11-04T08:00"})
     assert r.status_code == 400 and "no direct train" in r.json()["detail"]
     assert client.get("/route/train", params={**point, "to_stop": FAR}).status_code in (200, 400)  # from now
+
+
+def test_between_two_stations_it_is_the_train_only(toy_graph, timetable):
+    trip = plan_train_trip(toy_graph, timetable, SHORTEST, at(8, 0), from_stop=SB, to_stop=FAR)
+    assert (trip["direction"], trip["ride"], trip["direct"]) == ("train", None, None)  # Mosbach: no riding there
+    assert (trip["board"]["properties"]["stop_id"], trip["alight"]["properties"]["stop_id"]) == (SB, FAR)
+    first = trip["options"][0]
+    assert (first["leave_at"], first["arrive_at"], first["wait_s"], first["duration_s"]) == (
+        minute(at(8, 10)), minute(at(9, 0)), 0, 50 * 60)
+    with pytest.raises(RouteError, match="no direct train from Heilbronn A to Mosbach"):
+        plan_train_trip(toy_graph, timetable, SHORTEST, at(8, 0), from_stop=SA, to_stop=FAR)
+    with pytest.raises(RouteError, match="same station"):
+        plan_train_trip(toy_graph, timetable, SHORTEST, at(8, 0), from_stop=SB, to_stop=SB)
+
+
+def test_a_trip_inside_heilbronn_says_how_long_riding_all_the_way_takes(toy_graph, timetable):
+    # From station A the only train goes on to C at 10:00, for a 70 m ride back to B: riding the 100 m is there first.
+    trip = plan_train_trip(toy_graph, timetable, SHORTEST, at(8, 0), from_stop=SA, destination=COORDS[B])
+    direct = trip["direct"]
+    assert trip["alight"]["properties"]["stop_id"] == SC
+    assert direct["length_m"] == 100.0 and direct["arrive_at"] < trip["options"][0]["arrive_at"]
+    assert direct["arrive_at"] == minute(at(8, 0) + timedelta(seconds=direct["duration_s"]))
+    # Between two stations in Heilbronn too; to a station outside there is no riding all the way.
+    between = plan_train_trip(toy_graph, timetable, SHORTEST, at(8, 0), from_stop=SA, to_stop=SC)
+    assert between["direct"]["length_m"] == 70.0
+    assert plan_train_trip(toy_graph, timetable, SHORTEST, at(8, 0), origin=COORDS[A], to_stop=FAR)["direct"] is None
+
+
+def test_api_train_only_and_the_way_of_the_train(client):
+    r = client.get("/route/train", params={"from_stop": SB, "to_stop": FAR, "depart_time": "2026-11-04T08:00"})
+    assert r.status_code == 200
+    trip = TrainTrip.model_validate(r.json())
+    assert (trip.direction, trip.ride, trip.direct) == ("train", None, None)
+    # No tracks in tests: straight from station to station.
+    assert trip.options[0].path == [[COORDS[B][1], COORDS[B][0]], [9.144, 49.353]]
+    r = client.get("/route/train", params={"from_stop": SA, "to_stop": FAR, "depart_time": "2026-11-04T08:00"})
+    assert r.status_code == 400 and "no direct train from Heilbronn A to Mosbach" in r.json()["detail"]

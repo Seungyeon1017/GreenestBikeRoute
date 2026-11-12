@@ -3,7 +3,7 @@ import requests
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
-from backend.geocoding import MIN_INTERVAL_S, Geocoder, GeocodingUnavailable, SearchDropped
+from backend.geocoding import MIN_INTERVAL_S, Geocoder, GeocodingUnavailable, SearchDropped, street_places
 from backend.schemas import PlaceCollection
 
 
@@ -153,3 +153,57 @@ def test_geocode_is_documented(client):
     assert get["tags"] == ["Places"]
     assert get["responses"]["200"]["content"]["application/geo+json"]["schema"] == {"$ref": "#/components/schemas/PlaceCollection"}
     assert "503" in get["responses"]
+
+
+def suggested(collection):
+    return [f["properties"]["name"] for f in collection["features"]]
+
+
+def test_street_names_of_the_graph_complete_what_is_typed(toy_graph):
+    toy_graph.edges[1, 2, 0]["name"] = "Weststraße"
+    toy_graph.edges[1, 3, 0]["name"] = ["Weststraße", "Südstraße"]  # an edge merged from two ways
+    toy_graph.edges[3, 2, 0]["name"] = "Am Westfriedhof"
+    streets = street_places(toy_graph)
+    geocoder = Geocoder(fetch=lambda q: [])
+    # A name starting with it first, then one with a word starting with it; umlauts and case don't matter.
+    assert suggested(geocoder.suggest("wEst", streets)) == ["Weststraße", "Am Westfriedhof"]
+    assert suggested(geocoder.suggest("sudstr", streets)) == ["Südstraße"]
+    assert suggested(geocoder.suggest("straße", streets)) == []  # not the middle of a word
+    street = geocoder.suggest("wests", streets)["features"][0]
+    assert street["properties"] == {"label": "Weststraße", "name": "Weststraße", "category": "highway",
+                                    "type": "street", "local": True}
+    lon, lat = street["geometry"]["coordinates"]
+    assert 9.2100 <= lon <= 9.2108 and 49.1400 <= lat <= 49.1409  # one point, on the street
+
+
+def test_a_street_name_used_twice_far_apart_is_suggested_once(toy_graph):
+    toy_graph.add_node(8, y=49.2000, x=9.3000)
+    toy_graph.add_node(9, y=49.2001, x=9.3000)
+    toy_graph.add_edge(8, 9, osmid=99, length=10.0, name="Hauptstraße")
+    toy_graph.edges[1, 2, 0]["name"] = "Hauptstraße"  # 100 m: the longer one
+    (name, feature), = street_places(toy_graph)
+    assert name == "hauptstrasse"
+    assert feature["geometry"]["coordinates"][0] < 9.25
+
+
+def test_places_found_before_are_suggested_and_kept_across_restarts(tmp_path, nominatim):
+    path = tmp_path / "geocode.json"
+    geocoder = Geocoder(fetch=nominatim, sleep=lambda s: None, cache_path=path)
+    assert suggested(geocoder.suggest("rath")) == []
+    geocoder.collection("Rathaus")
+    assert suggested(geocoder.suggest("rath")) == ["Rathaus Flein", "Rathaus Heilbronn", "Altes Rathaus"]
+    assert suggested(geocoder.suggest("altes")) == ["Altes Rathaus"]
+    # A new server reads the file: the search is answered without Nominatim, the names are still known.
+    again = Geocoder(fetch=nominatim, sleep=lambda s: None, cache_path=path)
+    assert [f["properties"]["name"] for f in again.collection("rathaus")["features"]][0] == "Rathaus Heilbronn"
+    assert nominatim.queries == ["Rathaus"] and suggested(again.suggest("flein", limit=1)) == ["Rathaus Flein"]
+    assert suggested(again.suggest("rathaus f")) == ["Rathaus Flein"]
+
+
+def test_api_suggest(client, toy_graph):
+    toy_graph.edges[1, 2, 0]["name"] = "Weststraße"
+    r = client.get("/geocode/suggest", params={"q": "Wests"})
+    assert r.status_code == 200 and r.headers["content-type"] == "application/geo+json"
+    assert suggested(PlaceCollection.model_validate(r.json()).model_dump()) == ["Weststraße"]
+    assert r.json()["features"][0]["properties"]["local"] is True
+    assert client.get("/geocode/suggest", params={"q": "W"}).status_code == 422

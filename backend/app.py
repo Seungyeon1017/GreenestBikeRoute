@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse, Response
 
 from backend.reports import SNAP_M, ReportError, Reports
 from backend.schemas import EXAMPLE_TRIP, AirCollection, BikeFriendlyCollection, ClosureAnswer, ClosureCollection, ClosureFeature, ClosureReport,     DangerCollection, DayRoutes, Error, FlowCollection, GeofencingCollection, GradeCollection, GreenStreetCollection, LightingCollection, MappingCollection,     MappingFeature, MappingReport, PlaceCollection, FootwayFeature, StreetSegmentFeature, RouteCollection, RouteComparison, RoughnessCollection, ScoreCollection,     ShadeCollection, SharingTrip, SpeedCollection, StreetNames, TourCollection, TrainTrip, TransitDepartures, TransitStopCollection, VehicleCollection, ZoneCollection
-from backend.geocoding import Geocoder, GeocodingUnavailable, SearchDropped, normalize
+from backend.geocoding import Geocoder, GeocodingUnavailable, SearchDropped, normalize, street_places
 from backend.sharing import ATTRIBUTION, Sharing, SharingUnavailable, distance_m
 from backend.transit import LOCAL_TZ, Transit, TransitUnavailable
 from backend.users.community_routes import TAG as RIDERS_ROUTES_TAG
@@ -450,41 +450,48 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
         return sum(1 for v in vehicles if v["properties"]["vehicle"] == "bike"
                    and distance_m(lat, lon, *reversed(v["geometry"]["coordinates"])) <= SHARED_NEAR_M)
 
-    @app.get("/route/train", tags=[ROUTING, TRANSIT], summary="Ride to a station and take the train, or get off the train and ride on",
+    @app.get("/route/train", tags=[ROUTING, TRANSIT], summary="Ride to a station and take the train, get off the train and ride on, or go by train between two stations",
              response_model=TrainTrip,
-             responses={400: {"description": "No direct train at a station in Heilbronn, or the point is outside Heilbronn",
+             responses={400: {"description": "No direct train (at a station in Heilbronn, or between the two stations), or the point is outside Heilbronn",
                               "model": Error},
                         404: {"description": "No station with this stop_id", "model": Error}, **TRANSIT_ERRORS},
              response_description="The station to ride to (or get off at), the bike leg, and the trains to take")
     def route_train(
             from_lat: Optional[float] = Query(None, ge=-90, le=90, description=(
-                "Bike then train: where the ride starts (in Heilbronn). Give with from_lon and to_stop"),
+                "Where the ride starts (in Heilbronn), with from_lon; or give from_stop to start at a station"),
                 openapi_examples=trip_example("from_lat")),
             from_lon: Optional[float] = Query(None, ge=-180, le=180, openapi_examples=trip_example("from_lon")),
             to_stop: Optional[str] = Query(None, description=(
-                "Bike then train: the station to go to, a `stop_id` from /transit/stops (also outside Heilbronn)"),
+                "The station to go to, a `stop_id` from /transit/stops (also outside Heilbronn); or give to_lat and to_lon"),
                 openapi_examples={"mosbach": {"summary": "Mosbach, Bahnhof", "value": "de:08225:8209"}}),
             from_stop: Optional[str] = Query(None, description=(
-                "Train then bike: the station the train trip starts at (a `stop_id`). Give with to_lat and to_lon")),
-            to_lat: Optional[float] = Query(None, ge=-90, le=90, description="Train then bike: where the ride ends (in Heilbronn)"),
+                "The station the train trip starts at (a `stop_id`); or give from_lat and from_lon")),
+            to_lat: Optional[float] = Query(None, ge=-90, le=90, description="Where the ride ends (in Heilbronn), with to_lon"),
             to_lon: Optional[float] = Query(None, ge=-180, le=180),
             penalties=Depends(penalty_query), rider=Depends(rider_query)):
-        """Give either from_lat, from_lon and to_stop (bike then train), or from_stop, to_lat and to_lon (train then
-        bike). `depart_time` is the earliest start (now if left out): the answer says when to start riding to catch
-        each train, or when the ride ends. Which station in Heilbronn to use is chosen for the soonest arrival.
-        Bikes ride free on HNV trains except Monday to Friday 06:00-09:00 (`bike_ticket_needed`)."""
-        to_train = None not in (from_lat, from_lon, to_stop) and (from_stop, to_lat, to_lon) == (None, None, None)
-        from_train = None not in (from_stop, to_lat, to_lon) and (from_lat, from_lon, to_stop) == (None, None, None)
-        if not (to_train or from_train):
+        """Give from_lat, from_lon and to_stop (bike then train), from_stop, to_lat and to_lon (train then bike), or
+        from_stop and to_stop (the train only, nothing to ride). `depart_time` is the earliest start (now if left
+        out): the answer says when to start riding to catch each train, or when the ride ends. Which station in
+        Heilbronn to ride to or from is chosen for the soonest arrival. When both ends are in Heilbronn, `direct` says
+        how long riding all the way takes: show that instead when it is there sooner. Stops of one station (the
+        Stadtbahn stop in front of the Hauptbahnhof, the corners of Harmonie) share one `stop_id`; the old ones still
+        work. Bikes ride free on HNV trains except Monday to Friday 06:00-09:00 (`bike_ticket_needed`)."""
+        start, end = (from_lat, from_lon), (to_lat, to_lon)
+        to_train = None not in (*start, to_stop) and (from_stop, *end) == (None, None, None)
+        from_train = None not in (from_stop, *end) and (*start, to_stop) == (None, None, None)
+        train_only = None not in (from_stop, to_stop) and (*start, *end) == (None, None, None, None)
+        if not (to_train or from_train or train_only):
             raise HTTPException(status_code=422, detail=(
-                "give from_lat, from_lon and to_stop (bike then train), or from_stop, to_lat and to_lon (train then bike)"))
+                "give from_lat, from_lon and to_stop (bike then train), from_stop, to_lat and to_lon (train then bike), "
+                "or from_stop and to_stop (train only)"))
         after = penalties.depart_time or datetime.now(LOCAL_TZ)
         after = after.replace(tzinfo=LOCAL_TZ) if after.tzinfo is None else after.astimezone(LOCAL_TZ)
         set_closures(app.state.graph, reports.closures())
         try:
             tt = transit.timetable()
-            ends = ({"origin": (from_lat, from_lon), "to_stop": to_stop} if to_train
-                    else {"from_stop": from_stop, "destination": (to_lat, to_lon)})
+            ends = ({"from_stop": from_stop, "to_stop": to_stop} if train_only
+                    else {"origin": start, "to_stop": to_stop} if to_train
+                    else {"from_stop": from_stop, "destination": end})
             trip = plan_train_trip(app.state.graph, tt, penalties, after, **ends, **rider)
         except TransitUnavailable as e:
             raise HTTPException(status_code=503, detail=str(e))
@@ -492,6 +499,8 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
             raise HTTPException(status_code=404, detail=f"no station {e.args[0]}: pick a stop_id from /transit/stops")
         except RouteError as e:
             raise HTTPException(status_code=400, detail=str(e))
+        for option in trip["options"]:
+            option["path"] = transit.train_line(option["stops"])
         near = None if to_train else shared_bikes_near(*reversed(trip["alight"]["geometry"]["coordinates"]))
         return JSONResponse({**trip, "shared_bikes_near": near, **transit.about(tt)})
 
@@ -669,6 +678,25 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
             return Response(status_code=499)  # "client closed request": nobody reads it
         finally:
             watcher.cancel()
+
+    streets = {"graph": None, "places": []}  # street_places of the graph they were read from
+
+    @app.get("/geocode/suggest", tags=[PLACES], summary="Places whose name completes what the rider is typing, at once",
+             response_class=GeoJSONResponse, response_model=PlaceCollection,
+             response_description="Points as in /geocode, best completion first; empty if no known name fits")
+    def geocode_suggest(q: str = Query(..., max_length=200, description=(
+            "What the rider typed so far, e.g. Wests for Weststraße. Case, accents and extra spaces don't matter"),
+            openapi_examples={"street": {"summary": "Start of a street name", "value": "Wests"}}),
+                        limit: int = Query(5, ge=1, le=10, description="Return at most this many")):
+        """For the list under a search field while typing: ask on every keystroke, it doesn't wait for Nominatim.
+        Completes the names of the streets of the bike graph and of every place /geocode found before (`local`: the
+        label of a street is only its name). Ask /geocode as well once the rider pauses, for addresses and places
+        not searched yet."""
+        if len(normalize(q)) < 2:
+            raise HTTPException(status_code=422, detail="type at least 2 characters")
+        if streets["graph"] is not app.state.graph:
+            streets.update(graph=app.state.graph, places=street_places(app.state.graph))
+        return GeoJSONResponse(geocoder.suggest(q, streets["places"], limit))
 
     @app.get("/transit/stops", tags=[TRANSIT], summary="Stadtbahn and train stations of the region, as GeoJSON points",
              response_class=GeoJSONResponse, response_model=TransitStopCollection, responses=TRANSIT_ERRORS,

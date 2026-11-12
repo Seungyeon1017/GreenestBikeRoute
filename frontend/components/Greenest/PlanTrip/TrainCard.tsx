@@ -46,11 +46,18 @@ type TrainCardProps = {
   onOptionChange: (_index: number) => void
   /** from_train: plan the ride from the station with a rented e-bike instead. */
   onRentFromStation: (_trip: TrainTrip) => void
+  /** Riding all the way is there sooner than the first train's trip (both ends in Heilbronn). */
+  bikeSooner: boolean
+  /** The map shows that ride instead of the train trip: the card only says so. */
+  rideInstead: boolean
+  onRideInsteadChange: (_on: boolean) => void
 }
 
 /**
  * Bike + train: the trip for the start and destination of the form, when "Combine with trains"
- * is on and one of them is a station.
+ * is on and one of them is a station (both: the train only). Inside Heilbronn the train can be a
+ * detour: then the card says riding is sooner and the map shows the bike route, unless the
+ * rider asks for the train anyway.
  */
 export default function TrainCard(props: TrainCardProps) {
   const { t, i18n } = useTranslation()
@@ -58,6 +65,8 @@ export default function TrainCard(props: TrainCardProps) {
   const s = (key: string, values?: Record<string, unknown>) =>
     t(`greenest.planTrip.train.${key}`, values)
   const option = trip?.options[props.optionIndex] ?? trip?.options[0]
+  const direct = trip?.direct
+  const first = trip?.options[0]
 
   return (
     <Card>
@@ -88,7 +97,26 @@ export default function TrainCard(props: TrainCardProps) {
             {props.error}
           </p>
         )}
-        {trip && option && (
+        {trip && direct && first && props.bikeSooner && (
+          <div className="flex flex-col gap-1.5 rounded-xl bg-leaf-mint p-3 text-xs text-leaf-forest">
+            <p>
+              {s(props.rideInstead ? 'direct.shown' : 'direct.sooner', {
+                bike: trainTime(direct.arrive_at, i18n.language),
+                train: trainTime(first.arrive_at, i18n.language),
+                min: minutes(direct.duration_s),
+                km: km(direct.length_m, i18n.language),
+              })}
+            </p>
+            <button
+              className="self-start font-medium underline underline-offset-2"
+              onClick={() => props.onRideInsteadChange(!props.rideInstead)}
+              type="button"
+            >
+              {s(props.rideInstead ? 'direct.showTrain' : 'direct.showBike')}
+            </button>
+          </div>
+        )}
+        {trip && option && !props.rideInstead && (
           <TrainSteps
             onOptionChange={props.onOptionChange}
             onRentFromStation={props.onRentFromStation}
@@ -144,12 +172,12 @@ function TrainSteps({
       : s('duration.hours', { h: Math.floor(min / 60), min: min % 60 })
   }
   const toTrain = trip.direction === 'to_train'
-  const ride = trip.ride.properties
+  const ride = trip.ride?.properties
   const board = trip.board.properties.name
   const alight = trip.alight.properties.name
   const rideFacts = {
-    km: km(ride.length_m, i18n.language),
-    min: minutes(ride.duration_s),
+    km: km(ride?.length_m ?? 0, i18n.language),
+    min: minutes(ride?.duration_s ?? 0),
   }
   const between = option.stops.length - 2
   const platform = (value: string | null) =>
@@ -197,7 +225,9 @@ function TrainSteps({
       </div>
 
       <ol className="flex flex-col gap-2">
-        {toTrain ? (
+        {!ride ? (
+          trainStep
+        ) : toTrain ? (
           <>
             <RideStep>
               <span className="font-medium text-leaf-ink">
@@ -278,7 +308,7 @@ function TrainSteps({
         </fieldset>
       )}
 
-      {!toTrain && (trip.shared_bikes_near ?? 0) > 0 && (
+      {trip.direction === 'from_train' && (trip.shared_bikes_near ?? 0) > 0 && (
         <p>
           {s('shared.count', {
             count: trip.shared_bikes_near ?? 0,
@@ -294,9 +324,19 @@ function TrainSteps({
         </p>
       )}
 
-      <p className="text-leaf-muted">
-        {s('kcal', { kcal: Math.round(ride.kcal) })}
-      </p>
+      {ride && (
+        <p className="text-leaf-muted">
+          {s('kcal', { kcal: Math.round(ride.kcal) })}
+        </p>
+      )}
+      {!ride && trip.direct && (
+        <p className="text-leaf-muted">
+          {s('direct.between', {
+            min: minutes(trip.direct.duration_s),
+            km: km(trip.direct.length_m, i18n.language),
+          })}
+        </p>
+      )}
       <p className="text-[11px] text-leaf-muted">
         {trip.valid_until &&
           s('validUntil', {

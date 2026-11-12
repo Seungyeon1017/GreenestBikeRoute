@@ -480,7 +480,9 @@
           "place": "Ort"
         },
         "station": "Bahnhof · {{lines}}",
-        "stationOutside": "Bahnhof außerhalb Heilbronns, nur mit der Bahn · {{lines}}"
+        "stationOutside": "Bahnhof außerhalb Heilbronns, nur mit der Bahn · {{lines}}",
+        "searchingMore": "Weitere Orte werden gesucht …",
+        "localStreet": "Straße"
       },
       "locate": {
         "button": "Meinen Standort als Start nehmen",
@@ -817,11 +819,9 @@
       "train": {
         "title": "Rad + Bahn",
         "toggle": "Mit der Bahn kombinieren (S-Bahn, Regionalzüge)",
-        "toggleHint": "Wähle einen Bahnhof als Start oder Ziel, auch außerhalb Heilbronns (z. B. Mosbach). Du radelst hin und fährst mit dem Zug weiter, oder kommst mit dem Zug an und radelst weiter.",
+        "toggleHint": "Wähle einen Bahnhof als Start oder Ziel, auch außerhalb Heilbronns (z. B. Mosbach). Du radelst hin und fährst mit dem Zug weiter, oder kommst mit dem Zug an und radelst weiter. Sind Start und Ziel beide Bahnhöfe, zeigen wir nur die Züge. Bist du in Heilbronn mit dem Rad schneller, zeigen wir die Radroute.",
         "problem": {
-          "needTrain": "{{station}} liegt außerhalb Heilbronns, dorthin gibt es keine Radroute. Hake „Mit der Bahn kombinieren“ an, um mit Rad und Bahn hinzukommen.",
-          "bothOutside": "Start und Ziel liegen beide außerhalb Heilbronns. Einer davon muss in Heilbronn liegen, wo du radelst.",
-          "needStation": "Zum Kombinieren mit der Bahn wähle einen Bahnhof als Start oder Ziel (tippe seinen Namen, z. B. Mosbach)."
+          "needTrain": "{{station}} liegt außerhalb Heilbronns, dorthin gibt es keine Radroute. Hake „Mit der Bahn kombinieren“ an, um mit der Bahn hinzukommen."
         },
         "loading": "Züge werden gesucht …",
         "earliest": {
@@ -830,11 +830,13 @@
         },
         "headline": {
           "to_train": "Losradeln um {{leave}}",
-          "from_train": "Der Zug fährt um {{leave}}"
+          "from_train": "Der Zug fährt um {{leave}}",
+          "train": "Der Zug fährt um {{leave}}"
         },
         "arrive": {
           "to_train": "In {{station}} um {{time}} · insgesamt {{duration}}",
-          "from_train": "Am Ziel um {{time}} · insgesamt {{duration}}"
+          "from_train": "Am Ziel um {{time}} · insgesamt {{duration}}",
+          "train": "In {{station}} um {{time}} · insgesamt {{duration}}"
         },
         "step": {
           "rideTo": "{{km}} km ({{min}} Min.) radeln bis {{station}}",
@@ -853,7 +855,8 @@
         "others": "Andere Züge",
         "option": {
           "to_train": "Start {{leave}} · Zug {{departure}} → {{arrival}}",
-          "from_train": "Zug {{departure}} → {{arrival}} · am Ziel {{arrive}}"
+          "from_train": "Zug {{departure}} → {{arrival}} · am Ziel {{arrive}}",
+          "train": "Zug {{departure}} → {{arrival}}"
         },
         "shared": {
           "count_one": "Kein Rad dabei? In der Nähe von {{station}} ist gerade {{count}} Leih-E-Bike frei.",
@@ -865,12 +868,24 @@
         "validUntil": "Fahrplan bis {{date}}.",
         "noTrain": {
           "to_train": "In den nächsten zwei Tagen fährt kein direkter Zug von einem Heilbronner Bahnhof nach {{station}}.",
-          "from_train": "In den nächsten zwei Tagen fährt kein direkter Zug von {{station}} zu einem Heilbronner Bahnhof."
+          "from_train": "In den nächsten zwei Tagen fährt kein direkter Zug von {{station}} zu einem Heilbronner Bahnhof.",
+          "train": "In den nächsten zwei Tagen fährt kein direkter Zug von {{from}} nach {{to}}."
         },
         "unavailable": "Der Fahrplan ist gerade nicht verfügbar. Versuche es später noch einmal.",
         "duration": {
           "min": "{{min}} Min.",
           "hours": "{{h}} Std. {{min}} Min."
+        },
+        "hint": {
+          "needStation": "Für eine Verbindung mit der Bahn wähle einen Bahnhof als Start oder Ziel (tippe seinen Namen, z. B. Mosbach). Bis dahin siehst du die Radroute."
+        },
+        "sameStation": "Start und Ziel sind derselbe Bahnhof.",
+        "direct": {
+          "shown": "Mit dem Rad bist du schneller: direkt {{km}} km in {{min}} Min., an um {{bike}}. Mit der Bahn wärst du erst um {{train}} da. Die Karte zeigt deshalb die Radroute.",
+          "sooner": "Direkt mit dem Rad wärst du schon um {{bike}} da ({{km}} km, {{min}} Min.), mit der Bahn erst um {{train}}.",
+          "showTrain": "Bahnverbindung trotzdem zeigen",
+          "showBike": "Radroute zeigen",
+          "between": "Mit dem Rad wären es direkt {{km}} km ({{min}} Min.)."
         }
       }
     },

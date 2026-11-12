@@ -625,6 +625,9 @@ class VehicleProperties(BaseModel):
     price: Optional[str] = Field(description="Price as the provider publishes it, e.g. \"€1.00 to unlock + €0.44/min\"")
     rent_url: Optional[str] = Field(description="Link that opens this vehicle in the provider's app (or its web page) to rent it")
     last_reported: Optional[str] = Field(description="When the provider last reported this vehicle (ISO 8601)")
+    also: list[str] = Field(default_factory=list, description=(
+        "Other names of this station: stops under 200 m apart are one station (the Stadtbahn stop in front, Heilbronn "
+        "Hbf/Willy-Brandt-Pl., belongs to Heilbronn Hauptbahnhof), found by these names too"))
     distance_m: Optional[int] = Field(None, description="Metres from the near_lat/near_lon point, when one was given")
 
 
@@ -694,6 +697,8 @@ class PlaceProperties(BaseModel):
     name: Optional[str] = Field(description="Short name of the place, e.g. \"Rathaus Heilbronn\"; null for a plain address")
     category: Optional[str] = Field(description="OSM category, e.g. amenity, highway, building")
     type: Optional[str] = Field(description="OSM type within the category, e.g. townhall, residential, yes")
+    local: bool = Field(False, description=(
+        "In /geocode/suggest: a street from the bike graph, not from Nominatim, so `label` is only its name"))
 
 
 class PlaceFeature(BaseModel):
@@ -985,8 +990,9 @@ class TransitStopCollection(BaseModel):
         "type": "FeatureCollection", "valid_until": "2026-12-12",
         "attribution": "NVBW / MobiData BW (ODbL), timetable of the Heilbronner Hohenloher Haller Nahverkehr (HNV)",
         "features": [{"type": "Feature", "geometry": {"type": "Point", "coordinates": [9.2084503, 49.1427624]},
-                      "properties": {"stop_id": "de:08121:1114", "name": "Heilbronn Hbf/Willy-Brandt-Pl.",
-                                     "lines": ["S4", "S41", "S42"], "distance_m": 178,
+                      "properties": {"stop_id": "de:08121:26", "name": "Heilbronn Hauptbahnhof",
+                                     "lines": ["RE 8", "S4", "S41", "S42"],
+                                     "also": ["Heilbronn Hbf/Willy-Brandt-Pl."], "distance_m": 178,
                                      "rideable": True}}]}}}
 
 
@@ -1019,7 +1025,7 @@ class TransitDepartures(BaseModel):
     attribution: str = Field(description=TRANSIT_ATTRIBUTION)
 
     model_config = {"json_schema_extra": {"example": {
-        "stop": {"stop_id": "de:08121:1114", "name": "Heilbronn Hbf/Willy-Brandt-Pl."},
+        "stop": {"stop_id": "de:08121:26", "name": "Heilbronn Hauptbahnhof"},
         "to": {"stop_id": "de:08225:8209", "name": "Mosbach, Bahnhof"},
         "departures": [{"line": "S41", "headsign": "Mosbach, Bahnhof", "departure": "2026-11-04T08:18+01:00",
                         "platform": "2", "bike_ticket_needed": True, "arrival": "2026-11-04T09:16+01:00",
@@ -1049,20 +1055,33 @@ class TrainOption(TransitDeparture):
     wait_s: int = Field(description="Seconds at the station before the train leaves (bike then train; else 0)")
     duration_s: int = Field(description="Seconds from leave_at to arrive_at")
     stops: list[TrainStop] = Field(description=(
-        "Every station the train calls at from `board` to `alight`, both included: join their positions to draw the "
-        "train on a map (the timetable has no track geometry)"))
+        "Every station the train calls at from `board` to `alight`, both included"))
+    path: list[list[float]] = Field(description=(
+        "The train's way from `board` to `alight` as [lon, lat] points, to draw on a map: along the track, or "
+        "straight between two stations whose track isn't known (yet: the tracks are read in the background after "
+        "the first request)"))
+
+
+class DirectRide(BaseModel):
+    length_m: float
+    duration_s: float
+    arrive_at: str = Field(description="When the ride ends if it starts at depart_time (ISO 8601)")
 
 
 class TrainTrip(BaseModel):
     """A trip by bike and train. The rider names the far station; the station to ride to (or to get off at) is the one
     in Heilbronn that gets them there soonest, every station counting the same. Trains without a change only, as
     timetabled (no live delays). The bike leg is planned like /route, with the request's penalties."""
-    direction: Literal["to_train", "from_train"] = Field(description=(
+    direction: Literal["to_train", "from_train", "train"] = Field(description=(
         "to_train: ride to `board`, take the train to `alight`. from_train: take the train from `board`, get off at "
-        "`alight` and ride to the end"))
+        "`alight` and ride to the end. train: from station to station, nothing to ride"))
     board: TransitStopFeature = Field(description="Where to get on the train")
     alight: TransitStopFeature = Field(description="Where to get off")
-    ride: RideFeature = Field(description="The bike leg, as the route from /route (mode bike)")
+    ride: Optional[RideFeature] = Field(description=(
+        "The bike leg, as the route from /route (mode bike); null for direction train"))
+    direct: Optional[DirectRide] = Field(description=(
+        "Riding all the way instead, with the same penalties, when both ends are in Heilbronn (else null). There "
+        "sooner than options[0].arrive_at: the train is a detour"))
     options: list[TrainOption] = Field(min_length=1, description=(
         "The trains to take, the one arriving first first: the bike leg is the same for each"))
     shared_bikes_near: Optional[int] = Field(description=(

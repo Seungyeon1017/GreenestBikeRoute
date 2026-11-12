@@ -480,7 +480,9 @@
           "place": "Place"
         },
         "station": "Station · {{lines}}",
-        "stationOutside": "Station outside Heilbronn, by train only · {{lines}}"
+        "stationOutside": "Station outside Heilbronn, by train only · {{lines}}",
+        "searchingMore": "Searching more places…",
+        "localStreet": "Street"
       },
       "locate": {
         "button": "Use my location as start",
@@ -817,11 +819,9 @@
       "train": {
         "title": "Bike + train",
         "toggle": "Combine with trains (S-Bahn, regional trains)",
-        "toggleHint": "Pick a station as start or destination, also outside Heilbronn (e.g. Mosbach). You ride to it and take the train, or take the train from it and ride on.",
+        "toggleHint": "Pick a station as start or destination, also outside Heilbronn (e.g. Mosbach). You ride to it and take the train, or take the train from it and ride on. With a station at both ends we show the trains only. Where riding is faster inside Heilbronn, we show the bike route.",
         "problem": {
-          "needTrain": "{{station}} is outside Heilbronn, so there is no bike route to or from it. Tick “Combine with trains” to go there by bike and train.",
-          "bothOutside": "Start and destination are both outside Heilbronn. One of them must be in Heilbronn, where you ride.",
-          "needStation": "To combine with trains, pick a station as start or destination (type its name, e.g. Mosbach)."
+          "needTrain": "{{station}} is outside Heilbronn, so there is no bike route to or from it. Tick “Combine with trains” to go there by train."
         },
         "loading": "Looking up trains…",
         "earliest": {
@@ -830,11 +830,13 @@
         },
         "headline": {
           "to_train": "Start riding at {{leave}}",
-          "from_train": "Train leaves at {{leave}}"
+          "from_train": "Train leaves at {{leave}}",
+          "train": "The train leaves at {{leave}}"
         },
         "arrive": {
           "to_train": "At {{station}} at {{time}} · {{duration}} in all",
-          "from_train": "At your destination at {{time}} · {{duration}} in all"
+          "from_train": "At your destination at {{time}} · {{duration}} in all",
+          "train": "In {{station}} at {{time}} · {{duration}} in total"
         },
         "step": {
           "rideTo": "Ride {{km}} km ({{min}} min) to {{station}}",
@@ -853,7 +855,8 @@
         "others": "Other trains",
         "option": {
           "to_train": "Start {{leave}} · train {{departure}} → {{arrival}}",
-          "from_train": "Train {{departure}} → {{arrival}} · there {{arrive}}"
+          "from_train": "Train {{departure}} → {{arrival}} · there {{arrive}}",
+          "train": "Train {{departure}} → {{arrival}}"
         },
         "shared": {
           "count_one": "No bike with you? {{count}} shared e-bike is free near {{station}} right now.",
@@ -865,12 +868,24 @@
         "validUntil": "Timetable through {{date}}.",
         "noTrain": {
           "to_train": "No direct train to {{station}} from a station in Heilbronn in the next two days.",
-          "from_train": "No direct train from {{station}} to a station in Heilbronn in the next two days."
+          "from_train": "No direct train from {{station}} to a station in Heilbronn in the next two days.",
+          "train": "No direct train from {{from}} to {{to}} in the next two days."
         },
         "unavailable": "The timetable isn't available right now. Try again later.",
         "duration": {
           "min": "{{min}} min",
           "hours": "{{h}} h {{min}} min"
+        },
+        "hint": {
+          "needStation": "For a trip with a train, pick a station as start or destination (type its name, e.g. Mosbach). Until then you see the bike route."
+        },
+        "sameStation": "Start and destination are the same station.",
+        "direct": {
+          "shown": "Riding is faster: {{km}} km in {{min}} min, there at {{bike}}. By train you would only be there at {{train}}. So the map shows the bike route.",
+          "sooner": "Riding all the way you would be there at {{bike}} already ({{km}} km, {{min}} min), by train only at {{train}}.",
+          "showTrain": "Show the train anyway",
+          "showBike": "Show the bike route",
+          "between": "By bike it would be {{km}} km ({{min}} min)."
         }
       }
     },

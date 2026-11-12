@@ -5,6 +5,11 @@ to ride to, or to get off at, is chosen here: the one that gets the rider there 
 with the shortest ride. Every station counts the same. Only stations the bike graph reaches (Heilbronn) are ridden
 to or from, and only trains without a change.
 
+From one station to another there is nothing to ride: the trip is the direct trains between the two.
+
+When both ends are in Heilbronn the trip also says how long riding all the way takes (`direct`), so nobody is sent
+to a train that is slower than their bike.
+
 Which station: for each one with a train to (or from) the far station, the ride is first guessed from the straight
 line; the CANDIDATES best are then routed for real, with the request's penalties, as /route.
 
@@ -66,24 +71,55 @@ def _option(train, leave, arrive, wait_s):
             "duration_s": round((arrive - leave).total_seconds())}
 
 
+def _direct(G, a, b, penalties, after, rider):
+    """Riding all the way from a to b, leaving at `after`: {"length_m", "duration_s", "arrive_at"}, or None."""
+    ride = _ride(G, a, b, penalties, after, rider)
+    if ride is None:
+        return None
+    p = ride["properties"]
+    return {"length_m": p["length_m"], "duration_s": p["duration_s"],
+            "arrive_at": _iso(after + timedelta(seconds=p["duration_s"]))}
+
+
+def _train_only(G, timetable, penalties, after, a, b, rider):
+    """The direct trains from station a to station b, as plan_train_trip's answer without a ride."""
+    def name(sid):
+        return timetable.stations[sid]["name"]
+
+    if a == b:
+        raise RouteError(f"no direct train from {name(a)} to itself: start and end are the same station")
+    found = sorted(timetable.departures(a, after, to=b, limit=OPTIONS, with_stops=True),
+                   key=lambda t: (t["arrival"], t["departure"]))
+    if not found:
+        raise RouteError(f"no direct train from {name(a)} to {name(b)} in the next two days")
+    near = dict(rideable_stations(G, timetable))
+    direct = _direct(G, near[a], near[b], penalties, after, rider) if a in near and b in near else None
+    return {"direction": "train", "board": timetable.stop_feature(a), "alight": timetable.stop_feature(b),
+            "ride": None, "direct": direct,
+            "options": [_option(t, _time(t["departure"]), _time(t["arrival"]), 0) for t in found]}
+
+
 def plan_train_trip(G, timetable, penalties, after, origin=None, to_stop=None, from_stop=None, destination=None,
                     **rider):
     """The trip that arrives soonest, starting at or after `after` (aware datetime).
 
     Bike then train: `origin` (lat, lon) and `to_stop` (a station id). Train then bike: `from_stop` and `destination`.
+    Train only: `from_stop` and `to_stop`; then `ride` is None and `direction` "train".
     `timetable` is a backend.transit.Timetable, `penalties` the routing Penalties of /route (depart_time is set here:
     the bike leg starts at `after`, or when the train arrives), `rider` weight_kg / e_bike for kcal.
 
     Returns {"direction", "board", "alight" (station Features), "ride" (route Feature), "options"}: the trains to take
     between `board` and `alight`, the one arriving first first, each as Timetable.departures with `stops`, plus
     `leave_at` (start riding, or the train leaves), `arrive_at` (the train arrives, or the ride ends), `wait_s` at the
-    station before the train leaves (to_train) and `duration_s` for the whole trip.
+    station before the train leaves (to_train) and `duration_s` for the whole trip. `direct`: riding all the way
+    instead ({"length_m", "duration_s", "arrive_at"}), None when the far station is outside the bike graph.
     Raises KeyError for an unknown station and RouteError when no station in reach has a direct train.
     """
+    if from_stop is not None and to_stop is not None:
+        return _train_only(G, timetable, penalties, after, timetable.station_id(from_stop),
+                           timetable.station_id(to_stop), rider)
     to_train = origin is not None
-    far = to_stop if to_train else from_stop
-    if far not in timetable.stations:
-        raise KeyError(far)
+    far = timetable.station_id(to_stop if to_train else from_stop)
     point = origin if to_train else destination
     far_name = timetable.stations[far]["name"]
 
@@ -109,7 +145,8 @@ def plan_train_trip(G, timetable, penalties, after, origin=None, to_stop=None, f
         return options[0]["arrive_at"], ride_s
 
     guesses = []
-    for sid, at in rideable_stations(G, timetable):
+    near = rideable_stations(G, timetable)
+    for sid, at in near:
         if sid == far:
             continue
         ride_s = _straight_s(point, at)
@@ -136,6 +173,10 @@ def plan_train_trip(G, timetable, penalties, after, origin=None, to_stop=None, f
 
     _, sid, ride, options = best
     here, there = timetable.stop_feature(sid), timetable.stop_feature(far)
+    far_at = dict(near).get(far)
+    direct = None
+    if far_at is not None:
+        direct = _direct(G, *((origin, far_at) if to_train else (far_at, destination)), penalties, after, rider)
     return {"direction": "to_train" if to_train else "from_train",
             "board": here if to_train else there, "alight": there if to_train else here,
-            "ride": ride, "options": options}
+            "ride": ride, "direct": direct, "options": options}

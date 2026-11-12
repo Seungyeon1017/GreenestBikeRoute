@@ -11,7 +11,7 @@ import useMediaQuery from '@/hooks/useMediaQuery'
 import { closureNear, useReports } from '@/hooks/useReports'
 import useSavedRouteFromUrl from '@/hooks/useSavedRouteFromUrl'
 import { useSharedVehicles, useSharingTrip } from '@/hooks/useSharing'
-import { useTrainTrip } from '@/hooks/useTrainTrip'
+import { type TrainPlan, useTrainTrip } from '@/hooks/useTrainTrip'
 import { GRADE_COLOR } from '@/lib/hillColors'
 import { readTripLink } from '@/lib/shareLink'
 import {
@@ -43,7 +43,6 @@ import type {
   SharingTrip,
   SharingVehicleChoice,
   StreetSegmentFeature,
-  TrainDirection,
   TrainOption,
   TrainTrip,
   TransitStopCollection,
@@ -66,7 +65,7 @@ import { closureText, ReportsNotice } from './ReportsLegend'
 import RouteComparisonCard, { ROUTE_COLORS } from './RouteComparison'
 import StationsLegend from './StationsLegend'
 import TrainCard from './TrainCard'
-import { drawTrainTrip, trainRideBounds } from './trainLayers'
+import { drawTrainTrip, trainTripBounds } from './trainLayers'
 import { drawStations } from './transitLayers'
 import SaveRouteButton from './SaveRouteButton'
 import {
@@ -236,23 +235,16 @@ function stationAt(picked: PickedStation | null, point: LngLat | null) {
 }
 
 /**
- * What the start and destination ask for: a bike route, a bike + train trip, or nothing that
- * can be planned (why); null until both are set. A station outside Heilbronn is reached only
- * by train; with "Combine with trains" on, the station end is the train's end of the trip.
+ * What the start and destination ask for: a bike route, a trip with a train, or nothing that
+ * can be planned (why); null until both are set. Without "Combine with trains" it is a bike
+ * route, which a station outside Heilbronn can't have. With it, a station at one end is the
+ * train's end of the trip (the rider rides to or from the other), a station at both ends is a
+ * trip by train only, and without any station it stays a bike route, with a tip.
  */
 type TripPlan =
-  | { kind: 'bike' }
-  | {
-      kind: 'train'
-      direction: TrainDirection
-      station: TransitStopProperties
-      point: LngLat
-    }
-  | {
-      kind: 'problem'
-      problem: 'needTrain' | 'bothOutside' | 'needStation'
-      station?: string
-    }
+  | { kind: 'bike'; hint?: 'needStation' }
+  | ({ kind: 'train' } & TrainPlan)
+  | { kind: 'problem'; problem: 'needTrain'; station: string }
 
 function tripPlan(
   trainOn: boolean,
@@ -264,22 +256,25 @@ function tripPlan(
   if (!start || !end) {
     return null
   }
-  const startOut = startStop?.rideable === false
-  const endOut = endStop?.rideable === false
-  if (startOut && endOut) {
-    return { kind: 'problem', problem: 'bothOutside' }
-  }
   if (!trainOn) {
-    const outside = startOut ? startStop : endOut ? endStop : null
+    const outside = [startStop, endStop].find(s => s?.rideable === false)
     return outside
       ? { kind: 'problem', problem: 'needTrain', station: outside.name }
       : { kind: 'bike' }
   }
-  if (startStop && (startOut || !endStop)) {
+  if (startStop && endStop) {
+    return {
+      kind: 'train',
+      direction: 'train',
+      fromStation: startStop,
+      toStation: endStop,
+    }
+  }
+  if (startStop) {
     return {
       kind: 'train',
       direction: 'from_train',
-      station: startStop,
+      fromStation: startStop,
       point: end,
     }
   }
@@ -287,11 +282,11 @@ function tripPlan(
     return {
       kind: 'train',
       direction: 'to_train',
-      station: endStop,
+      toStation: endStop,
       point: start,
     }
   }
-  return { kind: 'problem', problem: 'needStation' }
+  return { kind: 'bike', hint: 'needStation' }
 }
 
 export default function PlanTripView() {
@@ -314,8 +309,6 @@ export default function PlanTripView() {
     stationAt(startStation, start),
     stationAt(endStation, end),
   )
-  // Only a plain bike route has the comparison, the hills and the rental trip.
-  const bikeRoute = plan?.kind === 'bike'
   const [options, setOptions] = useState<RouteOptions>(DEFAULT_ROUTE_OPTIONS)
   const [result, setResult] = useState<RouteResult | null>(null)
   // True once the map has loaded, so a saved route opened from the Profile gets its pins.
@@ -358,6 +351,34 @@ export default function PlanTripView() {
     [options, stop, day],
   )
 
+  // A trip with a train: ride to a station and take the train, get off the train and ride on,
+  // or from station to station.
+  const trainPlan = plan?.kind === 'train' ? plan : null
+  const trainTrip = useTrainTrip(trainPlan, tripOptions)
+  // Which of the trip's trains the card and the map show; a new trip starts with the first.
+  const [trainOptionIndex, setTrainOptionIndex] = useState(0)
+  const trainOption: TrainOption | null =
+    trainTrip.trip?.options[trainOptionIndex] ??
+    trainTrip.trip?.options[0] ??
+    null
+  // Inside Heilbronn the train can be a detour: when riding all the way is there sooner, the
+  // bike route is shown instead, unless the rider asks for the train anyway. From station to
+  // station it stays the train: that is what was asked for.
+  const [trainAnyway, setTrainAnyway] = useState(false)
+  const direct = trainTrip.trip?.direct
+  const bikeSooner = Boolean(
+    trainTrip.trip &&
+    direct &&
+    trainTrip.trip.direction !== 'train' &&
+    Date.parse(direct.arrive_at) <=
+      Date.parse(trainTrip.trip.options[0].arrive_at),
+  )
+  const rideInstead = bikeSooner && !trainAnyway
+  // The train trip on the map and in the card.
+  const shownTrain = rideInstead ? null : trainTrip.trip
+  // Only a plain bike route has the comparison, the hills and the rental trip.
+  const bikeRoute = plan?.kind === 'bike' || rideInstead
+
   // Hills: only requested while "Show hills" is ticked.
   const [showHills, setShowHills] = useState(false)
   // Same breakpoint as Tailwind's `lg`: the cards column and the map side by side.
@@ -385,22 +406,6 @@ export default function PlanTripView() {
     bikeRoute ? end : null,
     tripOptions,
   )
-
-  // Bike + train: ride to a station and take the train, or get off the train and ride on.
-  const trainPlan = plan?.kind === 'train' ? plan : null
-  const trainTrip = useTrainTrip(
-    Boolean(trainPlan),
-    trainPlan?.direction ?? 'to_train',
-    trainPlan?.station ?? null,
-    trainPlan?.point ?? null,
-    tripOptions,
-  )
-  // Which of the trip's trains the card and the map show; a new trip starts with the first.
-  const [trainOptionIndex, setTrainOptionIndex] = useState(0)
-  const trainOption: TrainOption | null =
-    trainTrip.trip?.options[trainOptionIndex] ??
-    trainTrip.trip?.options[0] ??
-    null
 
   // Riders' reports: closures and mapping mistakes.
   const reports = useReports()
@@ -452,7 +457,7 @@ export default function PlanTripView() {
     trip: TrainTrip | null
     option: TrainOption | null
   }>({ trip: null, option: null })
-  trainRef.current = { trip: trainTrip.trip, option: trainOption }
+  trainRef.current = { trip: shownTrain, option: trainOption }
   const reportsRef = useRef<{
     closures: ClosureCollection | null
     mapping: MappingCollection | null
@@ -747,26 +752,26 @@ export default function PlanTripView() {
       return
     }
     drawTrip(map, sharingTrip.trip, fences, sharingTrip.plainTrip)
-    drawTrainTrip(map, trainTrip.trip, trainOption)
-    fadeRoutes(map, Boolean(sharingTrip.trip || trainTrip.trip))
-  }, [
-    sharingTrip.trip,
-    sharingTrip.plainTrip,
-    fences,
-    trainTrip.trip,
-    trainOption,
-  ])
+    drawTrainTrip(map, shownTrain, trainOption)
+    fadeRoutes(map, Boolean(sharingTrip.trip || shownTrain))
+  }, [sharingTrip.trip, sharingTrip.plainTrip, fences, shownTrain, trainOption])
 
-  // A new bike + train trip: back to its first train, and show the bike leg with its station.
+  // A new trip with a train: back to its first train, and show the bike leg with its station
+  // (without one, the whole way of the train).
   useEffect(() => {
     setTrainOptionIndex(0)
-    if (trainTrip.trip) {
-      mapRef.current?.fitBounds(trainRideBounds(trainTrip.trip), {
-        padding: 80,
-        maxZoom: 16,
-      })
+    if (shownTrain) {
+      mapRef.current?.fitBounds(
+        trainTripBounds(shownTrain, shownTrain.options[0]),
+        { padding: 80, maxZoom: 16 },
+      )
     }
-  }, [trainTrip.trip])
+  }, [shownTrain])
+
+  // Another start, destination or mode: the train is no longer asked for "anyway".
+  useEffect(() => {
+    setTrainAnyway(false)
+  }, [start, end, trainOn])
 
   // Pins where to pick the vehicle up (①) and where to leave it (P), each with
   // a popup on hover (mouse) or tap (touch).
@@ -1504,6 +1509,11 @@ export default function PlanTripView() {
             }
             endLabel={endLabel}
             endStation={stationAt(endStation, end)}
+            hint={
+              plan?.kind === 'bike' && plan.hint
+                ? t(`greenest.planTrip.train.hint.${plan.hint}`)
+                : null
+            }
             loading={loading}
             locateError={locateError}
             locating={locating}
@@ -1546,16 +1556,19 @@ export default function PlanTripView() {
           )}
           {trainPlan && (
             <TrainCard
+              bikeSooner={bikeSooner}
               departTime={tripOptions.departTime}
               error={trainTrip.error}
               loading={trainTrip.loading}
               onOptionChange={setTrainOptionIndex}
               onRentFromStation={rentFromStation}
+              onRideInsteadChange={on => setTrainAnyway(!on)}
               optionIndex={trainOptionIndex}
+              rideInstead={rideInstead}
               trip={trainTrip.trip}
             />
           )}
-          {!wide && !trainPlan && comparison}
+          {!wide && (!trainPlan || rideInstead) && comparison}
           <SaveRouteButton
             end={end}
             endLabel={endLabel}
