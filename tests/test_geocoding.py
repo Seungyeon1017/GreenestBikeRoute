@@ -3,7 +3,7 @@ import requests
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
-from backend.geocoding import MIN_INTERVAL_S, Geocoder, GeocodingUnavailable
+from backend.geocoding import MIN_INTERVAL_S, Geocoder, GeocodingUnavailable, SearchDropped
 from backend.schemas import PlaceCollection
 
 
@@ -125,6 +125,26 @@ def test_searches_are_at_least_a_second_apart(nominatim):
     clock.now += 5
     geocoder.collection("Kaiserstraße")
     assert clock.slept == [pytest.approx(MIN_INTERVAL_S - 0.25), 0.0]
+
+
+def test_search_nobody_waits_for_is_not_sent(nominatim):
+    clock = FakeClock()
+    geocoder = Geocoder(fetch=nominatim, clock=clock, sleep=clock.sleep)
+    with pytest.raises(SearchDropped):
+        geocoder.collection("Ratha", gone=lambda: True)
+    assert nominatim.queries == [] and clock.slept == []  # and the next search doesn't wait for it
+    geocoder.collection("Rathaus")
+    assert nominatim.queries == ["Rathaus"] and clock.slept == []
+    assert geocoder.collection("Rathaus", gone=lambda: True)["features"]  # cached: no need to drop it
+
+
+def test_search_dropped_while_waiting_for_its_turn(nominatim):
+    clock = FakeClock()
+    geocoder = Geocoder(fetch=nominatim, clock=clock, sleep=clock.sleep)
+    geocoder.collection("Rathaus")
+    with pytest.raises(SearchDropped):  # the rider typed on during the second between searches
+        geocoder.collection("Allee", gone=lambda: bool(clock.slept))
+    assert nominatim.queries == ["Rathaus"]
 
 
 def test_geocode_is_documented(client):

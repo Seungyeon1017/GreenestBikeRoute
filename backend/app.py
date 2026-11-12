@@ -1,4 +1,5 @@
 """HTTP API for the bike router. From the repo root: uvicorn backend.app:app"""
+import asyncio
 import json
 import os
 import threading
@@ -10,11 +11,12 @@ from typing import Literal, Optional
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import JSONResponse, Response
 
 from backend.reports import SNAP_M, ReportError, Reports
 from backend.schemas import EXAMPLE_TRIP, AirCollection, BikeFriendlyCollection, ClosureAnswer, ClosureCollection, ClosureFeature, ClosureReport,     DangerCollection, DayRoutes, Error, FlowCollection, GeofencingCollection, GradeCollection, GreenStreetCollection, LightingCollection, MappingCollection,     MappingFeature, MappingReport, PlaceCollection, FootwayFeature, StreetSegmentFeature, RouteCollection, RouteComparison, RoughnessCollection, ScoreCollection,     ShadeCollection, SharingTrip, SpeedCollection, StreetNames, TourCollection, TrainTrip, TransitDepartures, TransitStopCollection, VehicleCollection, ZoneCollection
-from backend.geocoding import Geocoder, GeocodingUnavailable, normalize
+from backend.geocoding import Geocoder, GeocodingUnavailable, SearchDropped, normalize
 from backend.sharing import ATTRIBUTION, Sharing, SharingUnavailable, distance_m
 from backend.transit import LOCAL_TZ, Transit, TransitUnavailable
 from backend.users.community_routes import TAG as RIDERS_ROUTES_TAG
@@ -316,6 +318,7 @@ def near_query(
 
 SHARING_ERRORS = {503: {"description": "The sharing feed can't be read right now", "model": Error}}
 GEOCODE_ERRORS = {503: {"description": "The place search (Nominatim) can't be reached right now", "model": Error}}
+GEOCODE_WATCH_S = 0.05  # how often a queued /geocode checks that its caller is still there
 SHARED_NEAR_M = 300  # /route/train counts the free shared bikes this close to the station
 TRANSIT_ERRORS = {503: {"description": "No timetable: it can't be downloaded and none is cached yet", "model": Error}}
 
@@ -640,19 +643,32 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
     @app.get("/geocode", tags=[PLACES], summary="Places in Heilbronn matching a landmark, address or street, as GeoJSON points",
              response_class=GeoJSONResponse, response_model=PlaceCollection, responses=GEOCODE_ERRORS,
              response_description="Points with a `label` to show, best match first; empty if nothing matches")
-    def geocode(q: str = Query(..., max_length=200, description=(
+    async def geocode(request: Request, q: str = Query(..., max_length=200, description=(
             "What the rider typed, e.g. Rathaus, Allee 40 or Kaiserstraße. Case and extra spaces don't matter"),
             openapi_examples={"landmark": {"summary": "Landmark", "value": "Rathaus"},
                               "address": {"summary": "Address", "value": "Allee 40"}}),
                 limit: int = Query(5, ge=1, le=10, description="Return at most this many candidates")):
-        """Let the rider pick a candidate ("did you mean …") and route with its coordinates. Search on Enter, not while
-        typing: Nominatim allows 1 search a second for everyone, so results are cached and searches queue."""
+        """Let the rider pick a candidate ("did you mean …") and route with its coordinates. Nominatim allows 1 search
+        a second for everyone, so results are cached and searches queue; a search whose caller hung up before its turn
+        (e.g. the rider typed on) is not sent."""
         if len(normalize(q)) < 3:
             raise HTTPException(status_code=422, detail="type at least 3 characters to search")
+        hung_up = threading.Event()
+
+        async def watch():
+            while not await request.is_disconnected():
+                await asyncio.sleep(GEOCODE_WATCH_S)
+            hung_up.set()
+
+        watcher = asyncio.create_task(watch())
         try:
-            return GeoJSONResponse(geocoder.collection(q, limit))
+            return GeoJSONResponse(await run_in_threadpool(geocoder.collection, q, limit, hung_up.is_set))
         except GeocodingUnavailable as e:
             raise HTTPException(status_code=503, detail=str(e))
+        except SearchDropped:
+            return Response(status_code=499)  # "client closed request": nobody reads it
+        finally:
+            watcher.cancel()
 
     @app.get("/transit/stops", tags=[TRANSIT], summary="Stadtbahn and train stations of the region, as GeoJSON points",
              response_class=GeoJSONResponse, response_model=TransitStopCollection, responses=TRANSIT_ERRORS,

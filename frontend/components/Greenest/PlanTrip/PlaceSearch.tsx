@@ -16,7 +16,8 @@ import { matchStations, StationBadge } from './stations'
 
 /** The backend answers 422 below this many characters. */
 const MIN_CHARS = 3
-const DEBOUNCE_MS = 400
+// Nominatim asks not to search on every keystroke: wait for a pause in typing.
+const DEBOUNCE_MS = 600
 /** Station suggestions above the places, from the timetable (also outside Heilbronn). */
 const MAX_STATIONS = 3
 
