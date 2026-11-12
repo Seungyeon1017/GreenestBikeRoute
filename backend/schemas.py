@@ -25,8 +25,8 @@ ROUTE_EXAMPLE = {
         "bumpy_m": 202, "bad_air_m": 291, "stop_go_m": 379, "sunny_m": None, "unlit_m": None, "dim_m": None, "bike_friendly_m": 1259, "unpaved_m": 0, "pushed_m": 0,
         # Shortened: the real route has 49 stretches.
         "segments": [
-            {"from_index": 0, "to_index": 4, "start_m": 0.0, "length_m": 36.4, "name": "Kleiststraße", "way": None, "along": False, "flags": [], "roughness": 11.833, "danger_points": 0, "pm_risk": 0.494, "stop_go": 0.652, "speed_kmh": 14.495, "shade": None, "lit": 1.0, "bike_friendly": False, "unpaved": 0.0, "pushed": False, "segments": ["1214835654-11925390607", "26890921-1214835654"]},
-            {"from_index": 4, "to_index": 7, "start_m": 36.4, "length_m": 36.2, "name": "Sichererstraße", "way": None, "along": False, "flags": ["bike_friendly_m"], "roughness": 9.485, "danger_points": 0, "pm_risk": 0.507, "stop_go": 0.636, "speed_kmh": 13.248, "shade": None, "lit": 1.0, "bike_friendly": True, "unpaved": 0.0, "pushed": False, "segments": ["26890921-1214745069", "1214745069-1216889477", "1028721133-1216889477"]},
+            {"from_index": 0, "to_index": 4, "start_m": 0.0, "length_m": 36.4, "name": "Kleiststraße", "way": None, "along": False, "across": False, "flags": [], "roughness": 11.833, "danger_points": 0, "pm_risk": 0.494, "stop_go": 0.652, "speed_kmh": 14.495, "shade": None, "lit": 1.0, "bike_friendly": False, "unpaved": 0.0, "pushed": False, "segments": ["1214835654-11925390607", "26890921-1214835654"]},
+            {"from_index": 4, "to_index": 7, "start_m": 36.4, "length_m": 36.2, "name": "Sichererstraße", "way": None, "along": False, "across": False, "flags": ["bike_friendly_m"], "roughness": 9.485, "danger_points": 0, "pm_risk": 0.507, "stop_go": 0.636, "speed_kmh": 13.248, "shade": None, "lit": 1.0, "bike_friendly": True, "unpaved": 0.0, "pushed": False, "segments": ["26890921-1214745069", "1214745069-1216889477", "1028721133-1216889477"]},
         ],
     },
 }
@@ -45,8 +45,8 @@ SHORTEST_EXAMPLE = {
         "bumpy_m": 1895, "bad_air_m": 733, "stop_go_m": 481, "sunny_m": None, "unlit_m": None, "dim_m": None, "bike_friendly_m": 874, "unpaved_m": 0, "pushed_m": 0,
         # Shortened: the real route has 39 stretches.
         "segments": [
-            {"from_index": 0, "to_index": 4, "start_m": 0.0, "length_m": 36.4, "name": "Kleiststraße", "way": None, "along": False, "flags": [], "roughness": 11.833, "danger_points": 0, "pm_risk": 0.494, "stop_go": 0.652, "speed_kmh": 14.495, "shade": None, "lit": 1.0, "bike_friendly": False, "unpaved": 0.0, "pushed": False, "segments": ["1214835654-11925390607", "26890921-1214835654"]},
-            {"from_index": 4, "to_index": 11, "start_m": 36.4, "length_m": 89.8, "name": "Sichererstraße", "way": None, "along": False, "flags": ["bike_friendly_m"], "roughness": 9.485, "danger_points": 0, "pm_risk": 0.491, "stop_go": 0.636, "speed_kmh": 13.248, "shade": None, "lit": 1.0, "bike_friendly": True, "unpaved": 0.0, "pushed": False, "segments": ["26890921-1214835706", "1214835682-1214835706", "1214835682-1216735058", "1214835677-1216735058", "1214835597-1214835677", "1214835597-1214835623", "1214835623-1558436876"]},
+            {"from_index": 0, "to_index": 4, "start_m": 0.0, "length_m": 36.4, "name": "Kleiststraße", "way": None, "along": False, "across": False, "flags": [], "roughness": 11.833, "danger_points": 0, "pm_risk": 0.494, "stop_go": 0.652, "speed_kmh": 14.495, "shade": None, "lit": 1.0, "bike_friendly": False, "unpaved": 0.0, "pushed": False, "segments": ["1214835654-11925390607", "26890921-1214835654"]},
+            {"from_index": 4, "to_index": 11, "start_m": 36.4, "length_m": 89.8, "name": "Sichererstraße", "way": None, "along": False, "across": False, "flags": ["bike_friendly_m"], "roughness": 9.485, "danger_points": 0, "pm_risk": 0.491, "stop_go": 0.636, "speed_kmh": 13.248, "shade": None, "lit": 1.0, "bike_friendly": True, "unpaved": 0.0, "pushed": False, "segments": ["26890921-1214835706", "1214835682-1214835706", "1214835682-1216735058", "1214835677-1216735058", "1214835597-1214835677", "1214835597-1214835623", "1214835623-1558436876"]},
         ],
     },
 }
