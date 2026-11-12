@@ -1,5 +1,6 @@
 """HTTP API for the bike router. From the repo root: uvicorn backend.app:app"""
 import json
+import os
 import threading
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -351,7 +352,9 @@ def create_app(graph=None, sharing=None, reports=None, geocoder=None, walk_graph
                   openapi_tags=TAGS_METADATA)
     # The overlays are MBs of GeoJSON: compressed ~8x, which counts on a slow connection.
     app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
-    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST", "PUT", "DELETE"],
+    # Which sites' pages may call the API: CORS_ORIGINS="https://a.example,https://b.example" when deployed, else any.
+    origins = [o.strip() for o in os.environ.get("CORS_ORIGINS", "*").split(",") if o.strip()]
+    app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["GET", "POST", "PUT", "DELETE"],
                        allow_headers=["Content-Type", "Authorization"])
     sharing = sharing if sharing is not None else Sharing()
     reports = reports if reports is not None else Reports()
