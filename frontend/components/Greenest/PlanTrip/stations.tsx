@@ -72,7 +72,7 @@ function isStop({ category, type }: PlaceProperties) {
  * The station a place of the search stands for, or null: a railway place (a station, a
  * platform, a tram stop) within STATION_PLACE_M of one of its stops. So "Harmonie" found by the place
  * search and Harmonie from the timetable are not listed twice, and either one is a station
- * for "Combine with trains".
+ * for the mode "Bike + train".
  */
 export function stationOfPlace(
   stations: TransitStopFeature[],

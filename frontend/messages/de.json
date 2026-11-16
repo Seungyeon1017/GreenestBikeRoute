@@ -391,6 +391,12 @@
         "onlyDay": "nur tagsüber",
         "onlyNight": "nur nachts"
       },
+      "mode": {
+        "label": "Verkehrsmittel",
+        "bike": "Eigenes Rad",
+        "train": "Rad + Bahn",
+        "rental": "Leihrad"
+      },
       "loading": "Route wird berechnet…",
       "reset": "Zurücksetzen",
       "start": "Start",
@@ -501,7 +507,6 @@
       },
       "sharing": {
         "title": "E-Bikes & E-Scooter zum Leihen",
-        "tripToggle": "Kein Rad dabei? Für diese Fahrt eins leihen",
         "tripVehicleLabel": "Fahrzeug zum Leihen",
         "vehicleLabel": "Angezeigte Fahrzeuge",
         "choice": {
@@ -825,10 +830,9 @@
       },
       "train": {
         "title": "Rad + Bahn",
-        "toggle": "Mit der Bahn kombinieren (S-Bahn, Regionalzüge)",
         "toggleHint": "Wähle einen Bahnhof als Start oder Ziel, auch außerhalb Heilbronns (z. B. Mosbach). Du radelst hin und fährst mit dem Zug weiter, oder kommst mit dem Zug an und radelst weiter. Sind Start und Ziel beide Bahnhöfe, zeigen wir nur die Züge. Bist du in Heilbronn mit dem Rad schneller, zeigen wir die Radroute.",
         "problem": {
-          "needTrain": "{{station}} liegt außerhalb Heilbronns, dorthin gibt es keine Radroute. Hake „Mit der Bahn kombinieren“ an, um mit der Bahn hinzukommen."
+          "needTrain": "{{station}} liegt außerhalb Heilbronns, dorthin gibt es keine Radroute. Wähle „Rad + Bahn“, um mit der Bahn hinzukommen."
         },
         "loading": "Züge werden gesucht …",
         "earliest": {

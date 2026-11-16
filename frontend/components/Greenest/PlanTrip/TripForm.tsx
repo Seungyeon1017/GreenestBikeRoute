@@ -8,8 +8,10 @@ import Card, { CardTitle } from '@/components/Greenest/ui/Card'
 import type {
   LngLat,
   RouteOptions,
+  SharingVehicleChoice,
   TransitStopCollection,
   TransitStopProperties,
+  TripMode,
 } from '@/types/greenest'
 import InfoTip from '@/components/Greenest/ui/InfoTip'
 import Segmented from '@/components/Greenest/ui/Segmented'
@@ -34,12 +36,18 @@ type TripFormProps = {
   /** The station in each field, while its pin is still on it. */
   startStation: TransitStopProperties | null
   endStation: TransitStopProperties | null
-  /** "Combine with trains": a station as start or destination is reached by train. */
-  trainOn: boolean
-  onTrainOnChange: (_on: boolean) => void
+  /**
+   * Own bike, bike + train (a station as start or destination is reached by train) or a rented
+   * vehicle: one at a time.
+   */
+  mode: TripMode
+  onModeChange: (_mode: TripMode) => void
+  /** Rental: which vehicle to rent. */
+  tripVehicle: SharingVehicleChoice
+  onTripVehicleChange: (_vehicle: SharingVehicleChoice) => void
   /** Why the start and destination give no trip, shown under the fields. */
   notice: string | null
-  /** A tip that stops nothing (the route is planned anyway), shown under the checkbox. */
+  /** A tip that stops nothing (the route is planned anyway), shown under the mode switch. */
   hint: string | null
   /** "Use my location" in the Start field: the device's position becomes the start. */
   onLocate: () => void
@@ -179,6 +187,8 @@ function nowForInput(): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`
 }
 
+const MODES: TripMode[] = ['bike', 'train', 'rental']
+
 /** The id of the departure input, or of the "Now | Pick a time" switch while no time is set. */
 const DEPART_ID = 'depart-time'
 
@@ -212,8 +222,10 @@ export default function TripForm({
   onPickEndStation,
   startStation,
   endStation,
-  trainOn,
-  onTrainOnChange,
+  mode,
+  onModeChange,
+  tripVehicle,
+  onTripVehicleChange,
   notice,
   hint,
   onLocate,
@@ -393,24 +405,45 @@ export default function TripForm({
           </div>
           {/* relative: the info panel spans this row. */}
           <span className="relative flex items-center gap-1.5 text-sm text-leaf-ink/80">
-            <label className="flex cursor-pointer items-center gap-2">
-              <input
-                checked={trainOn}
-                className="h-4 w-4 accent-leaf-forest"
-                onChange={e => onTrainOnChange(e.target.checked)}
-                type="checkbox"
-              />
-              {t('greenest.planTrip.train.toggle')}
-            </label>
+            <Segmented
+              className="min-w-0 flex-1"
+              label={t('greenest.planTrip.mode.label')}
+              onChange={onModeChange}
+              options={MODES.map(value => ({
+                value,
+                label: t(`greenest.planTrip.mode.${value}`),
+              }))}
+              value={mode}
+            />
             <InfoTip
               label={t('greenest.planTrip.info.about', {
-                name: t('greenest.planTrip.train.toggle'),
+                name: t('greenest.planTrip.mode.train'),
               })}
             >
               {t('greenest.planTrip.train.toggleHint')}
             </InfoTip>
           </span>
-          {trainOn && stationsError && (
+          {mode === 'rental' && (
+            <select
+              aria-label={t('greenest.planTrip.sharing.tripVehicleLabel')}
+              className="rounded-lg border border-leaf-sand bg-white px-2 py-1 text-sm text-leaf-ink"
+              onChange={e =>
+                onTripVehicleChange(e.target.value as SharingVehicleChoice)
+              }
+              value={tripVehicle}
+            >
+              <option value="all">
+                {t('greenest.planTrip.sharing.choice.quickest')}
+              </option>
+              <option value="bike">
+                {t('greenest.planTrip.sharing.vehicle.bike')}
+              </option>
+              <option value="scooter">
+                {t('greenest.planTrip.sharing.vehicle.scooter')}
+              </option>
+            </select>
+          )}
+          {mode === 'train' && stationsError && (
             <p className="text-xs text-red-800" role="alert">
               {stationsError}
             </p>

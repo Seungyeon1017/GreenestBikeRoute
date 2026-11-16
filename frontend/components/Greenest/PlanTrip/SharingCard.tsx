@@ -72,10 +72,8 @@ type SharingCardProps = {
   zones: ZoneCollection | null
   error: string | null
   // The trip with a rented vehicle.
+  /** The form's mode is "Rental"; which vehicle is chosen there too. */
   tripOn: boolean
-  onTripOnChange: (_on: boolean) => void
-  tripVehicle: SharingVehicleChoice
-  onTripVehicleChange: (_vehicle: SharingVehicleChoice) => void
   trip: SharingTrip | null
   /** The same trip without the rider's settings, to compare with. */
   plainTrip: SharingTrip | null
@@ -113,51 +111,31 @@ export default function SharingCard(props: SharingCardProps) {
       <div className="flex flex-col gap-4">
         <CardTitle>{s('title')}</CardTitle>
 
-        {/* Rent one for this trip: the walk–ride–walk plan. */}
-        <section className="flex flex-col gap-2">
-          <label className="flex cursor-pointer items-start gap-2 text-sm text-leaf-ink/80">
-            <input
-              checked={tripOn}
-              className="mt-0.5 h-4 w-4 accent-leaf-forest"
-              onChange={e => props.onTripOnChange(e.target.checked)}
-              type="checkbox"
-            />
-            <span>{s('tripToggle')}</span>
-          </label>
-          <select
-            aria-label={s('tripVehicleLabel')}
-            className={SELECT}
-            disabled={!tripOn}
-            onChange={e =>
-              props.onTripVehicleChange(e.target.value as SharingVehicleChoice)
-            }
-            value={props.tripVehicle}
-          >
-            <option value="all">{s('choice.quickest')}</option>
-            <option value="bike">{s('vehicle.bike')}</option>
-            <option value="scooter">{s('vehicle.scooter')}</option>
-          </select>
-
-          {tripOn && !props.hasRoute && (
-            <p className="text-xs text-leaf-muted">{s('needRoute')}</p>
-          )}
-          {tripOn && props.tripLoading && (
-            <p className="text-xs text-leaf-muted" role="status">
-              {s('tripLoading')}
-            </p>
-          )}
-          {tripOn && tripError && (
-            <p className="text-xs text-red-700" role="alert">
-              {tripError}
-            </p>
-          )}
-          {tripOn && trip && <TripSteps name={name} s={s} trip={trip} />}
-          {tripOn && trip && props.plainTrip && (
-            <TripComparison plain={props.plainTrip} trip={trip} />
-          )}
-        </section>
-
-        <hr className="border-leaf-sand/70" />
+        {/* Rental mode: the walk–ride–walk plan. */}
+        {tripOn && (
+          <>
+            <section className="flex flex-col gap-2">
+              {!props.hasRoute && (
+                <p className="text-xs text-leaf-muted">{s('needRoute')}</p>
+              )}
+              {props.tripLoading && (
+                <p className="text-xs text-leaf-muted" role="status">
+                  {s('tripLoading')}
+                </p>
+              )}
+              {tripError && (
+                <p className="text-xs text-red-700" role="alert">
+                  {tripError}
+                </p>
+              )}
+              {trip && <TripSteps name={name} s={s} trip={trip} />}
+              {trip && props.plainTrip && (
+                <TripComparison plain={props.plainTrip} trip={trip} />
+              )}
+            </section>
+            <hr className="border-leaf-sand/70" />
+          </>
+        )}
 
         {/* Every free vehicle on the map. */}
         <section className="flex flex-col gap-2">

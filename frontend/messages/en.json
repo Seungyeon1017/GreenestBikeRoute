@@ -391,6 +391,12 @@
         "onlyDay": "by day only",
         "onlyNight": "at night only"
       },
+      "mode": {
+        "label": "How to travel",
+        "bike": "My bike",
+        "train": "Bike + train",
+        "rental": "Rental"
+      },
       "loading": "Calculating route…",
       "reset": "Reset",
       "start": "Start",
@@ -501,7 +507,6 @@
       },
       "sharing": {
         "title": "Shared e-bikes & e-scooters",
-        "tripToggle": "No bike? Rent one for this trip",
         "tripVehicleLabel": "Vehicle to rent",
         "vehicleLabel": "Vehicles to show",
         "choice": {
@@ -825,10 +830,9 @@
       },
       "train": {
         "title": "Bike + train",
-        "toggle": "Combine with trains (S-Bahn, regional trains)",
         "toggleHint": "Pick a station as start or destination, also outside Heilbronn (e.g. Mosbach). You ride to it and take the train, or take the train from it and ride on. With a station at both ends we show the trains only. Where riding is faster inside Heilbronn, we show the bike route.",
         "problem": {
-          "needTrain": "{{station}} is outside Heilbronn, so there is no bike route to or from it. Tick “Combine with trains” to go there by train."
+          "needTrain": "{{station}} is outside Heilbronn, so there is no bike route to or from it. Choose “Bike + train” to go there by train."
         },
         "loading": "Looking up trains…",
         "earliest": {

@@ -73,10 +73,10 @@ type TrainCardProps = {
 }
 
 /**
- * Bike + train: the trip for the start and destination of the form, when "Combine with trains"
- * is on and one of them is a station (both: the train only). Inside Heilbronn the train can be a
- * detour: then the card says riding is sooner and the map shows the bike route, unless the
- * rider asks for the train anyway.
+ * Bike + train: the trip for the start and destination of the form, when the mode is
+ * "Bike + train" and one of them is a station (both: the train only). Inside Heilbronn the
+ * train can be a detour: then the card says riding is sooner and the map shows the bike
+ * route, unless the rider asks for the train anyway.
  */
 export default function TrainCard(props: TrainCardProps) {
   const { t, i18n } = useTranslation()

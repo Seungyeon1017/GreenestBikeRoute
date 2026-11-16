@@ -47,6 +47,7 @@ import type {
   TrainTrip,
   TransitStopCollection,
   TransitStopProperties,
+  TripMode,
   VehicleCollection,
   ZoneCollection,
 } from '@/types/greenest'
@@ -236,7 +237,7 @@ function stationAt(picked: PickedStation | null, point: LngLat | null) {
 
 /**
  * What the start and destination ask for: a bike route, a trip with a train, or nothing that
- * can be planned (why); null until both are set. Without "Combine with trains" it is a bike
+ * can be planned (why); null until both are set. Outside the mode "Bike + train" it is a bike
  * route, which a station outside Heilbronn can't have. With it, a station at one end is the
  * train's end of the trip (the rider rides to or from the other), a station at both ends is a
  * trip by train only, and without any station it stays a bike route, with a tip.
@@ -298,8 +299,11 @@ export default function PlanTripView() {
   // Text in the Start and Destination search fields.
   const [startLabel, setStartLabel] = useState('')
   const [endLabel, setEndLabel] = useState('')
-  // "Combine with trains", and the stations picked as start or destination.
-  const [trainOn, setTrainOn] = useState(false)
+  // Own bike, bike + train or a rented vehicle: one at a time, so never two trips at once.
+  const [mode, setMode] = useState<TripMode>('bike')
+  const trainOn = mode === 'train'
+  const tripOn = mode === 'rental'
+  // The stations picked as start or destination.
   const [startStation, setStartStation] = useState<PickedStation | null>(null)
   const [endStation, setEndStation] = useState<PickedStation | null>(null)
   const plan = tripPlan(
@@ -409,7 +413,6 @@ export default function PlanTripView() {
   const [showSharing, setShowSharing] = useState(false)
   const [sharingVehicle, setSharingVehicle] =
     useState<SharingVehicleChoice>('all')
-  const [tripOn, setTripOn] = useState(false)
   const [tripVehicle, setTripVehicle] = useState<SharingVehicleChoice>('all')
   const [fences, setFences] = useState<GeofencingCollection | null>(null)
   const sharing = useSharedVehicles(showSharing, sharingVehicle, start)
@@ -1434,9 +1437,8 @@ export default function PlanTripView() {
   /** No bike on the train: the ride from the station becomes a trip with a rented e-bike. */
   function rentFromStation(trip: TrainTrip) {
     const [lng, lat] = trip.alight.geometry.coordinates
-    setTrainOn(false)
     setTripVehicle('bike')
-    setTripOn(true)
+    setMode('rental')
     pickPlace('start', [lng, lat], trip.alight.properties.name)
   }
 
@@ -1531,6 +1533,7 @@ export default function PlanTripView() {
             loading={loading}
             locateError={locateError}
             locating={locating}
+            mode={mode}
             notice={
               plan?.kind === 'problem'
                 ? t(`greenest.planTrip.train.problem.${plan.problem}`, {
@@ -1541,6 +1544,7 @@ export default function PlanTripView() {
             onDayModeChange={setDayMode}
             onEndLabelChange={setEndLabel}
             onLocate={locateStart}
+            onModeChange={setMode}
             onOptionsChange={setOptions}
             onPickEnd={(point, label) => pickPlace('end', point, label)}
             onPickEndStation={(station, point) =>
@@ -1552,13 +1556,13 @@ export default function PlanTripView() {
             }
             onReset={handleReset}
             onStartLabelChange={setStartLabel}
-            onTrainOnChange={setTrainOn}
+            onTripVehicleChange={setTripVehicle}
             options={options}
             startLabel={startLabel}
             startStation={stationAt(startStation, start)}
             stations={stations}
             stationsError={stationsError}
-            trainOn={trainOn}
+            tripVehicle={tripVehicle}
           />
           {error && (
             <p
@@ -1597,8 +1601,6 @@ export default function PlanTripView() {
             hasRoute={bikeRoute}
             hasStart={Boolean(start)}
             onShowChange={setShowSharing}
-            onTripOnChange={setTripOn}
-            onTripVehicleChange={setTripVehicle}
             onVehicleChange={setSharingVehicle}
             plainTrip={sharingTrip.plainTrip}
             show={showSharing}
@@ -1606,7 +1608,6 @@ export default function PlanTripView() {
             tripError={sharingTrip.error}
             tripLoading={sharingTrip.loading}
             tripOn={tripOn}
-            tripVehicle={tripVehicle}
             vehicle={sharingVehicle}
             vehicles={sharing.vehicles}
             zones={sharing.zones}

@@ -488,6 +488,9 @@ export type TrainTrip = {
 }
 
 export type SharingVehicleKind = 'bike' | 'scooter'
+
+/** How the trip is made: on the rider's own bike, with a train on the way, or on a rented vehicle. */
+export type TripMode = 'bike' | 'train' | 'rental'
 /** Which shared vehicles to show or rent: e-bikes, e-scooters or both. */
 export type SharingVehicleChoice = 'all' | SharingVehicleKind
 
