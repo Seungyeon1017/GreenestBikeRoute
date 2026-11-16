@@ -380,10 +380,17 @@
       "options": "Options",
       "preferTime": "Fastest instead of shortest",
       "preferTimeHint": "Plans by riding time, using the speeds cyclists were measured at.",
-      "departTime": "Departure time",
-      "departTimeHint": "Needed for the shade and lighting sliders: shade counts by day, lighting after dark.",
-      "now": "Now",
-      "clearTime": "Clear",
+      "depart": {
+        "label": "Departure",
+        "now": "Now",
+        "pick": "Pick a time",
+        "hintNone": "Shade and lighting only count with a departure time",
+        "hintDay": "“Through the day” (under Options) decides the time.",
+        "needTime": "Only with a departure time: shade counts by day, lighting at night.",
+        "choose": "Pick a departure time",
+        "onlyDay": "by day only",
+        "onlyNight": "at night only"
+      },
       "loading": "Calculating route…",
       "reset": "Reset",
       "start": "Start",
@@ -826,7 +833,8 @@
         "loading": "Looking up trains…",
         "earliest": {
           "now": "Earliest start: now",
-          "at": "Earliest start: {{time}}"
+          "at": "Earliest start: {{time}}",
+          "change": "change"
         },
         "headline": {
           "to_train": "Start riding at {{leave}}",

@@ -380,10 +380,17 @@
       "options": "Optionen",
       "preferTime": "Schnellste statt kürzeste Route",
       "preferTimeHint": "Plant nach Fahrzeit, mit den gemessenen Geschwindigkeiten von Radfahrenden.",
-      "departTime": "Abfahrtszeit",
-      "departTimeHint": "Nötig für Schatten und Beleuchtung: Schatten zählt tagsüber, Beleuchtung nach Einbruch der Dunkelheit.",
-      "now": "Jetzt",
-      "clearTime": "Löschen",
+      "depart": {
+        "label": "Abfahrt",
+        "now": "Jetzt",
+        "pick": "Zeit wählen",
+        "hintNone": "Schatten und Beleuchtung zählen erst mit einer Abfahrtszeit",
+        "hintDay": "„Über den Tag“ (unter Optionen) bestimmt die Zeit.",
+        "needTime": "Nur mit Abfahrtszeit: Schatten zählt tagsüber, Beleuchtung nachts.",
+        "choose": "Abfahrtszeit wählen",
+        "onlyDay": "nur tagsüber",
+        "onlyNight": "nur nachts"
+      },
       "loading": "Route wird berechnet…",
       "reset": "Zurücksetzen",
       "start": "Start",
@@ -826,7 +833,8 @@
         "loading": "Züge werden gesucht …",
         "earliest": {
           "now": "Frühester Start: jetzt",
-          "at": "Frühester Start: {{time}}"
+          "at": "Frühester Start: {{time}}",
+          "change": "ändern"
         },
         "headline": {
           "to_train": "Losradeln um {{leave}}",

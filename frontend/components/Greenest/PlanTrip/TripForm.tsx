@@ -1,6 +1,7 @@
 'use client'
 
 import { cx } from 'class-variance-authority'
+import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import Card, { CardTitle } from '@/components/Greenest/ui/Card'
@@ -11,6 +12,7 @@ import type {
   TransitStopProperties,
 } from '@/types/greenest'
 import InfoTip from '@/components/Greenest/ui/InfoTip'
+import Segmented from '@/components/Greenest/ui/Segmented'
 import { isSunUp } from '@/lib/sun'
 import PlaceSearch from './PlaceSearch'
 
@@ -50,7 +52,7 @@ type TripFormProps = {
   /** "Through the day": the route for each time of day instead of one departure. */
   dayMode: boolean
   onDayModeChange: (_on: boolean) => void
-  /** The day slider, shown in place of the departure hint while dayMode is on. */
+  /** The day slider, shown under "Through the day" while dayMode is on. */
   daySlider?: ReactNode
   loading?: boolean
 }
@@ -177,6 +179,26 @@ function nowForInput(): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`
 }
 
+/** The id of the departure input, or of the "Now | Pick a time" switch while no time is set. */
+const DEPART_ID = 'depart-time'
+
+/**
+ * Brings the departure time into view and puts the focus there: on the time input, or, while
+ * the departure is "now", on "Pick a time".
+ */
+export function focusDepartTime() {
+  const el = document.getElementById(DEPART_ID)
+  if (!el) {
+    return
+  }
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  const target =
+    el instanceof HTMLInputElement
+      ? el
+      : el.querySelector<HTMLElement>('[role="radio"][aria-checked="false"]')
+  ;(target ?? el).focus({ preventScroll: true })
+}
+
 export default function TripForm({
   startLabel,
   endLabel,
@@ -221,6 +243,23 @@ export default function TripForm({
     !dayMode &&
     (sunUp === null || (key === 'shade' && !sunUp) || (key === 'dark' && sunUp))
 
+  /** Why a time slider is off although a time is set: shade counts by day only, lighting after dark only. */
+  const timeSliderReason = (key: SliderKey) =>
+    dayMode || sunUp === null || !timeSliderOff(key)
+      ? null
+      : t(
+          `greenest.planTrip.depart.${key === 'shade' ? 'onlyDay' : 'onlyNight'}`,
+        )
+
+  // "Pick a departure time" under Options: the input appears with the next render, then gets the focus.
+  const focusTime = useRef(false)
+  useEffect(() => {
+    if (focusTime.current && hasTime) {
+      focusTime.current = false
+      focusDepartTime()
+    }
+  }, [hasTime])
+
   /** Changes one option and keeps the others. */
   const set = <K extends keyof RouteOptions>(key: K, value: RouteOptions[K]) =>
     onOptionsChange({ ...options, [key]: value })
@@ -228,6 +267,7 @@ export default function TripForm({
   const renderSlider = (
     { key, min, max, step }: SliderSpec,
     disabled = false,
+    reason: string | null = null,
   ) => (
     // relative: the info panel spans this row.
     <div
@@ -240,8 +280,10 @@ export default function TripForm({
           htmlFor={`option-${key}`}
         >
           {t(`greenest.planTrip.penalties.${key}`)}: {options[key]}
+          {reason && ` (${reason})`}
         </label>
         <InfoTip
+          disabled={disabled}
           label={t('greenest.planTrip.info.about', {
             name: t(`greenest.planTrip.penalties.${key}`),
           })}
@@ -301,6 +343,54 @@ export default function TripForm({
               {locateError}
             </p>
           )}
+          {/* relative: the summer-shade info panel spans this block. */}
+          <div className="relative flex flex-col gap-1 text-sm text-leaf-ink/80">
+            <span id="depart-label">{t('greenest.planTrip.depart.label')}</span>
+            <Segmented
+              disabled={dayMode}
+              id={hasTime ? undefined : DEPART_ID}
+              label={t('greenest.planTrip.depart.label')}
+              onChange={choice =>
+                set('departTime', choice === 'now' ? '' : nowForInput())
+              }
+              options={[
+                { value: 'now', label: t('greenest.planTrip.depart.now') },
+                { value: 'time', label: t('greenest.planTrip.depart.pick') },
+              ]}
+              value={hasTime ? 'time' : 'now'}
+            />
+            {hasTime && (
+              <input
+                aria-labelledby="depart-label"
+                className="min-w-0 rounded-lg border border-leaf-sand bg-white px-2 py-1 text-sm disabled:opacity-40"
+                disabled={dayMode}
+                id={DEPART_ID}
+                onChange={e => set('departTime', e.target.value)}
+                type="datetime-local"
+                value={options.departTime}
+              />
+            )}
+            <span className="text-xs text-leaf-muted">
+              {dayMode
+                ? t('greenest.planTrip.depart.hintDay')
+                : sunUp === null
+                  ? t('greenest.planTrip.depart.hintNone')
+                  : sunUp
+                    ? t('greenest.planTrip.sky.day')
+                    : t('greenest.planTrip.sky.night')}
+              {/* The 21 July caveat stays one tap away, so the line is no longer than the night one. */}
+              {!dayMode && outsideSummer && (
+                <InfoTip
+                  className="ml-1 align-middle"
+                  label={t('greenest.planTrip.info.about', {
+                    name: t('greenest.planTrip.penalties.shade'),
+                  })}
+                >
+                  {t('greenest.planTrip.sky.summerShade')}
+                </InfoTip>
+              )}
+            </span>
+          </div>
           {/* relative: the info panel spans this row. */}
           <span className="relative flex items-center gap-1.5 text-sm text-leaf-ink/80">
             <label className="flex cursor-pointer items-center gap-2">
@@ -363,33 +453,8 @@ export default function TripForm({
               </span>
             </label>
 
-            {/* relative: the summer-shade info panel spans this block. */}
+            {/* relative: the info panel spans this block. */}
             <div className="relative flex flex-col gap-1 text-sm text-leaf-ink/80">
-              <label htmlFor="depart-time">
-                {t('greenest.planTrip.departTime')}
-              </label>
-              <div className="flex gap-2">
-                <input
-                  className="min-w-0 flex-1 rounded-lg border border-leaf-sand bg-white px-2 py-1 text-sm disabled:opacity-40"
-                  disabled={dayMode}
-                  id="depart-time"
-                  onChange={e => set('departTime', e.target.value)}
-                  type="datetime-local"
-                  value={options.departTime}
-                />
-                <button
-                  className="rounded-lg border border-leaf-sand px-2 py-1 text-xs hover:bg-leaf-cream disabled:opacity-40"
-                  disabled={dayMode}
-                  onClick={() =>
-                    set('departTime', hasTime ? '' : nowForInput())
-                  }
-                  type="button"
-                >
-                  {hasTime
-                    ? t('greenest.planTrip.clearTime')
-                    : t('greenest.planTrip.now')}
-                </button>
-              </div>
               <span className="flex items-center gap-1.5">
                 <label className="flex cursor-pointer items-center gap-2">
                   <input
@@ -408,32 +473,30 @@ export default function TripForm({
                   {t('greenest.planTrip.day.info')}
                 </InfoTip>
               </span>
-              {dayMode ? (
-                daySlider
-              ) : (
-                <span className="text-xs text-leaf-muted">
-                  {sunUp === null
-                    ? t('greenest.planTrip.departTimeHint')
-                    : sunUp
-                      ? t('greenest.planTrip.sky.day')
-                      : t('greenest.planTrip.sky.night')}
-                  {/* The 21 July caveat stays one tap away, so the line is no longer than the night one. */}
-                  {outsideSummer && (
-                    <InfoTip
-                      className="ml-1 align-middle"
-                      label={t('greenest.planTrip.info.about', {
-                        name: t('greenest.planTrip.penalties.shade'),
-                      })}
-                    >
-                      {t('greenest.planTrip.sky.summerShade')}
-                    </InfoTip>
-                  )}
-                </span>
-              )}
+              {dayMode && daySlider}
             </div>
 
+            {!hasTime && !dayMode && (
+              <p className="text-xs text-leaf-muted">
+                {t('greenest.planTrip.depart.needTime')}{' '}
+                <button
+                  className="font-medium text-leaf-forest underline underline-offset-2"
+                  onClick={() => {
+                    focusTime.current = true
+                    set('departTime', nowForInput())
+                  }}
+                  type="button"
+                >
+                  {t('greenest.planTrip.depart.choose')}
+                </button>
+              </p>
+            )}
             {TIME_SLIDERS.map(spec =>
-              renderSlider(spec, timeSliderOff(spec.key)),
+              renderSlider(
+                spec,
+                timeSliderOff(spec.key),
+                timeSliderReason(spec.key),
+              ),
             )}
           </div>
         </details>

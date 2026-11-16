@@ -432,6 +432,21 @@ def test_dark_penalty_detours_onto_lit_streets_after_dark_only(sunny_unlit_short
     assert route_props(G, shade_penalty=0, dark_penalty=4, depart_time=SUMMER_AFTERNOON)["length_m"] == 100
 
 
+def test_without_a_departure_time_shade_and_lighting_are_ignored(sunny_unlit_shortcut):
+    # The form sends both sliders with every request: with no time set they must not move the route.
+    G = sunny_unlit_shortcut
+
+    def route(**kw):
+        return find_route(G, COORDS[A], COORDS[B], 0, 0, 0, 0, **kw)["features"][0]
+
+    off, full = route(shade_penalty=0, dark_penalty=0), route(shade_penalty=10, dark_penalty=40)
+    assert off["geometry"] == full["geometry"] and full["properties"]["length_m"] == 100
+    assert (full["properties"]["depart_time"], full["properties"]["daylight"]) == (None, None)
+    # The same sliders do move it once there is a time, by day and after dark.
+    for when in (SUMMER_AFTERNOON, SUMMER_NIGHT):
+        assert route(shade_penalty=10, dark_penalty=40, depart_time=when)["properties"]["length_m"] == 140
+
+
 def test_dimly_lit_streets_cost_a_quarter_of_a_dark_one(toy_graph):
     """A -> B is lit but Mapillary saw few lamps on it; the 40 % longer detour via C has plenty."""
     for d in toy_graph.edges.values():

@@ -16,6 +16,8 @@ type InfoTipProps = {
   above?: boolean
   /** Show the panel right under the (i) instead of across the parent row, e.g. inside a scrolling list. */
   anchored?: boolean
+  /** Greyed and not opening, e.g. next to a slider that is off. */
+  disabled?: boolean
 }
 
 const ANCHORED_WIDTH = 256
@@ -34,12 +36,13 @@ export default function InfoTip({
   className,
   above = false,
   anchored = false,
+  disabled = false,
 }: InfoTipProps) {
   const id = useId()
   // Opened by hover (closes when the mouse leaves) or pinned by a click/tap.
   const [hovered, setHovered] = useState(false)
   const [pinned, setPinned] = useState(false)
-  const open = hovered || pinned
+  const open = !disabled && (hovered || pinned)
   const ref = useRef<HTMLSpanElement>(null)
   // Fixed position of an anchored panel, so a scrolling parent can't clip it.
   const [spot, setSpot] = useState<{
@@ -123,7 +126,9 @@ export default function InfoTip({
           term
             ? 'cursor-help rounded underline decoration-leaf-moss decoration-dashed decoration-2 underline-offset-[0.2em]'
             : 'rounded-full text-leaf-muted hover:text-leaf-forest',
+          'disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-leaf-muted',
         )}
+        disabled={disabled}
         onClick={() => setPinned(p => !p)}
         type="button"
       >

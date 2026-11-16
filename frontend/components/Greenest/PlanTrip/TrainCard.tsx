@@ -7,6 +7,7 @@ import Card, { CardTitle } from '@/components/Greenest/ui/Card'
 import InfoTip from '@/components/Greenest/ui/InfoTip'
 import type { TrainOption, TrainStop, TrainTrip } from '@/types/greenest'
 import { rideOf, TRAIN_RIDE_COLOR, trainLineColor } from './trainLayers'
+import { focusDepartTime } from './TripForm'
 
 const TIME_ZONE = 'Europe/Berlin'
 
@@ -103,7 +104,14 @@ export default function TrainCard(props: TrainCardProps) {
             ? s('earliest.at', {
                 time: trainTime(props.departTime, i18n.language),
               })
-            : s('earliest.now')}
+            : s('earliest.now')}{' '}
+          <button
+            className="font-medium text-leaf-forest underline underline-offset-2"
+            onClick={focusDepartTime}
+            type="button"
+          >
+            {s('earliest.change')}
+          </button>
         </p>
         {props.loading && (
           <p className="text-xs text-leaf-muted" role="status">
