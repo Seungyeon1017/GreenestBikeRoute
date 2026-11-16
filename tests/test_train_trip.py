@@ -9,7 +9,7 @@ from backend.sharing import SharingUnavailable
 from backend.transit import LOCAL_TZ, Timetable, Transit
 from routing.costs import SHORTEST
 from routing.route import RouteError
-from routing.train_trip import ALIGHT_BUFFER_S, BOARD_BUFFER_S, plan_train_trip
+from routing.train_trip import ALIGHT_BUFFER_S, BOARD_BUFFER_S, plan_train_trip, rideable_stations
 from tests.conftest import COORDS, A, B, C
 from tests.test_transit import csv_text, feed_zip
 
@@ -222,3 +222,97 @@ def test_api_train_only_and_the_way_of_the_train(client):
     assert trip.options[0].path == [[COORDS[B][1], COORDS[B][0]], [9.144, 49.353]]
     r = client.get("/route/train", params={"from_stop": SA, "to_stop": FAR, "depart_time": "2026-11-04T08:00"})
     assert r.status_code == 400 and "no direct train from Heilbronn A to Mosbach" in r.json()["detail"]
+
+
+# One station with two stops, 80 m apart at corners B and C (merged: under 200 m), each with its own trains:
+#   stop B 08:10 -> Far 09:00, stop C 08:12 -> Far 09:10; Far 09:00 -> stop C 10:00.
+PARTS_FEED = {
+    **FEED,
+    "stops.txt": csv_text(
+        "stop_id,stop_name,stop_lat,stop_lon,location_type,parent_station,platform_code",
+        stop(SB, "Heilbronn Markt", B), stop(SC, "Heilbronn Markt/Rathaus", C),
+        stop(FAR, "Mosbach, Bahnhof", lat=49.353, lon=9.144)),
+    "trips.txt": csv_text(
+        "route_id,service_id,trip_id,trip_headsign",
+        ("re8", "weekdays", "train", "Mosbach"), ("s41", "weekdays", "tram", "Mosbach"),
+        ("s41", "weekdays", "back", "Heilbronn")),
+    "stop_times.txt": csv_text(
+        "trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type",
+        *calls("train", (SB, "08:10"), (FAR, "09:00")), *calls("tram", (SC, "08:12"), (FAR, "09:10")),
+        *calls("back", (FAR, "09:00"), (SC, "10:00"))),
+}
+
+
+@pytest.fixture
+def parts_timetable():
+    return Timetable(feed_zip(PARTS_FEED))
+
+
+def test_the_ride_goes_to_the_stop_the_train_uses(toy_graph, parts_timetable):
+    trip = plan_train_trip(toy_graph, parts_timetable, SHORTEST, at(8, 0), origin=COORDS[A], to_stop=FAR)
+    station = trip["board"]["properties"]
+    assert (station["stop_id"], station["name"]) == (SB, "Heilbronn Markt")
+    assert [s["stop_place"] for s in station["stops"]] == [SB, SC]
+    # The trains of both stops are listed, each with the stop it leaves from.
+    train, tram = trip["options"][:2]
+    assert [(o["line"], o["stop_place"], o["stops"][0]["stop_place"]) for o in (train, tram)] == [
+        ("RE 8", SB, SB), ("S41", SC, SC)]
+    assert {o["stops"][0]["stop_id"] for o in (train, tram)} == {SB}  # one station
+    assert {o["stop_place"] for o in trip["options"]} == {SB, SC}
+    # A ride per stop, ending there; `ride` is the first option's.
+    rides = {r["stop_place"]: r["ride"] for r in trip["rides"]}
+    assert set(rides) == {SB, SC} and trip["ride"] is rides[SB]
+    for part, corner in ((SB, B), (SC, C)):
+        assert rides[part]["geometry"]["coordinates"][-1] == [COORDS[corner][1], COORDS[corner][0]]
+    assert (rides[SB]["properties"]["length_m"], rides[SC]["properties"]["length_m"]) == (100.0, 70.0)
+    # Each train is timed with the ride to its own stop.
+    for option, leaves in ((train, at(8, 10)), (tram, at(8, 12))):
+        ride_s = rides[option["stop_place"]]["properties"]["duration_s"]
+        leave = leaves - timedelta(seconds=BOARD_BUFFER_S + ride_s)
+        assert option["leave_at"] == minute(leave)
+        assert option["duration_s"] == round((datetime.fromisoformat(option["arrival"]) - leave).total_seconds())
+    assert rides[SB]["properties"]["duration_s"] != rides[SC]["properties"]["duration_s"]
+
+
+def test_the_ride_starts_at_the_stop_the_train_arrives_at(toy_graph, parts_timetable):
+    trip = plan_train_trip(toy_graph, parts_timetable, SHORTEST, at(8, 30), from_stop=FAR, destination=COORDS[B])
+    option = trip["options"][0]
+    assert trip["alight"]["properties"]["stop_id"] == SB  # the station, though its train stops at the other stop
+    assert (option["stop_place"], option["stops"][-1]["stop_place"]) == (SC, SC)
+    assert [r["stop_place"] for r in trip["rides"]] == [SC]  # stop B has no train from Mosbach: not routed
+    ride = trip["rides"][0]["ride"]
+    assert ride is trip["ride"] and ride["geometry"]["coordinates"][0] == [COORDS[C][1], COORDS[C][0]]
+    assert option["arrive_at"] == minute(at(10, 0) + timedelta(seconds=ALIGHT_BUFFER_S + ride["properties"]["duration_s"]))
+
+
+def test_a_stop_away_from_every_street_is_left_out_with_its_trains(toy_graph):
+    # Stop "C" 190 m north of corner B: part of the station, but not reached by bike.
+    feed = {**PARTS_FEED, "stops.txt": csv_text(
+        "stop_id,stop_name,stop_lat,stop_lon,location_type,parent_station,platform_code",
+        stop(SB, "Heilbronn Markt", B), stop(SC, "Heilbronn Markt/Rathaus", lat=COORDS[B][0] + 0.0017, lon=COORDS[B][1]),
+        stop(FAR, "Mosbach, Bahnhof", lat=49.353, lon=9.144))}
+    timetable = Timetable(feed_zip(feed))
+    assert len(timetable.stations) == 2
+    assert rideable_stations(toy_graph, timetable) == [(SB, COORDS[B])]
+    trip = plan_train_trip(toy_graph, timetable, SHORTEST, at(8, 0), origin=COORDS[A], to_stop=FAR)
+    assert {o["stop_place"] for o in trip["options"]} == {SB} and [r["stop_place"] for r in trip["rides"]] == [SB]
+
+
+def test_api_rides_by_stop(toy_graph, tmp_path):
+    transit = Transit(path=tmp_path / "gtfs.zip", fetch=lambda: feed_zip(PARTS_FEED))
+    lat, lon = COORDS[A]
+    with TestClient(create_app(graph=toy_graph, transit=transit)) as c:
+        r = c.get("/route/train", params={"from_lat": lat, "from_lon": lon, "to_stop": FAR,
+                                          "depart_time": "2026-11-04T08:00"})
+        stops = c.get("/transit/stops", params={"q": "markt"}).json()["features"]
+        only = c.get("/route/train", params={"from_stop": SC, "to_stop": FAR, "depart_time": "2026-11-04T08:00"})
+    trip = TrainTrip.model_validate(r.json())
+    assert [o.stop_place for o in trip.options[:2]] == [SB, SC]
+    assert [x.stop_place for x in trip.rides] == [SB, SC]
+    assert trip.options[1].stops[0].stop_name == "Heilbronn Markt/Rathaus"
+    # The train's line starts at the stop it uses, not at the station's main point.
+    assert trip.options[1].path[0] == [COORDS[C][1], COORDS[C][0]]
+    assert len(stops) == 1 and stops[0]["properties"]["rideable"] is True
+    # Train only: nothing to ride, no stop to ride to.
+    only = TrainTrip.model_validate(only.json())
+    assert only.rides == [] and {o.stop_place for o in only.options} == {None}

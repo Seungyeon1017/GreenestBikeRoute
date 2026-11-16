@@ -961,14 +961,25 @@ TRANSIT_VALID_UNTIL = ("Last day the timetable covers (the yearly timetable chan
 TRANSIT_ATTRIBUTION = "Data credit to show with the timetable"
 
 
+class TransitStopPlace(BaseModel):
+    stop_place: str = Field(description="IFOPT stop place, e.g. de:08121:1114")
+    name: str = Field(description="The stop's own name, e.g. \"Heilbronn Hbf/Willy-Brandt-Pl.\"")
+    lon: float
+    lat: float
+    lines: list[str] = Field(description="The lines calling at this stop")
+
+
 class TransitStopProperties(BaseModel):
     stop_id: str = Field(description="Station id (IFOPT stop place, e.g. de:08121:26), for /transit/departures")
     name: str = Field(description="Station name as in the timetable, e.g. \"Mosbach, Bahnhof\"")
     lines: list[str] = Field(description="Stadtbahn and train lines calling here, e.g. [\"S4\", \"S41\", \"S42\"]")
     distance_m: Optional[int] = Field(None, description="Metres from the near_lat/near_lon point, when one was given")
     rideable: Optional[bool] = Field(None, description=(
-        "In /transit/stops: true in Heilbronn, where the bike graph reaches it, so it can be the start or end of a "
-        "plain bike route; false outside, reached only with /route/train"))
+        "In /transit/stops: true in Heilbronn, where the bike graph reaches one of its `stops`, so it can be the "
+        "start or end of a plain bike route; false outside, reached only with /route/train"))
+    stops: list[TransitStopPlace] = Field(default_factory=list, description=(
+        "The stops the station is made of, its main one (the feature's own point) first: one for most stations, "
+        "several where stops within 200 m were merged, each to mark on the map at its own place"))
 
 
 class TransitStopFeature(BaseModel):
@@ -1035,9 +1046,14 @@ class TransitDepartures(BaseModel):
 
 
 class TrainStop(BaseModel):
-    stop_id: str
-    name: str
-    lon: float
+    stop_id: str = Field(description="The station, as in /transit/stops")
+    name: str = Field(description="The station's name")
+    stop_place: str = Field(description=(
+        "The stop of the station the train uses (IFOPT stop place): `stop_id` itself, or for a station merged from "
+        "several stops one of its `stops` in /transit/stops, e.g. de:08121:1114 at Heilbronn Hauptbahnhof"))
+    stop_name: str = Field(description=(
+        "That stop's own name, e.g. \"Heilbronn Hbf/Willy-Brandt-Pl.\"; the same as `name` unless the station is merged"))
+    lon: float = Field(description="Where the train stops: the position of `stop_place`, not of the whole station")
     lat: float
     platform: Optional[str] = Field(description="Platform (Gleis) the train uses here, null if the timetable doesn't say")
     arrival: str = Field(description="When the train arrives here (ISO 8601, Heilbronn local time)")
@@ -1046,6 +1062,10 @@ class TrainStop(BaseModel):
 
 class TrainOption(TransitDeparture):
     """One train to take between `board` and `alight`, with the times of the whole trip around it."""
+    stop_place: Optional[str] = Field(description=(
+        "The stop of the station in Heilbronn this train uses, where the bike leg ends (bike then train: of "
+        "stops[0]) or starts (train then bike: of the last stop). Draw the entry of `rides` with this `stop_place`. "
+        "null for direction train"))
     leave_at: str = Field(description=(
         "When the trip starts (ISO 8601). Bike then train: start riding now to be at the station 3 minutes before "
         "the train leaves. Train then bike: the train leaves"))
@@ -1053,7 +1073,8 @@ class TrainOption(TransitDeparture):
         "When the trip ends. Bike then train: the train arrives at the station asked for. Train then bike: the ride "
         "ends, having started 2 minutes after the train arrived"))
     wait_s: int = Field(description="Seconds at the station before the train leaves (bike then train; else 0)")
-    duration_s: int = Field(description="Seconds from leave_at to arrive_at")
+    duration_s: int = Field(description=(
+        "Seconds from leave_at to arrive_at. All three count the ride to or from this train's own `stop_place`"))
     stops: list[TrainStop] = Field(description=(
         "Every station the train calls at from `board` to `alight`, both included"))
     path: list[list[float]] = Field(description=(
@@ -1068,6 +1089,11 @@ class DirectRide(BaseModel):
     arrive_at: str = Field(description="When the ride ends if it starts at depart_time (ISO 8601)")
 
 
+class TrainRide(BaseModel):
+    stop_place: str = Field(description="The stop this ride ends at (bike then train) or starts at (train then bike)")
+    ride: RideFeature = Field(description="The bike leg, as the route from /route (mode bike)")
+
+
 class TrainTrip(BaseModel):
     """A trip by bike and train. The rider names the far station; the station to ride to (or to get off at) is the one
     in Heilbronn that gets them there soonest, every station counting the same. Trains without a change only, as
@@ -1078,12 +1104,17 @@ class TrainTrip(BaseModel):
     board: TransitStopFeature = Field(description="Where to get on the train")
     alight: TransitStopFeature = Field(description="Where to get off")
     ride: Optional[RideFeature] = Field(description=(
-        "The bike leg, as the route from /route (mode bike); null for direction train"))
+        "The bike leg of options[0], as the route from /route (mode bike); null for direction train"))
+    rides: list[TrainRide] = Field(description=(
+        "The bike leg for each stop of the station that a train in `options` uses: a station merged from several "
+        "stops (up to 175 m apart) has a ride per stop. The one to draw is the one whose `stop_place` matches the "
+        "chosen option's. Empty for direction train"))
     direct: Optional[DirectRide] = Field(description=(
         "Riding all the way instead, with the same penalties, when both ends are in Heilbronn (else null). There "
         "sooner than options[0].arrive_at: the train is a detour"))
     options: list[TrainOption] = Field(min_length=1, description=(
-        "The trains to take, the one arriving first first: the bike leg is the same for each"))
+        "The trains to take, the one arriving first first. They may leave from different stops of the station: "
+        "each has its own `stop_place` and bike leg in `rides`"))
     shared_bikes_near: Optional[int] = Field(description=(
         "from_train: shared e-bikes free to rent right now within 300 m of `alight`, for riders without a bike "
         "(plan that trip with /route/sharing from the station); null for to_train or when the sharing feed is down"))

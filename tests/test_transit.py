@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from backend.app import create_app
 from backend.schemas import TransitDepartures, TransitStopCollection
-from backend.transit import (REFRESH_DAYS, Transit, TransitUnavailable, bike_ticket_needed, easter, is_public_holiday,
+from backend.transit import (LOCAL_TZ, REFRESH_DAYS, Transit, TransitUnavailable, bike_ticket_needed, easter, is_public_holiday,
                              merged_name)
 
 HBF, MOSBACH, SUELMERTOR = "de:08121:1114", "de:08225:8209", "de:08121:75"
@@ -121,8 +121,10 @@ def test_only_train_stations_are_listed_one_per_station(transit):
     # the bus stop, served by a bus and an unnamed "train" (rail replacement), is left out.
     assert names(stops) == ["Heilbronn Hbf/Willy-Brandt-Pl.", "Heilbronn Sülmertor", "Mosbach, Bahnhof"]
     hbf = stops["features"][0]
-    assert hbf["properties"] == {"stop_id": HBF, "name": "Heilbronn Hbf/Willy-Brandt-Pl.", "lines": ["RE 8", "S41"],
-                                 "also": []}
+    assert hbf["properties"] == {
+        "stop_id": HBF, "name": "Heilbronn Hbf/Willy-Brandt-Pl.", "lines": ["RE 8", "S41"], "also": [],
+        "stops": [{"stop_place": HBF, "name": "Heilbronn Hbf/Willy-Brandt-Pl.", "lon": 9.2084503, "lat": 49.1427624,
+                   "lines": ["RE 8", "S41"]}]}  # an unmerged station is its own only stop
     assert hbf["geometry"]["coordinates"] == [9.2084503, 49.1427624]  # the parent station's position
     assert stops["valid_until"] == "2026-12-12"
 
@@ -290,8 +292,15 @@ def test_stops_a_short_walk_apart_are_one_station(tmp_path):
     transit = Transit(path=tmp_path / "gtfs.zip", fetch=lambda: feed_zip(NEAR_FEED))
     hbf = transit.stops(q="heilbronn h")["features"][0]["properties"]
     # The part with the most lines gives the id; the name of the other still finds it.
+    stops = hbf.pop("stops")
     assert hbf == {"stop_id": BAHNHOF, "name": "Heilbronn Hauptbahnhof", "lines": ["RB 83", "RE 8", "S41"],
                    "also": ["Heilbronn Hbf/Willy-Brandt-Pl."]}
+    # Both parts stay on the map, each at its own place with its own name and lines, the main one first.
+    assert stops == [
+        {"stop_place": BAHNHOF, "name": "Heilbronn Hauptbahnhof", "lon": 9.2081, "lat": 49.143,
+         "lines": ["RB 83", "RE 8", "S41"]},
+        {"stop_place": HBF, "name": "Heilbronn Hbf/Willy-Brandt-Pl.", "lon": 9.2084503, "lat": 49.1427624,
+         "lines": ["RE 8", "S41"]}]
     assert names(transit.stops(q="willy-brandt")) == ["Heilbronn Hauptbahnhof"]
     assert len(transit.stops()["features"]) == 3
     # Trains of both parts leave from it, under either id.
@@ -308,3 +317,33 @@ def test_merged_names_drop_the_corner_and_the_kind_of_stop():
     assert merged_name("HN Harmonie/Hafenmarktpassage") == "Heilbronn Harmonie"
     assert merged_name("Heilbronn Harmonie (Stadtbahn)") == "Heilbronn Harmonie"
     assert merged_name("Karlsruhe-Durlach") == "Karlsruhe-Durlach"
+
+
+def test_a_merged_stations_trains_stop_at_their_own_part(tmp_path):
+    tt = Transit(path=tmp_path / "gtfs.zip", fetch=lambda: feed_zip(NEAR_FEED)).timetable()
+    after = datetime(2026, 11, 4, 8, 0, tzinfo=LOCAL_TZ)
+    found = tt.departures(BAHNHOF, after, to=SUELMERTOR, limit=4, with_stops=True)
+    first = [d["stops"][0] for d in found]
+    # One station (stop_id, name), but each train at the stop it uses: the S41 in front, the 11:00 RE at the platforms.
+    assert {(s["stop_id"], s["name"]) for s in first} == {(BAHNHOF, "Heilbronn Hauptbahnhof")}
+    assert [(d["departure"][11:16], s["stop_place"]) for d, s in zip(found, first)] == [
+        ("08:18", HBF), ("10:00", HBF), ("11:00", BAHNHOF), ("13:04", HBF)]
+    at_platforms = [d for d in found if d["stops"][0]["stop_place"] == BAHNHOF]
+    assert [d["line"] for d in at_platforms] == ["RE 8"]
+    assert (first[0]["stop_name"], first[0]["lon"], first[0]["lat"]) == (
+        "Heilbronn Hbf/Willy-Brandt-Pl.", 9.2084503, 49.1427624)
+    assert (first[2]["stop_name"], first[2]["lon"], first[2]["lat"]) == ("Heilbronn Hauptbahnhof", 9.2081, 49.143)
+    # The train calling at both parts in a row leaves from the second; an unmerged station is its own part.
+    assert first[3]["platform"] == "1" and first[3]["arrival"][11:16] == "13:00"
+    last = found[0]["stops"][-1]
+    assert (last["stop_place"], last["stop_name"]) == (SUELMERTOR, last["name"])
+
+
+def test_api_stops_list_the_parts_of_a_merged_station(tmp_path, toy_graph):
+    transit = Transit(path=tmp_path / "gtfs.zip", fetch=lambda: feed_zip(NEAR_FEED))
+    with TestClient(create_app(graph=toy_graph, transit=transit)) as c:
+        r = c.get("/transit/stops", params={"q": "hauptbahnhof"})
+    assert r.status_code == 200
+    hbf = TransitStopCollection.model_validate(r.json()).features[0].properties
+    assert [(s.stop_place, s.name) for s in hbf.stops] == [
+        (BAHNHOF, "Heilbronn Hauptbahnhof"), (HBF, "Heilbronn Hbf/Willy-Brandt-Pl.")]

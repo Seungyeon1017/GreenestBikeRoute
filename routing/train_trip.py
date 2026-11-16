@@ -13,6 +13,10 @@ to a train that is slower than their bike.
 Which station: for each one with a train to (or from) the far station, the ride is first guessed from the straight
 line; the CANDIDATES best are then routed for real, with the request's penalties, as /route.
 
+A station can have several stops (the timetable merges stops within 200 m into one station, e.g. the train platforms
+of the Hauptbahnhof and the Stadtbahn stop in front of it). The bike leg goes to the stop the train uses: the trains
+of all stops of the station are listed, each timed with the ride to its own stop.
+
 Group: features on top.
 """
 import weakref
@@ -39,16 +43,27 @@ def _iso(when):
     return when.isoformat(timespec="minutes")
 
 
-_REACHABLE = weakref.WeakKeyDictionary()  # timetable -> (its graph, rideable_stations): neither changes while the API runs
+_REACHABLE = weakref.WeakKeyDictionary()  # timetable -> (its graph, rideable_stops): neither changes while the API runs
+
+
+def rideable_stops(G, timetable):
+    """The stops the bike graph reaches (in Heilbronn), by station: {station id: {stop place id: (lat, lon)}}.
+    A merged station has a stop per part; a part too far from every street is left out."""
+    if timetable not in _REACHABLE or _REACHABLE[timetable][0]() is not G:
+        near = {}
+        for sid, parts in timetable.parts_of.items():
+            stops = {part: (p["lat"], p["lon"]) for part, p in ((part, timetable.parts[part]) for part in parts)
+                     if nearest_street(G, p["lat"], p["lon"])[3] <= STATION_SNAP_M}
+            if stops:
+                near[sid] = stops
+        _REACHABLE[timetable] = (weakref.ref(G), near)
+    return _REACHABLE[timetable][1]
 
 
 def rideable_stations(G, timetable):
-    """The stations the bike graph reaches (in Heilbronn): [(id, (lat, lon))]."""
-    if timetable not in _REACHABLE or _REACHABLE[timetable][0]() is not G:
-        near = [(sid, (s["lat"], s["lon"])) for sid, s in timetable.stations.items()
-                if nearest_street(G, s["lat"], s["lon"])[3] <= STATION_SNAP_M]
-        _REACHABLE[timetable] = (weakref.ref(G), near)
-    return _REACHABLE[timetable][1]
+    """The stations the bike graph reaches, those with a stop it reaches: [(id, (lat, lon) of its main part)]."""
+    return [(sid, (timetable.stations[sid]["lat"], timetable.stations[sid]["lon"]))
+            for sid in rideable_stops(G, timetable)]
 
 
 def _straight_s(a, b):
@@ -66,8 +81,9 @@ def _ride(G, a, b, penalties, depart, rider):
     return feature
 
 
-def _option(train, leave, arrive, wait_s):
-    return {**train, "leave_at": _iso(leave), "arrive_at": _iso(arrive), "wait_s": round(wait_s),
+def _option(train, stop_place, leave, arrive, wait_s):
+    """A train with the times of the whole trip; `stop_place` is the stop the bike leg goes to or starts at."""
+    return {**train, "stop_place": stop_place, "leave_at": _iso(leave), "arrive_at": _iso(arrive), "wait_s": round(wait_s),
             "duration_s": round((arrive - leave).total_seconds())}
 
 
@@ -95,8 +111,8 @@ def _train_only(G, timetable, penalties, after, a, b, rider):
     near = dict(rideable_stations(G, timetable))
     direct = _direct(G, near[a], near[b], penalties, after, rider) if a in near and b in near else None
     return {"direction": "train", "board": timetable.stop_feature(a), "alight": timetable.stop_feature(b),
-            "ride": None, "direct": direct,
-            "options": [_option(t, _time(t["departure"]), _time(t["arrival"]), 0) for t in found]}
+            "ride": None, "rides": [], "direct": direct,
+            "options": [_option(t, None, _time(t["departure"]), _time(t["arrival"]), 0) for t in found]}
 
 
 def plan_train_trip(G, timetable, penalties, after, origin=None, to_stop=None, from_stop=None, destination=None,
@@ -108,10 +124,13 @@ def plan_train_trip(G, timetable, penalties, after, origin=None, to_stop=None, f
     `timetable` is a backend.transit.Timetable, `penalties` the routing Penalties of /route (depart_time is set here:
     the bike leg starts at `after`, or when the train arrives), `rider` weight_kg / e_bike for kcal.
 
-    Returns {"direction", "board", "alight" (station Features), "ride" (route Feature), "options"}: the trains to take
+    Returns {"direction", "board", "alight" (station Features), "ride", "rides", "options"}: the trains to take
     between `board` and `alight`, the one arriving first first, each as Timetable.departures with `stops`, plus
-    `leave_at` (start riding, or the train leaves), `arrive_at` (the train arrives, or the ride ends), `wait_s` at the
-    station before the train leaves (to_train) and `duration_s` for the whole trip. `direct`: riding all the way
+    `stop_place` (the stop of the station in Heilbronn this train uses: a merged station has several, up to 175 m
+    apart), `leave_at` (start riding, or the train leaves), `arrive_at` (the train arrives, or the ride ends), `wait_s` at the
+    station before the train leaves (to_train) and `duration_s` for the whole trip, all with the ride to its own
+    stop. `rides`: [{"stop_place", "ride" (route Feature)}], the bike leg for each stop a listed train uses; `ride`
+    is the one of options[0]. `direct`: riding all the way
     instead ({"length_m", "duration_s", "arrive_at"}), None when the far station is outside the bike graph.
     Raises KeyError for an unknown station and RouteError when no station in reach has a direct train.
     """
@@ -123,60 +142,81 @@ def plan_train_trip(G, timetable, penalties, after, origin=None, to_stop=None, f
     point = origin if to_train else destination
     far_name = timetable.stations[far]["name"]
 
-    def trains(station, ready):
-        """Direct trains for a rider who is at `station` at `ready` (to_train), or leaving `far` from `ready` on."""
-        if to_train:
-            found = timetable.departures(station, ready, to=far, limit=OPTIONS, with_stops=True)
-        else:
-            found = timetable.departures(far, ready, to=station, limit=OPTIONS, with_stops=True)
-        return sorted(found, key=lambda t: (t["arrival"], t["departure"]))
-
     def trip(station, ride_s):
-        """The options through `station` for a ride of ride_s seconds, the soonest first, or [] without a train."""
+        """The options through `station`, the soonest there first, or [] without a train: the trains of each of its
+        stops in `ride_s` ({stop place id: riding seconds}), each timed with the ride to (or from) its own stop."""
+        limit = OPTIONS * (len(timetable.parts_of[station]) + 1)  # room for the trains of stops that are left out
+        found = []
         if to_train:
-            found = trains(station, after + timedelta(seconds=ride_s + BOARD_BUFFER_S))
-            return [_option(t, _time(t["departure"]) - timedelta(seconds=ride_s + BOARD_BUFFER_S), _time(t["arrival"]),
-                            BOARD_BUFFER_S) for t in found]
-        return [_option(t, _time(t["departure"]), _time(t["arrival"]) + timedelta(seconds=ALIGHT_BUFFER_S + ride_s), 0)
-                for t in trains(station, after)]
+            ready = after + timedelta(seconds=min(ride_s.values()) + BOARD_BUFFER_S)
+            for t in timetable.departures(station, ready, to=far, limit=limit, with_stops=True):
+                part = t["stops"][0]["stop_place"]
+                lead = timedelta(seconds=ride_s.get(part, 0) + BOARD_BUFFER_S)
+                if part in ride_s and _time(t["departure"]) >= after + lead:
+                    found.append((_time(t["arrival"]), t["departure"],
+                                  _option(t, part, _time(t["departure"]) - lead, _time(t["arrival"]), BOARD_BUFFER_S)))
+        else:
+            for t in timetable.departures(far, after, to=station, limit=limit, with_stops=True):
+                part = t["stops"][-1]["stop_place"]
+                if part in ride_s:
+                    arrive = _time(t["arrival"]) + timedelta(seconds=ALIGHT_BUFFER_S + ride_s[part])
+                    found.append((arrive, t["departure"], _option(t, part, _time(t["departure"]), arrive, 0)))
+        return [option for _, _, option in sorted(found, key=lambda f: f[:2])[:OPTIONS]]
 
     def rank(options, ride_s):
         """Soonest there first; then the shortest ride (the same train stops at several stations in a row)."""
-        return options[0]["arrive_at"], ride_s
+        return options[0]["arrive_at"], ride_s[options[0]["stop_place"]]
+
+    def routed(station, stops, guessed):
+        """The real rides for `station`: ({stop place id: route Feature}, options). A stop is routed once a listed
+        train uses it; until then its ride is the guess, so the list is worked out again after each new route.
+        A stop without a route is left out with its trains."""
+        ride_s, rides, options = dict(guessed), {}, trip(station, guessed)
+        while options:
+            new = next((o for o in options if o["stop_place"] not in rides), None)
+            if new is None:
+                break
+            part = new["stop_place"]
+            if to_train:
+                ride = _ride(G, origin, stops[part], penalties, after, rider)
+            else:
+                ride = _ride(G, stops[part], destination, penalties, _time(new["arrival"]), rider)
+            if ride is None:
+                del ride_s[part]
+            else:
+                rides[part], ride_s[part] = ride, ride["properties"]["duration_s"]
+            options = trip(station, ride_s) if ride_s else []
+        return rides, options, ride_s
 
     guesses = []
-    near = rideable_stations(G, timetable)
-    for sid, at in near:
+    near = rideable_stops(G, timetable)
+    for sid, stops in near.items():
         if sid == far:
             continue
-        ride_s = _straight_s(point, at)
+        ride_s = {part: _straight_s(point, at) for part, at in stops.items()}
         options = trip(sid, ride_s)
         if options:
-            guesses.append((rank(options, ride_s), sid, at, options))
+            guesses.append((rank(options, ride_s), sid, ride_s))
     if not guesses:
         way = f"to {far_name}" if to_train else f"from {far_name}"
         raise RouteError(f"no direct train {way} at a station in Heilbronn in the next two days")
 
     best = None
-    for _, sid, at, guessed in sorted(guesses, key=lambda g: g[0])[:CANDIDATES]:
-        if to_train:
-            ride = _ride(G, origin, at, penalties, after, rider)
-        else:
-            ride = _ride(G, at, destination, penalties, _time(guessed[0]["arrival"]), rider)
-        if ride is None:
-            continue
-        options = trip(sid, ride["properties"]["duration_s"])
-        if options and (best is None or rank(options, ride["properties"]["duration_s"]) < best[0]):
-            best = (rank(options, ride["properties"]["duration_s"]), sid, ride, options)
+    for _, sid, guessed in sorted(guesses, key=lambda g: g[:2])[:CANDIDATES]:
+        rides, options, ride_s = routed(sid, near[sid], guessed)
+        if options and (best is None or rank(options, ride_s) < best[0]):
+            best = (rank(options, ride_s), sid, rides, options)
     if best is None:
         raise RouteError("no rideable route between the point and a station with a direct train")
 
-    _, sid, ride, options = best
+    _, sid, rides, options = best
+    used = list(dict.fromkeys(o["stop_place"] for o in options))
     here, there = timetable.stop_feature(sid), timetable.stop_feature(far)
-    far_at = dict(near).get(far)
+    far_at = dict(rideable_stations(G, timetable)).get(far)
     direct = None
     if far_at is not None:
         direct = _direct(G, *((origin, far_at) if to_train else (far_at, destination)), penalties, after, rider)
     return {"direction": "to_train" if to_train else "from_train",
             "board": here if to_train else there, "alight": there if to_train else here,
-            "ride": ride, "direct": direct, "options": options}
+            "ride": rides[used[0]], "rides": [{"stop_place": part, "ride": rides[part]} for part in used],
+            "direct": direct, "options": options}

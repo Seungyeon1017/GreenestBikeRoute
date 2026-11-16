@@ -22,6 +22,7 @@ import time
 import zipfile
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import NamedTuple, Optional
 from zoneinfo import ZoneInfo
 
 import requests
@@ -109,6 +110,18 @@ class TransitUnavailable(RuntimeError):
     """There is no timetable: it can't be downloaded and no copy is cached."""
 
 
+class Call(NamedTuple):
+    """One stop of a trip. `station` is the (merged) station's id, `part` the stop place the train really stops at:
+    the same until stops are merged, then one of the station's parts."""
+    station: str
+    platform: Optional[str]
+    arrival_s: int
+    departure_s: int
+    board: bool
+    alight: bool
+    part: str
+
+
 class Timetable:
     """The rail part of a GTFS feed (zip bytes): stations, the lines calling there and every trip's stops.
     Stops within `same_station_m` of each other are one station (see SAME_STATION_M)."""
@@ -134,8 +147,10 @@ class Timetable:
         self.valid_from = _gtfs_date(info["feed_start_date"]) if info.get("feed_start_date") else None
         self.valid_until = _gtfs_date(info["feed_end_date"]) if info.get("feed_end_date") else None
         self.stations = {}      # station id -> {"name", "lat", "lon", "lines"}, merged ones also "also"
+        self.parts = {}         # stop place id -> {"name", "lat", "lon", "lines"}: the stops as they were before merging
+        self.parts_of = {}      # station id -> the ids of its stop places, its main one first
         self.alias = {}         # every stop place's id -> its station's id (itself, or the one it was merged into)
-        self.trips = []         # (line, service_id, headsign, [(station id, platform, arrival s, departure s, board, alight)])
+        self.trips = []         # (line, service_id, headsign, [Call])
         self.calls = {}         # station id -> [(trip index, stop index)]
         for trip_id, (line, service, headsign) in trips.items():
             calls = []
@@ -144,18 +159,20 @@ class Timetable:
                 station = self._station(stops, stop)
                 self.stations[station]["lines"].add(line)
                 arrival, departure = st["arrival_time"] or st["departure_time"], st["departure_time"] or st["arrival_time"]
-                calls.append((station, stop.get("platform_code") or None, _seconds(arrival), _seconds(departure),
-                              st.get("pickup_type") != "1", st.get("drop_off_type") != "1"))
+                calls.append(Call(station, stop.get("platform_code") or None, _seconds(arrival), _seconds(departure),
+                                  st.get("pickup_type") != "1", st.get("drop_off_type") != "1", station))
             self.trips.append((line, service, headsign, calls))
         self._merge(same_station_m)
         for t, (_, _, _, calls) in enumerate(self.trips):
             for i, call in enumerate(calls):
-                self.calls.setdefault(call[0], []).append((t, i))
+                self.calls.setdefault(call.station, []).append((t, i))
 
     def _merge(self, within_m):
         """Makes one station of the stops within `within_m` of each other (chains count: A near B near C). It keeps
         the id and place of its part with the most lines, a name without the corner (merged_name), all their lines,
-        and the parts' own names in `also`, so a search for "Willy-Brandt" still finds the Hauptbahnhof."""
+        and the parts' own names in `also`, so a search for "Willy-Brandt" still finds the Hauptbahnhof. The stops
+        themselves stay in `parts`, each with its own place, and every call keeps the `part` its train stops at."""
+        self.parts = self.stations
         ids = list(self.stations)
         root = {sid: sid for sid in ids}
 
@@ -182,16 +199,18 @@ class Timetable:
                            "lines": set().union(*(self.stations[sid]["lines"] for sid in parts))}
                 station["also"] = [n for n in names if n != station["name"]]
             merged[main] = station
+            self.parts_of[main] = [main, *(sid for sid in parts if sid != main)]
             for sid in parts:
                 self.alias[sid] = main
         self.stations = merged
         for t, (line, service, headsign, calls) in enumerate(self.trips):
             joined = []
-            for sid, *rest in calls:
-                call = (self.alias[sid], *rest)
-                if joined and joined[-1][0] == call[0]:  # two parts of one station in a row: arrive at the first, leave the last
+            for call in calls:
+                call = call._replace(station=self.alias[call.station])
+                if joined and joined[-1].station == call.station:  # two parts of one station in a row: arrive at the first, leave the last (its platform and part)
                     first = joined.pop()
-                    call = (call[0], call[1], first[2], call[3], first[4] or call[4], first[5] or call[5])
+                    call = call._replace(arrival_s=first.arrival_s, board=first.board or call.board,
+                                         alight=first.alight or call.alight)
                 joined.append(call)
             self.trips[t] = (line, service, headsign, joined)
 
@@ -229,31 +248,32 @@ class Timetable:
     def departures(self, station, after, to=None, limit=10, with_stops=False):
         """The next `limit` trains leaving `station` at or after `after` (aware datetime), soonest first, within
         SEARCH_DAYS; with `to`, only trains that go on to station `to`, with their arrival there. `with_stops` (needs
-        `to`) adds `stops`: every station the train calls at from `station` to `to`, with position and times."""
+        `to`) adds `stops`: every station the train calls at from `station` to `to`, with times and the position of
+        the stop it uses there (see _call)."""
         out = []
         first = after.date() - timedelta(days=1)  # GTFS times run past 24:00 for trips that began the day before
         for trip_index, i in self.calls.get(station, ()):
             line, service, headsign, calls = self.trips[trip_index]
-            _, platform, _, dep_s, board, _ = calls[i]
-            if not board or i == len(calls) - 1:
+            here = calls[i]
+            if not here.board or i == len(calls) - 1:
                 continue
             end = None
             if to is not None:
-                j = next((j for j in range(i + 1, len(calls)) if calls[j][0] == to and calls[j][5]), None)
+                j = next((j for j in range(i + 1, len(calls)) if calls[j].station == to and calls[j].alight), None)
                 if j is None:
                     continue
                 end = calls[j]
             for offset in range(SEARCH_DAYS + 1):
                 day = first + timedelta(days=offset)
-                leaves = self._at(day, dep_s)
+                leaves = self._at(day, here.departure_s)
                 if leaves < after or leaves > after + timedelta(days=SEARCH_DAYS) or not self.runs(service, day):
                     continue
-                departure = {"line": line, "headsign": headsign or self.stations[calls[-1][0]]["name"],
-                             "departure": leaves.isoformat(timespec="minutes"), "platform": platform,
+                departure = {"line": line, "headsign": headsign or self.stations[calls[-1].station]["name"],
+                             "departure": leaves.isoformat(timespec="minutes"), "platform": here.platform,
                              "bike_ticket_needed": bike_ticket_needed(leaves)}
                 if end is not None:
-                    arrives = self._at(day, end[2])
-                    departure.update(arrival=arrives.isoformat(timespec="minutes"), arrival_platform=end[1],
+                    arrives = self._at(day, end.arrival_s)
+                    departure.update(arrival=arrives.isoformat(timespec="minutes"), arrival_platform=end.platform,
                                      duration_min=round((arrives - leaves).total_seconds() / 60))
                     if with_stops:
                         departure["stops"] = [self._call(day, c) for c in calls[i:j + 1]]
@@ -261,19 +281,23 @@ class Timetable:
         return [d for _, d in sorted(out, key=lambda x: x[0])[:limit]]
 
     def _call(self, day, call):
-        """One stop of a train on service day `day`, for `stops`."""
-        sid, platform, arr_s, dep_s, _, _ = call
-        s = self.stations[sid]
-        return {"stop_id": sid, "name": s["name"], "lon": s["lon"], "lat": s["lat"], "platform": platform,
-                "arrival": self._at(day, arr_s).isoformat(timespec="minutes"),
-                "departure": self._at(day, dep_s).isoformat(timespec="minutes")}
+        """One stop of a train on service day `day`, for `stops`: the station's id and name, and the place, id
+        (`stop_place`) and own name (`stop_name`) of the part of it the train stops at."""
+        part = self.parts[call.part]
+        return {"stop_id": call.station, "name": self.stations[call.station]["name"],
+                "stop_place": call.part, "stop_name": part["name"], "lon": part["lon"], "lat": part["lat"],
+                "platform": call.platform,
+                "arrival": self._at(day, call.arrival_s).isoformat(timespec="minutes"),
+                "departure": self._at(day, call.departure_s).isoformat(timespec="minutes")}
 
     def stop_feature(self, sid):
-        """Station `sid` as a GeoJSON Feature, as in /transit/stops."""
+        """Station `sid` as a GeoJSON Feature, as in /transit/stops: at its main part, with every part in `stops`."""
         s = self.stations[sid]
+        stops = [{"stop_place": part, "name": p["name"], "lon": p["lon"], "lat": p["lat"], "lines": sorted(p["lines"])}
+                 for part, p in ((part, self.parts[part]) for part in self.parts_of[sid])]
         return {"type": "Feature", "geometry": {"type": "Point", "coordinates": [s["lon"], s["lat"]]},
                 "properties": {"stop_id": sid, "name": s["name"], "lines": sorted(s["lines"]),
-                               "also": s.get("also", [])}}
+                               "also": s.get("also", []), "stops": stops}}
 
     @staticmethod
     def _at(day, seconds):
