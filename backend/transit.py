@@ -370,12 +370,14 @@ class Transit:
                 "departures": tt.departures(stop_id, local(after), to, limit), **self.about(tt)}
 
     def train_line(self, stops):
-        """The line [[lon, lat], ...] a train runs through `stops` (a departure's `stops`): along the track where it
-        is known, else straight to the next station."""
-        between = self.tracks.between(self.timetable().alias) if self.tracks else {}
+        """The line [[lon, lat], ...] a train runs through `stops` (a departure's `stops`), from each stop's own
+        position to the next one's: along the track between exactly these two stops (`stop_place`) where it is
+        known, else straight."""
         line = []
         for a, b in zip(stops, stops[1:]):
-            part = between.get((a["stop_id"], b["stop_id"])) or [[a["lon"], a["lat"]], [b["lon"], b["lat"]]]
+            at_a, at_b = (a["lon"], a["lat"]), (b["lon"], b["lat"])
+            part = (self.tracks.line(a["stop_place"], b["stop_place"], at_a, at_b) if self.tracks
+                    else [list(at_a), list(at_b)])
             line.extend(part if not line or line[-1] != part[0] else part[1:])
         return line
 

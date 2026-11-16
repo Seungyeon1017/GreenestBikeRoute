@@ -1078,9 +1078,10 @@ class TrainOption(TransitDeparture):
     stops: list[TrainStop] = Field(description=(
         "Every station the train calls at from `board` to `alight`, both included"))
     path: list[list[float]] = Field(description=(
-        "The train's way from `board` to `alight` as [lon, lat] points, to draw on a map: along the track, or "
-        "straight between two stations whose track isn't known (yet: the tracks are read in the background after "
-        "the first request)"))
+        "The train's way from `board` to `alight` as [lon, lat] points, to draw on a map. It passes through the "
+        "position of every entry of `stops` and ends at the first and last one's. Between two stops it follows the "
+        "track of exactly that pair, trimmed to the two stops; it is straight where that track isn't known (yet: "
+        "the tracks are read in the background after the first request) or stays more than 250 m from a stop"))
 
 
 class DirectRide(BaseModel):

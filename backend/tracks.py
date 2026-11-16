@@ -5,8 +5,12 @@ The timetable used for departures (backend.transit) comes without line geometry.
 with it ("mit Linienverlauf": shapes.txt, a point every ~40 m along the track), but that feed is 70 MB zipped
 (400 MB of shapes, mostly buses), so it is not read on every start: once, in the background, the rail tracks are cut out
 of it into cache/gtfs_hnv_tracks.json (a few MB) and the download is thrown away. Tracks rarely move: the file is built
-again when it is older than REFRESH_DAYS. Until it is there, and between stations it doesn't know, trips are drawn
+again when it is older than REFRESH_DAYS. Until it is there, and between stops it doesn't know, trips are drawn
 straight.
+
+The file has a track for each two stop places, also for each part of a station the timetable merges (the platforms of
+the Hauptbahnhof and the Stadtbahn stop in front of it have their own). The cuts are not exact: some tracks end short
+of their stop, some run on past it. `fitted` trims a track to its two stops and ties it to their marks.
 
 Data: NVBW / MobiData BW, "Soll-Fahrplandaten Verkehrsverbünde BW (einzeln) mit Linienverlauf", HNV
 (https://mobidata-bw.de/dataset/soll-fahrplandaten-verkehrsverbunde-bw-einzeln-mit-linienverlauf), GTFS, ODbL.
@@ -19,17 +23,51 @@ import tempfile
 import threading
 import time
 import zipfile
+import math
 from bisect import bisect_left, bisect_right
 from pathlib import Path
 
 import requests
-from shapely.geometry import LineString
+from shapely.geometry import LineString, Point
+from shapely.ops import substring
 
 GTFS_URL = "https://www.nvbw.de/fileadmin/user_upload/service/open_data/fahrplandaten_mit_liniennetz/hnv.zip"
 TRACKS_PATH = Path(__file__).resolve().parent.parent / "cache" / "gtfs_hnv_tracks.json"
 REFRESH_DAYS = 90
 RETRY_S = 3600          # after a failed build, wait this long before trying again
 SIMPLIFY_DEG = 0.00001  # ~1 m: drops the points of straight track
+MAX_END_GAP_M = 250     # a track that comes no nearer than this to one of its stops is not that pair's: drawn straight
+SNAP_M = 10             # a trimmed track's end this near its stop's mark is moved onto it; further away, joined to it
+M_PER_DEG = 111_320
+
+
+def fitted(track, a, b):
+    """`track` ([[lon, lat], ...], from stop a to stop b) from a's mark to b's and no further: [[lon, lat], ...] that
+    starts at `a` and ends at `b` (each (lon, lat)), so that two tracks in a row meet at the mark between them.
+    Of the track only the part between the point nearest to a (looked for in its first half) and the point nearest to
+    b (in its second half) is kept. None when the track stays more than MAX_END_GAP_M away from a or b."""
+    kx = M_PER_DEG * math.cos(math.radians(a[1]))  # metres around a: the pair is a few km at most
+
+    def metres(p):
+        return (p[0] - a[0]) * kx, (p[1] - a[1]) * M_PER_DEG
+
+    line = LineString([metres(p) for p in track])
+    half = line.length / 2
+    if half == 0:
+        return None
+    pa, pb = Point(metres(a)), Point(metres(b))
+    start = substring(line, 0, half).project(pa)
+    end = half + substring(line, half, line.length).project(pb)
+    first, last = line.interpolate(start), line.interpolate(end)
+    if first.distance(pa) > MAX_END_GAP_M or last.distance(pb) > MAX_END_GAP_M:
+        return None
+    cut = list(substring(line, start, end).coords) if end > start else []
+    if cut and first.distance(pa) <= SNAP_M:
+        cut = cut[1:]
+    if cut and last.distance(pb) <= SNAP_M:
+        cut = cut[:-1]
+    inner = [[round(a[0] + x / kx, 6), round(a[1] + y / M_PER_DEG, 6)] for x, y in cut]
+    return [[a[0], a[1]], *inner, [b[0], b[1]]]
 
 
 def station_of(stop_id):
@@ -92,6 +130,7 @@ class Tracks:
         self.path, self.clock, self.background = Path(path), clock, background
         self.fetch, self.is_train = fetch or self._download, is_train
         self._tracks, self._read_at, self._tried, self._lock = None, None, None, threading.Lock()
+        self._fitted = (None, {})  # (the tracks they were made from, {(a, b): fitted track or None})
 
     @staticmethod
     def _download(to_path):
@@ -122,7 +161,7 @@ class Tracks:
             Path(tmp).unlink(missing_ok=True)
 
     def tracks(self):
-        """{(a, b): [[lon, lat], ...]} as far as known ({} while the first build runs)."""
+        """{(a, b): [[lon, lat], ...]} by stop place, as far as known ({} while the first build runs)."""
         with self._lock:
             if self._stale() and (self._tried is None or self.clock() - self._tried > RETRY_S):
                 self._tried = self.clock()
@@ -139,16 +178,16 @@ class Tracks:
                     pass
             return self._tracks or {}
 
-    def between(self, alias):
-        """The tracks by station as the timetable merges them: {(station a, station b): line}; `alias` maps a stop
-        place's id to its station's (Timetable.alias)."""
+    def line(self, a, b, at_a, at_b):
+        """The way of a train from stop place a to b, whose marks are at_a and at_b ((lon, lat)): its track from
+        mark to mark (see fitted), or straight when the pair has no track of its own or the track isn't near both.
+        Never another stop's track: the next stop of the same station can be 100 m away."""
         tracks = self.tracks()
-        key = (id(tracks), id(alias))
-        if getattr(self, "_between_key", None) != key:
-            merged = {}
-            for (a, b), line in tracks.items():
-                a, b = alias.get(a), alias.get(b)
-                if a and b and a != b:
-                    merged.setdefault((a, b), line)
-            self._between, self._between_key = merged, key
-        return self._between
+        if self._fitted[0] is not tracks:
+            self._fitted = (tracks, {})
+        cache = self._fitted[1]
+        key = (a, b, at_a, at_b)
+        if key not in cache:
+            track = tracks.get((a, b))
+            cache[key] = fitted(track, at_a, at_b) if track and len(track) >= 2 else None
+        return cache[key] or [list(at_a), list(at_b)]
