@@ -1,6 +1,6 @@
 import type { Feature, FeatureCollection } from 'geojson'
 import maplibregl from 'maplibre-gl'
-import type { TrainOption, TrainTrip } from '@/types/greenest'
+import type { TrainOption, TrainRide, TrainTrip } from '@/types/greenest'
 import { ROUTE_COLORS } from './RouteComparison'
 import {
   addStationIcons,
@@ -17,6 +17,18 @@ export const TRAIN_RIDE_COLOR = ROUTE_COLORS.greenest
 /** S-Bahn lines (S4, S41, ...) in the S disc's green, other trains in the train disc's blue. */
 export function trainLineColor(line: string) {
   return /^S\d/.test(line) ? SBAHN_COLOR : TRAIN_COLOR
+}
+
+/**
+ * The bike leg that goes with a train: the ride to (or from) the stop that train uses. A station
+ * can have several stops a short walk apart, each with its own ride.
+ */
+export function rideOf(
+  trip: TrainTrip,
+  option: TrainOption | null | undefined,
+): TrainRide | null {
+  const own = trip.rides?.find(r => r.stop_place === option?.stop_place)
+  return own?.ride ?? trip.ride
 }
 
 /**
@@ -117,8 +129,9 @@ export function drawTrainTrip(
       },
       properties: { mode: 'train', color },
     })
-    if (trip.ride) {
-      lines.push({ ...trip.ride, properties: { mode: 'bike' } })
+    const ride = rideOf(trip, option)
+    if (ride) {
+      lines.push({ ...ride, properties: { mode: 'bike' } })
     }
     const ends = [trip.board, trip.alight].map(f => f.properties)
     option.stops.forEach((s, i) => {
@@ -151,7 +164,7 @@ export function trainTripBounds(
   trip: TrainTrip,
   option: TrainOption,
 ): maplibregl.LngLatBounds {
-  const coords = (trip.ride?.geometry.coordinates ??
+  const coords = (rideOf(trip, option)?.geometry.coordinates ??
     option.path ??
     option.stops.map(s => [s.lon, s.lat])) as [number, number][]
   return coords.reduce(

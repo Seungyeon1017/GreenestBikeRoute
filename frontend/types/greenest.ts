@@ -386,6 +386,22 @@ export type TransitStopProperties = {
   distance_m?: number
   /** In Heilbronn, so a plain bike route can start or end there; false: only by train. */
   rideable?: boolean
+  /**
+   * The stops the station is made of, its main one (the feature's own point) first: one for
+   * most stations, several where stops a short walk apart were merged.
+   */
+  stops?: TransitStopPlace[]
+}
+
+/** One stop of a station, at its own place. */
+export type TransitStopPlace = {
+  /** IFOPT stop place, e.g. de:08121:1114. */
+  stop_place: string
+  /** The stop's own name, e.g. "Heilbronn Hbf/Willy-Brandt-Pl.". */
+  name: string
+  lon: number
+  lat: number
+  lines: string[]
 }
 
 export type TransitStopFeature = Feature<Point, TransitStopProperties>
@@ -401,8 +417,13 @@ export type TransitStopCollection = FeatureCollection<
 
 /** One station a train of `/route/train` calls at. */
 export type TrainStop = {
+  /** The station, and its name. */
   stop_id: string
   name: string
+  /** The stop of the station the train uses, and that stop's own name. */
+  stop_place?: string
+  stop_name?: string
+  /** Where the train stops: the stop's place, not the whole station's. */
   lon: number
   lat: number
   platform: string | null
@@ -422,6 +443,11 @@ export type TrainOption = {
   duration_min: number
   /** Mon-Fri 06:00-09:00 a bike needs a Fahrradkarte on HNV trains. */
   bike_ticket_needed: boolean
+  /**
+   * The stop of the Heilbronn station this train uses: the bike leg to draw is the one of
+   * `TrainTrip.rides` with this `stop_place`. null for direction train.
+   */
+  stop_place?: string | null
   /** When the trip starts: start riding (to_train), or the train leaves (from_train). */
   leave_at: string
   /** When the trip ends: the train arrives (to_train), or the ride ends (from_train). */
@@ -440,13 +466,17 @@ export type TrainOption = {
  */
 export type TrainDirection = 'to_train' | 'from_train' | 'train'
 
+export type TrainRide = Feature<LineString, RouteProperties & { mode: 'bike' }>
+
 /** `/route/train`: a trip by bike and train through the Heilbronn station that gets there soonest. */
 export type TrainTrip = {
   direction: TrainDirection
   board: Feature<Point, TransitStopProperties>
   alight: Feature<Point, TransitStopProperties>
-  /** The bike leg, as the route from `/route`; null for direction train. */
-  ride: Feature<LineString, RouteProperties & { mode: 'bike' }> | null
+  /** The bike leg of options[0], as the route from `/route`; null for direction train. */
+  ride: TrainRide | null
+  /** The bike leg for each stop of the station that one of the trains uses. */
+  rides?: { stop_place: string; ride: TrainRide }[]
   /** Riding all the way instead, when both ends are in Heilbronn: sooner there, the train is a detour. */
   direct: { length_m: number; duration_s: number; arrive_at: string } | null
   /** The trains to take, the one arriving first first. */

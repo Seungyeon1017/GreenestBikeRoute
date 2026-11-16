@@ -376,6 +376,20 @@ export default function PlanTripView() {
   const rideInstead = bikeSooner && !trainAnyway
   // The train trip on the map and in the card.
   const shownTrain = rideInstead ? null : trainTrip.trip
+  // The pins of a shown train trip stand where its train stops: a station can have several
+  // stops a short walk apart, and the pin of the station is on its main one. Only the pins
+  // move; `start` and `end` stay the picked points.
+  const startIsStation = Boolean(stationAt(startStation, start))
+  const endIsStation = Boolean(stationAt(endStation, end))
+  const trainStops = shownTrain && trainOption ? trainOption.stops : null
+  const startPin = useMemo<LngLat | null>(() => {
+    const stop = startIsStation ? trainStops?.[0] : undefined
+    return stop ? [stop.lon, stop.lat] : start
+  }, [start, startIsStation, trainStops])
+  const endPin = useMemo<LngLat | null>(() => {
+    const stop = endIsStation ? trainStops?.[trainStops.length - 1] : undefined
+    return stop ? [stop.lon, stop.lat] : end
+  }, [end, endIsStation, trainStops])
   // Only a plain bike route has the comparison, the hills and the rental trip.
   const bikeRoute = plan?.kind === 'bike' || rideInstead
 
@@ -888,12 +902,12 @@ export default function PlanTripView() {
   // when its point changes or is reset.
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !start) {
+    if (!map || !startPin) {
       return
     }
     const marker = endpointPin(
       map,
-      start,
+      startPin,
       '#1a7f37',
       t('greenest.planTrip.start'),
       point => {
@@ -904,16 +918,16 @@ export default function PlanTripView() {
     return () => {
       marker.remove()
     }
-  }, [start, t])
+  }, [startPin, t])
 
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !end) {
+    if (!map || !endPin) {
       return
     }
     const marker = endpointPin(
       map,
-      end,
+      endPin,
       '#b3261e',
       t('greenest.planTrip.destination'),
       point => {
@@ -924,7 +938,7 @@ export default function PlanTripView() {
     return () => {
       marker.remove()
     }
-  }, [end, t])
+  }, [endPin, t])
 
   // 4. HANDLERS: functions called by clicks and buttons.
 

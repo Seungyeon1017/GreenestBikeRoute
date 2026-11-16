@@ -1,9 +1,6 @@
-import type { FeatureCollection } from 'geojson'
+import type { Feature, FeatureCollection, Point } from 'geojson'
 import type maplibregl from 'maplibre-gl'
-import type {
-  TransitStopCollection,
-  TransitStopProperties,
-} from '@/types/greenest'
+import type { TransitStopCollection } from '@/types/greenest'
 
 const EMPTY: FeatureCollection = { type: 'FeatureCollection', features: [] }
 
@@ -78,9 +75,14 @@ export function addStationIcons(map: maplibregl.Map) {
   }
 }
 
+/** From this zoom on every stop of a station has its own name underneath. */
+const STOP_NAMES_ZOOM = 17
+
 /**
- * Stadtbahn and train stations: an S disc or a train disc, with the name underneath from
- * zoom 13 on (names that would overlap are left out). Pass null to hide them.
+ * Stadtbahn and train stations: an S disc or a train disc at each stop of the station (the
+ * Hauptbahnhof has its platforms and the Stadtbahn stop in front), each for the lines calling
+ * there. The station's name is underneath its main stop from zoom 13 on (names that would
+ * overlap are left out); from zoom 17 on each stop has its own name. Pass null to hide them.
  */
 export function drawStations(
   map: maplibregl.Map,
@@ -99,7 +101,15 @@ export function drawStations(
         'icon-allow-overlap': true,
         // S-Bahn stops on top where a train station sits next to one.
         'symbol-sort-key': ['match', ['get', 'kind'], 'sbahn', 1, 0],
-        'text-field': ['step', ['zoom'], '', 13, ['get', 'name']],
+        'text-field': [
+          'step',
+          ['zoom'],
+          '',
+          13,
+          ['case', ['get', 'main'], ['get', 'name'], ''],
+          STOP_NAMES_ZOOM,
+          ['get', 'stop_name'],
+        ],
         'text-font': [
           'Montserrat Medium',
           'Open Sans Regular',
@@ -118,13 +128,26 @@ export function drawStations(
       },
     })
   }
-  const features = (stops?.features ?? []).map(f => ({
-    ...f,
-    properties: {
-      ...f.properties,
-      kind: stationKind(f.properties.lines),
-    } as TransitStopProperties & { kind: StationKind },
-  }))
+  const features: Feature<Point>[] = (stops?.features ?? []).flatMap(f => {
+    const { stop_id, name, lines } = f.properties
+    const [lon, lat] = f.geometry.coordinates
+    // An older backend sends no stops: the station's own point.
+    const parts = f.properties.stops?.length
+      ? f.properties.stops
+      : [{ stop_place: stop_id, name, lon, lat, lines }]
+    return parts.map((part, i) => ({
+      type: 'Feature' as const,
+      geometry: { type: 'Point' as const, coordinates: [part.lon, part.lat] },
+      properties: {
+        stop_id,
+        name,
+        stop_place: part.stop_place,
+        stop_name: part.name,
+        main: i === 0,
+        kind: stationKind(part.lines) satisfies StationKind,
+      },
+    }))
+  })
   map
     .getSource<maplibregl.GeoJSONSource>('stations')
     ?.setData({ type: 'FeatureCollection', features })

@@ -5,8 +5,8 @@ import { Bike, TrainFront } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import Card, { CardTitle } from '@/components/Greenest/ui/Card'
 import InfoTip from '@/components/Greenest/ui/InfoTip'
-import type { TrainOption, TrainTrip } from '@/types/greenest'
-import { TRAIN_RIDE_COLOR, trainLineColor } from './trainLayers'
+import type { TrainOption, TrainStop, TrainTrip } from '@/types/greenest'
+import { rideOf, TRAIN_RIDE_COLOR, trainLineColor } from './trainLayers'
 
 const TIME_ZONE = 'Europe/Berlin'
 
@@ -34,6 +34,24 @@ const km = (metres: number, language: string) =>
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
   })
+
+/**
+ * A station's name, with the stop the train uses there when the station has several:
+ * "Heilbronn Hauptbahnhof (Hbf/Willy-Brandt-Pl.)". The stop's name goes without the words it
+ * starts with like the station's ("Heilbronn").
+ */
+export function stopLabel(stop: Pick<TrainStop, 'name' | 'stop_name'>) {
+  if (!stop.stop_name || stop.stop_name === stop.name) {
+    return stop.name
+  }
+  const station = stop.name.split(' ')
+  const own = stop.stop_name.split(' ')
+  let same = 0
+  while (same < own.length - 1 && own[same] === station[same]) {
+    same++
+  }
+  return `${stop.name} (${own.slice(same).join(' ')})`
+}
 
 type TrainCardProps = {
   /** The earliest start as "YYYY-MM-DDTHH:mm", or '' for now. */
@@ -172,7 +190,8 @@ function TrainSteps({
       : s('duration.hours', { h: Math.floor(min / 60), min: min % 60 })
   }
   const toTrain = trip.direction === 'to_train'
-  const ride = trip.ride?.properties
+  // The ride to the stop this train uses: a station can have several, each with its own ride.
+  const ride = rideOf(trip, option)?.properties
   const board = trip.board.properties.name
   const alight = trip.alight.properties.name
   const rideFacts = {
@@ -195,8 +214,10 @@ function TrainSteps({
           {s('step.train', { line: option.line, headsign: option.headsign })}
         </span>
         <span>
-          {board} {time(option.departure)}
-          {platform(option.platform)} → {alight} {time(option.arrival)}
+          {stopLabel(option.stops[0])} {time(option.departure)}
+          {platform(option.platform)} →{' '}
+          {stopLabel(option.stops[option.stops.length - 1])}{' '}
+          {time(option.arrival)}
           {platform(option.arrival_platform)}
         </span>
         <span className="text-leaf-muted">

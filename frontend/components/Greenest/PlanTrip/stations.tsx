@@ -54,10 +54,10 @@ export function metresBetween([lng1, lat1]: LngLat, [lng2, lat2]: LngLat) {
 }
 
 /**
- * A place of the search this close to a station is that station: the stops merged into one
- * station are up to 200 m apart, and OpenStreetMap puts its own point on each platform.
+ * A place of the search this close to a stop of a station is that station: OpenStreetMap puts
+ * its own point on each platform, a little away from the timetable's.
  */
-const STATION_PLACE_M = 250
+const STATION_PLACE_M = 150
 
 /** OSM categories of stops and stations: such a place next to a station is the station itself. */
 function isStop({ category, type }: PlaceProperties) {
@@ -70,7 +70,7 @@ function isStop({ category, type }: PlaceProperties) {
 
 /**
  * The station a place of the search stands for, or null: a railway place (a station, a
- * platform, a tram stop) within STATION_PLACE_M of one. So "Harmonie" found by the place
+ * platform, a tram stop) within STATION_PLACE_M of one of its stops. So "Harmonie" found by the place
  * search and Harmonie from the timetable are not listed twice, and either one is a station
  * for "Combine with trains".
  */
@@ -86,7 +86,10 @@ export function stationOfPlace(
   let bestM = STATION_PLACE_M
   for (const s of stations) {
     const [lng, lat] = s.geometry.coordinates
-    const m = metresBetween(at, [lng, lat])
+    const stops: LngLat[] = s.properties.stops?.length
+      ? s.properties.stops.map(p => [p.lon, p.lat])
+      : [[lng, lat]]
+    const m = Math.min(...stops.map(p => metresBetween(at, p)))
     if (m <= bestM) {
       best = s
       bestM = m
