@@ -161,9 +161,7 @@ STREET_OVERLAYS = {"roughness": roughness_collection, "flow": flow_collection, "
                    "shade": shade_collection, "lighting": lighting_collection,
                    "bike_friendly": bike_friendly_collection}
 # What penalty_query gives without parameters: the /score the map asks for.
-DEFAULT_PENALTIES = (DEFAULT_BUMP_PENALTY, DEFAULT_DANGER_PENALTY, DEFAULT_PM_PENALTY, DEFAULT_STOP_PENALTY, False,
-                     DEFAULT_SHADE_PENALTY, DEFAULT_DARK_PENALTY, DEFAULT_PREFER_BIKE_FRIENDLY, DEFAULT_UNPAVED_PENALTY,
-                     None)
+DEFAULT_PENALTIES = Penalties()
 
 
 API_DESCRIPTION = """

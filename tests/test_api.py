@@ -1,3 +1,5 @@
+import threading
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -5,8 +7,10 @@ from backend.app import create_app
 from backend.schemas import DangerCollection, FlowCollection, GradeCollection, LightingCollection, RouteCollection, \
     RouteComparison, RoughnessCollection, ScoreCollection, ShadeCollection, SpeedCollection, DayRoutes
 from download_data import HEILBRONN_BBOX, overtaking_risk
-from routing.costs import DEFAULT_BUMP_PENALTY, MIN_OVERTAKING_CM
+from routing.costs import DEFAULT_BUMP_PENALTY, MIN_OVERTAKING_CM, Penalties
 from routing.graph import attach_lighting, attach_shade
+from routing.naming import name_streets
+from routing.route import sky
 from tests.conftest import COORDS, A, B, joined
 
 
@@ -135,6 +139,25 @@ def test_street_overlays_come_without_names_until_they_are_ready(client):
     r = client.get("/roughness")
     assert r.json()["named"] is True
     assert set(r.json()["features"][0]["properties"]) == {"roughness", "name", "way", "along"}
+
+
+def test_startup_prepares_the_named_default_score(toy_graph, monkeypatch):
+    crashes, naming = [], threading.Event()
+    monkeypatch.setattr(threading, "excepthook", crashes.append)
+    monkeypatch.setattr("backend.app.load_graph", lambda: toy_graph)
+    monkeypatch.setattr("backend.app.name_streets", lambda G: (naming.wait(10), name_streets(G)))
+    with TestClient(create_app(sharing=object(), walk_graph=toy_graph)) as c:
+        worker = next(t for t in threading.enumerate() if "name_overlays" in t.name)
+        assert c.get("/score").json()["named"] is False  # served while the streets are still being named
+        assert c.get("/roughness").json()["named"] is False
+        naming.set()
+        worker.join(30)
+
+        assert not worker.is_alive() and crashes == []
+        assert list(c.app.state.scores) == [(Penalties(), *sky(toy_graph, None), True)]
+        assert c.app.state.scores[Penalties(), *sky(toy_graph, None), True]["named"] is True
+        assert all(key[-1] is True for key in c.app.state.overlays)
+        assert c.get("/score").json()["named"] is True
 
 
 def test_overlays_are_compressed(client):
