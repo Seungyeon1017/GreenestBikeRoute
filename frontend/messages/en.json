@@ -1080,7 +1080,7 @@
           {
             "heading": "Street and map reports",
             "lines": [
-              "Reports store the location, type, optional note and end date, time, a random browser ID and a salted hash of your IP address, to count independent reports and limit misuse. Closure reports are deleted after 33 days. Map reports lose the browser ID and IP hash once reviewed. Basis: Art. 6 (1) (f) GDPR."
+              "Reports store the location, type, optional note and end date, time, a random browser ID and a salted hash of your IP address, to count independent reports and limit misuse. Closure reports are deleted after 368 days. Map reports lose the browser ID and IP hash once reviewed. Basis: Art. 6 (1) (f) GDPR."
             ]
           },
           {

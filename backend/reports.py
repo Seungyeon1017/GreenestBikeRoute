@@ -47,6 +47,7 @@ OPEN_AT = 2              # independent "open again" answers that lift a closure
 LOCAL_TZ = ZoneInfo("Europe/Berlin")  # end dates are Heilbronn days
 SNAP_M = 50          # a closure report further than this from every street is refused
 MAPPING_KINDS = ("rideable", "other")
+RETAIN_S = 368 * 24 * 3600  # closure reports are deleted this long after they came in
 PURGE_EVERY_S = 3600  # how often old personal data is cleaned up (see Reports._purge)
 
 SCHEMA = """
@@ -136,14 +137,14 @@ class Reports:
         self._purge()
 
     def _purge(self):
-        """At most once per PURGE_EVERY_S: delete closure reports too old to count (MAX_S + GRACE_S, 33 days), and
+        """At most once per PURGE_EVERY_S: delete closure reports older than RETAIN_S, and
         remove the reporter id and IP hash from mapping reports a maintainer has reviewed."""
         now = self.clock()
         if self._purged is not None and now - self._purged < PURGE_EVERY_S:
             return
         with self.lock, self.db:
             self._purged = now
-            self.db.execute("DELETE FROM closure_reports WHERE created < ?", (now - MAX_S - GRACE_S,))
+            self.db.execute("DELETE FROM closure_reports WHERE created < ?", (now - RETAIN_S,))
             self.db.execute("UPDATE mapping_reports SET reporter = '', client = '' "
                             "WHERE status != 'pending' AND (reporter != '' OR client != '')")
 

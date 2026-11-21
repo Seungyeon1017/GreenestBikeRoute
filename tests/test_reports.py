@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
-from backend.reports import CLOSED_AT, DEFAULT_S, GRACE_S, LOCAL_TZ, MAX_S, OPEN_AT, ReportError, Reports
+from backend.reports import CLOSED_AT, DEFAULT_S, GRACE_S, LOCAL_TZ, MAX_S, OPEN_AT, RETAIN_S, ReportError, Reports
 from backend.schemas import ClosureCollection, ClosureFeature, FootwayFeature, MappingCollection, MappingFeature,     StreetSegmentFeature
 from routing.footways import Footways, footway_collection
 from routing.graph import keep_rideable_footways
@@ -76,10 +76,10 @@ def mapping_ids(reports):
     return tuple(reports.db.execute("SELECT reporter, client FROM mapping_reports").fetchone())
 
 
-def test_closure_reports_are_deleted_after_33_days(reports, clock):
-    assert MAX_S + GRACE_S == 33 * 24 * 3600
+def test_closure_reports_are_deleted_after_368_days(reports, clock):
+    assert RETAIN_S == 368 * 24 * 3600
     report(reports, "r1", "1.1.1.1")
-    clock.t += MAX_S + GRACE_S - 1
+    clock.t += RETAIN_S - 1
     reports.closures()
     assert stored_closures(reports) == 1
     clock.t += 3602  # past the limit and the hourly check
