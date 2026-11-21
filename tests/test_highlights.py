@@ -4,9 +4,11 @@ from fastapi.testclient import TestClient
 
 from backend.app import create_app
 from backend.schemas import GreenStreetCollection, TourCollection
-from routing import tours
+from routing import highlights, naming, tours
+from routing.edges import _GRAPH_LOCK
 from routing.graph import attach_shade
 from routing.highlights import MIN_RIDDEN_M, greenest_streets, ridden
+from routing.snap import _snapped_ends
 
 # Five nodes on a line in Heilbronn, ~110 m apart; each street is one two-way edge (200 m long, for round numbers).
 NODES = {1: (49.1400, 9.2100), 2: (49.1410, 9.2100), 3: (49.1420, 9.2100), 4: (49.1430, 9.2100), 5: (49.1440, 9.2100)}
@@ -59,6 +61,57 @@ def test_two_way_street_counts_once(streets):
 def test_unmeasured_air_counts_at_its_prior(streets):
     streets.edges[1, 2, 0]["pm_risk"] = streets.edges[2, 1, 0]["pm_risk"] = None
     assert greenest_streets(streets)["features"][0]["properties"]["pm_risk"] == 0.5
+
+
+def test_route_starting_mid_ranking_changes_nothing(streets, monkeypatch):
+    expected = greenest_streets(streets)
+    route = _snapped_ends(streets, (49.1405, 9.2100), (49.1415, 9.2100))  # splits Allee and Kaiserstraße
+    named, real = [], highlights.street_name
+
+    def name_during_route(G, u, v, d):
+        if not named:
+            route.__enter__()
+        named.append((u, v))
+        return real(G, u, v, d)
+
+    monkeypatch.setattr(highlights, "street_name", name_during_route)
+    try:
+        ranked = greenest_streets(streets)
+    finally:
+        if named:
+            route.__exit__(None, None, None)
+    assert ranked == expected
+    assert not any(isinstance(n, str) for edge in named for n in edge)
+
+
+def test_route_restores_the_graph_under_the_lock(streets, monkeypatch):
+    held, remove_node = [], streets.remove_node
+    monkeypatch.setattr(streets, "remove_node", lambda n: (held.append(_GRAPH_LOCK.locked()), remove_node(n)))
+    with _snapped_ends(streets, (49.1405, 9.2100), (49.1415, 9.2100)):
+        pass
+    assert held == [True, True]
+
+
+def test_street_index_is_built_under_the_lock(streets, monkeypatch):
+    held, build = [], naming._NamedRoads
+    monkeypatch.setattr(naming, "_NamedRoads", lambda G: (held.append(_GRAPH_LOCK.locked()), build(G))[1])
+    greenest_streets(streets)
+    assert held == [True]
+
+
+def test_street_index_survives_a_route_ending_while_counted(streets, monkeypatch):
+    index = naming._named_roads(streets)
+    streets.add_node("snap-start", x=9.21, y=49.1405)
+    count = streets.number_of_nodes
+
+    def count_then_route_ends():
+        n = count()
+        if "snap-start" in streets:
+            streets.remove_node("snap-start")
+        return n
+
+    monkeypatch.setattr(streets, "number_of_nodes", count_then_route_ends)
+    assert naming._named_roads(streets) is index
 
 
 def test_attach_shade_sets_tree_canopy(streets):

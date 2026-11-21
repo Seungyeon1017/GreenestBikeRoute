@@ -5,7 +5,7 @@ Group: features on top.
 """
 from routing.costs import DEFAULT_PM_RISK
 from routing.edges import edge_coords
-from routing.naming import street_name
+from routing.naming import street_edges, street_name
 
 # A street counts only where ATRAI bikes rode it: its edges with a bike measurement (roughness, speed, stop-and-go or
 # air), and only with at least MIN_RIDDEN_M of them, so a few metres of a crossing street don't rank.
@@ -36,7 +36,7 @@ def greenest_streets(G, limit=None):
     first, with `rank`, `name`, `green_score` 0-100 and what it is made of (length-weighted over the ridden edges).
     A way without a name (a sidewalk, a bike path) counts for the road it runs beside (street_name)."""
     streets, seen = {}, set()
-    for u, v, d in G.edges(data=True):
+    for u, v, d in street_edges(G):
         edge = (min(u, v), max(u, v), str(d["osmid"]), round(float(d["length"]), 1))
         if edge in seen or not ridden(d):
             continue

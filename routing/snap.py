@@ -125,8 +125,8 @@ def _snapped_ends(G, origin, destination):
     """
     undo = []  # (node, [(u, v, key, data) removed edges]) in the order they were made
     ends = []
-    try:
-        with _GRAPH_LOCK:
+    with _GRAPH_LOCK:  # until G is restored, so no one sees it half split
+        try:
             index = _snap_index(G)  # before the first split changes G
             for label, (lat, lon) in (("start", origin), ("end", destination)):
                 # The end may lie on a piece of the street the start split.
@@ -161,11 +161,11 @@ def _snapped_ends(G, origin, destination):
             if ends[0] == ends[1]:
                 raise RouteError("start and end snap to the same spot")
             yield ends
-    finally:
-        for node, removed in reversed(undo):
-            G.remove_node(node)
-            for a, b, k, d in removed:
-                G.add_edge(a, b, key=k, **d)
+        finally:
+            for node, removed in reversed(undo):
+                G.remove_node(node)
+                for a, b, k, d in removed:
+                    G.add_edge(a, b, key=k, **d)
 
 
 def nearest_street(G, lat, lon):

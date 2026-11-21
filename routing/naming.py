@@ -237,7 +237,14 @@ _NAMED_ROADS = weakref.WeakKeyDictionary()
 
 
 def _named_roads(G):
-    size = G.number_of_nodes() - sum(n in G for n in ("snap-start", "snap-end"))
+    def snapped():
+        return sum(n in G for n in ("snap-start", "snap-end"))
+
+    while True:  # a route may add or remove its ends while this counts without the lock
+        ends, nodes = snapped(), G.number_of_nodes()
+        if snapped() == ends:
+            break
+    size = nodes - ends
     cached = _NAMED_ROADS.get(G)
     if cached is None or cached[0] != size:
         cached = _NAMED_ROADS[G] = (size, _NamedRoads(G))
@@ -347,12 +354,20 @@ def street_parts(G, u, v, d):
     return [(last - b, last - a, label) for a, b, label in reversed(cache[street])]
 
 
-def name_streets(G):
-    """street_parts of every street, ahead of the overlays and routes that ask for them (~15 s on Heilbronn): e.g. in a
-    background thread at startup. The edges are listed under the graph lock, as routes add and remove their ends."""
+def street_edges(G):
+    """The graph's edges [(u, v, d)] without a route's temporary ends, to go through without the graph lock. Listed
+    under it, with the index naming them built, as routes add and remove their ends. Not for use inside a route."""
     with _GRAPH_LOCK:
         edges = [(u, v, d) for u, v, d in G.edges(data=True) if not isinstance(u, str) and not isinstance(v, str)]
-    for u, v, d in edges:
+        if edges:
+            _named_roads(G)
+    return edges
+
+
+def name_streets(G):
+    """street_parts of every street, ahead of the overlays and routes that ask for them (~15 s on Heilbronn): e.g. in a
+    background thread at startup."""
+    for u, v, d in street_edges(G):
         street_parts(G, u, v, d)
 
 
