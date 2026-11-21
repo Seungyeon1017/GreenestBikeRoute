@@ -9,7 +9,7 @@ export default function PageIntro({
   className,
 }: {
   title: string
-  subtitle: string
+  subtitle?: string
   /** Explains `term`, a word in the title, in a tooltip on that word. */
   note?: { term: string; text: ReactNode }
   className?: string
@@ -28,9 +28,11 @@ export default function PageIntro({
           title
         )}
       </h1>
-      <p className="max-w-2xl text-sm leading-relaxed text-leaf-muted md:text-base">
-        {subtitle}
-      </p>
+      {subtitle && (
+        <p className="max-w-2xl text-sm leading-relaxed text-leaf-muted md:text-base">
+          {subtitle}
+        </p>
+      )}
     </div>
   )
 }

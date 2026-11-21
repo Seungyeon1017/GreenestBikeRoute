@@ -1026,6 +1026,14 @@
     "dialog": {
       "close": "Close"
     },
+    "demo": {
+      "title": "Demo of GreenestBikeRoute",
+      "watch": "Watch on YouTube",
+      "tryApp": "Try the live app",
+      "play": "Play video",
+      "privacy": "Pressing play loads the YouTube player. Google then receives your IP address and may store data on your device. Nothing is sent to YouTube before you press play.",
+      "footerLink": "Demo video"
+    },
     "legal": {
       "draftTitle": "Draft, pending legal review",
       "draftText": "Operator not yet confirmed. We are kindly asking the City of Heilbronn to operate this service.",
@@ -1092,7 +1100,8 @@
           {
             "heading": "External services",
             "lines": [
-              "Cloudflare carries all website traffic. CARTO delivers the base map directly to your browser and receives your IP address. Nominatim (OpenStreetMap Foundation) receives place-search text from our server, without your IP address or account. Cloudflare and CARTO may process data outside the EU. External links are contacted only when you open them."
+              "Cloudflare carries all website traffic. CARTO delivers the base map directly to your browser and receives your IP address. Nominatim (OpenStreetMap Foundation) receives place-search text from our server, without your IP address or account. Cloudflare and CARTO may process data outside the EU. External links are contacted only when you open them.",
+              "The demo video loads from YouTube (Google Ireland Limited) only after you press play. Google then receives your IP address and device data, may store information on your device, and may process data outside the EU. Basis: Art. 6 (1) (a) GDPR and § 25 (1) TDDDG."
             ]
           },
           {

@@ -103,6 +103,9 @@ export default function AppFooter() {
           </div>
         </div>
         <div className="flex gap-5 text-xs">
+          <Link className={LINK} href="/demo">
+            {t('greenest.demo.footerLink')}
+          </Link>
           <Link className={LINK} href="/impressum">
             {t('footer.impressum')}
           </Link>

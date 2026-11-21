@@ -1026,6 +1026,14 @@
     "dialog": {
       "close": "Schließen"
     },
+    "demo": {
+      "title": "Demo of GreenestBikeRoute",
+      "watch": "Auf YouTube ansehen",
+      "tryApp": "Live-App ausprobieren",
+      "play": "Video abspielen",
+      "privacy": "Beim Abspielen wird der YouTube-Player geladen. Google erhält dann deine IP-Adresse und kann Daten auf deinem Gerät speichern. Vorher werden keine Daten an YouTube übertragen.",
+      "footerLink": "Demovideo"
+    },
     "legal": {
       "draftTitle": "Entwurf, rechtliche Prüfung ausstehend",
       "draftText": "Der Betreiber steht noch nicht fest. Wir bitten die Stadt Heilbronn freundlich, diesen Dienst zu betreiben.",
@@ -1092,7 +1100,8 @@
           {
             "heading": "Externe Dienste",
             "lines": [
-              "Cloudflare überträgt den gesamten Datenverkehr der Website. CARTO liefert die Grundkarte direkt an Ihren Browser und erhält dabei Ihre IP-Adresse. Nominatim (OpenStreetMap Foundation) erhält von unserem Server den Suchtext, ohne IP-Adresse oder Konto. Cloudflare und CARTO können Daten außerhalb der EU verarbeiten. Externe Links werden erst beim Öffnen aufgerufen."
+              "Cloudflare überträgt den gesamten Datenverkehr der Website. CARTO liefert die Grundkarte direkt an Ihren Browser und erhält dabei Ihre IP-Adresse. Nominatim (OpenStreetMap Foundation) erhält von unserem Server den Suchtext, ohne IP-Adresse oder Konto. Cloudflare und CARTO können Daten außerhalb der EU verarbeiten. Externe Links werden erst beim Öffnen aufgerufen.",
+              "Das Demovideo wird erst nach Klick auf Abspielen von YouTube (Google Ireland Limited) geladen. Google erhält dann Ihre IP-Adresse und Gerätedaten, kann Informationen auf Ihrem Gerät speichern und Daten außerhalb der EU verarbeiten. Grundlage: Art. 6 Abs. 1 lit. a DSGVO und § 25 Abs. 1 TDDDG."
             ]
           },
           {
