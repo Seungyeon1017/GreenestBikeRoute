@@ -11,11 +11,10 @@ const messagesMap = { de, en } as const
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 
 export const metadata: Metadata = {
+  // Social apps need absolute URLs; `app/opengraph-image.png` is the preview.
+  metadataBase: new URL('https://greenestbikeroute.ta-a-mi.earth'),
   title: 'GreenestBikeRoute Heilbronn',
   icons: '/favicon.svg',
-  openGraph: {
-    images: [{ url: '/opengraph-image.png' }],
-  },
 }
 
 export const viewport: Viewport = {
