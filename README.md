@@ -91,6 +91,18 @@ The Overview map reads small files from `frontend/public/map-data/`. After downl
 node frontend/scripts/build-map-data.mjs
 ```
 
+## Deploy on the Raspberry Pi
+
+To update production, run this on the Pi:
+
+```bash
+cd ~/code_projects/GreenestBikeRoute
+git pull
+sudo docker compose -f compose.yml -f compose.prod.yml up --build -d
+```
+
+The site is served on port `8088`, with the API under `/api`. `.env` and `cache/` stay on the Pi and are not in git.
+
 ## License
 
 Code: [AGPL-3.0](LICENSE), the license of the Green City Dashboard that `frontend/` is forked from.
