@@ -1025,6 +1025,84 @@
     },
     "dialog": {
       "close": "Close"
+    },
+    "legal": {
+      "draftTitle": "Draft, pending legal review",
+      "draftText": "Operator not yet confirmed. We are kindly asking the City of Heilbronn to operate this service.",
+      "imprint": {
+        "title": "Imprint",
+        "subtitle": "Provider information for GreenestBikeRoute Heilbronn.",
+        "sections": [
+          {
+            "heading": "Provider and responsible for content (§ 5 DDG, § 18 (2) MStV)",
+            "lines": [
+              "[Name: pending]",
+              "[Postal address: pending]",
+              "Email: [pending]"
+            ]
+          },
+          {
+            "heading": "About this service",
+            "lines": [
+              "GreenestBikeRoute is a hackathon prototype. Routes can be wrong or out of date, so always follow traffic rules and local conditions."
+            ]
+          }
+        ]
+      },
+      "privacy": {
+        "title": "Privacy Policy",
+        "subtitle": "The controller is the operator named in the Imprint.",
+        "sections": [
+          {
+            "heading": "Website and logs",
+            "lines": [
+              "Cloudflare forwards requests to our server and processes your IP address. Our access logs contain the time, URL, status, data size, referring page, browser and proxy connection address. URLs can include trip coordinates and searches. Access logs are deleted after 7 days, and error logs are limited in size. Basis: Art. 6 (1) (f) GDPR."
+            ]
+          },
+          {
+            "heading": "Account",
+            "lines": [
+              "We store your email, password hash, optional display name and sign-up date until your account is deleted. To delete it, email the contact in the Imprint. Basis: Art. 6 (1) (b) GDPR."
+            ]
+          },
+          {
+            "heading": "Trips and location",
+            "lines": [
+              "Start, destination and options are sent to our server to calculate a route. Saved routes are stored with your account. Your location is used only after you allow it in your browser. Share links contain the trip's coordinates. Basis: Art. 6 (1) (b) GDPR, and (a) for location."
+            ]
+          },
+          {
+            "heading": "Published routes",
+            "lines": [
+              "Published GPX rides show everyone the line, name, description, tags, display name, date, moving time, length and recording app. We trim 200 m from each end, but a route can still reveal places you visit. Hearts, bookmarks and flags are stored with your account, and maintainers can see an author's email when moderating. You can delete your routes at any time. Basis: Art. 6 (1) (b) and (f) GDPR."
+            ]
+          },
+          {
+            "heading": "Street and map reports",
+            "lines": [
+              "Reports store the location, type, optional note and end date, time, a random browser ID and a salted hash of your IP address, to count independent reports and limit misuse. Closure reports are deleted after 33 days. Map reports lose the browser ID and IP hash once reviewed. Basis: Art. 6 (1) (f) GDPR."
+            ]
+          },
+          {
+            "heading": "Cookies and browser storage",
+            "lines": [
+              "A “lang” cookie keeps your language for 1 year. Browser storage holds your login token (valid for 7 days), report ID and answered closure questions. We use no analytics or advertising trackers."
+            ]
+          },
+          {
+            "heading": "External services",
+            "lines": [
+              "Cloudflare carries all website traffic. CARTO delivers the base map directly to your browser and receives your IP address. Nominatim (OpenStreetMap Foundation) receives place-search text from our server, without your IP address or account. Cloudflare and CARTO may process data outside the EU. External links are contacted only when you open them."
+            ]
+          },
+          {
+            "heading": "Your rights",
+            "lines": [
+              "You have the rights in Art. 15 to 21 GDPR, including access, correction, erasure and objection. You can withdraw consent at any time and complain to a supervisory authority, such as the State Commissioner for Data Protection in Baden-Württemberg."
+            ]
+          }
+        ]
+      }
     }
   }
 }

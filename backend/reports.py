@@ -47,6 +47,7 @@ OPEN_AT = 2              # independent "open again" answers that lift a closure
 LOCAL_TZ = ZoneInfo("Europe/Berlin")  # end dates are Heilbronn days
 SNAP_M = 50          # a closure report further than this from every street is refused
 MAPPING_KINDS = ("rideable", "other")
+PURGE_EVERY_S = 3600  # how often old personal data is cleaned up (see Reports._purge)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -120,6 +121,8 @@ class Reports:
         self.lock = threading.Lock()
         self.db = sqlite3.connect(str(path), check_same_thread=False)
         self.db.row_factory = sqlite3.Row
+        self.db.execute("PRAGMA secure_delete = ON")  # deleted reports don't linger in the file's free pages
+        self._purged = None
         with self.lock, self.db:
             self.db.executescript(SCHEMA)
             # Files made before closures had end dates and "open again" answers.
@@ -130,6 +133,19 @@ class Reports:
                 self.db.execute("ALTER TABLE closure_reports ADD COLUMN until REAL")
             self.db.execute("INSERT OR IGNORE INTO meta VALUES ('salt', ?)", (secrets.token_hex(16),))
             self.salt = self.db.execute("SELECT value FROM meta WHERE key = 'salt'").fetchone()[0]
+        self._purge()
+
+    def _purge(self):
+        """At most once per PURGE_EVERY_S: delete closure reports too old to count (MAX_S + GRACE_S, 33 days), and
+        remove the reporter id and IP hash from mapping reports a maintainer has reviewed."""
+        now = self.clock()
+        if self._purged is not None and now - self._purged < PURGE_EVERY_S:
+            return
+        with self.lock, self.db:
+            self._purged = now
+            self.db.execute("DELETE FROM closure_reports WHERE created < ?", (now - MAX_S - GRACE_S,))
+            self.db.execute("UPDATE mapping_reports SET reporter = '', client = '' "
+                            "WHERE status != 'pending' AND (reporter != '' OR client != '')")
 
     def _client(self, ip):
         """The client IP, salted and hashed: enough to tell networks apart without storing addresses."""
@@ -172,6 +188,7 @@ class Reports:
         return self._states()
 
     def _states(self, include_open=False):
+        self._purge()
         now = self.clock()
         with self.lock:
             rows = self.db.execute("SELECT * FROM closure_reports WHERE created >= ? ORDER BY created, id",
@@ -246,8 +263,8 @@ class Reports:
 
     def _resolve(self, report_id, status, way_id=None):
         with self.lock, self.db:
-            self.db.execute("UPDATE mapping_reports SET status = ?, resolved = ?, osm_way_id = COALESCE(?, osm_way_id) "
-                            "WHERE id = ?", (status, self.clock(), way_id, report_id))
+            self.db.execute("UPDATE mapping_reports SET status = ?, resolved = ?, osm_way_id = COALESCE(?, osm_way_id), "
+                            "reporter = '', client = '' WHERE id = ?", (status, self.clock(), way_id, report_id))
 
 
 def main(argv=None):

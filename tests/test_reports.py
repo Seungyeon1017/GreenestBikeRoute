@@ -68,6 +68,45 @@ def test_both_directions_are_one_segment(reports):
     assert reports.closure_states()[(A, B)]["reports"] == 2
 
 
+def stored_closures(reports):
+    return reports.db.execute("SELECT COUNT(*) FROM closure_reports").fetchone()[0]
+
+
+def mapping_ids(reports):
+    return tuple(reports.db.execute("SELECT reporter, client FROM mapping_reports").fetchone())
+
+
+def test_closure_reports_are_deleted_after_33_days(reports, clock):
+    assert MAX_S + GRACE_S == 33 * 24 * 3600
+    report(reports, "r1", "1.1.1.1")
+    clock.t += MAX_S + GRACE_S - 1
+    reports.closures()
+    assert stored_closures(reports) == 1
+    clock.t += 3602  # past the limit and the hourly check
+    reports.closures()
+    assert stored_closures(reports) == 0
+
+
+def test_reviewed_mapping_report_loses_its_ids(reports):
+    r = reports.report_mapping("other", (9.21, 49.14), "r1", "1.1.1.1", note="wrong tag")
+    assert all(mapping_ids(reports))
+    reports.reject_mapping(r["id"])
+    assert mapping_ids(reports) == ("", "")
+    assert reports.mapping_report(r["id"])["note"] == "wrong tag"
+
+
+def test_opening_a_file_cleans_already_reviewed_reports(tmp_path, clock):
+    path = tmp_path / "reports.sqlite3"
+    old = Reports(path, clock=clock)
+    old.report_mapping("other", (9.21, 49.14), "r1", "1.1.1.1", note="wrong tag")
+    with old.db:
+        old.db.execute("UPDATE mapping_reports SET status = 'rejected'")
+    old.db.close()
+    reopened = Reports(path, clock=clock)
+    assert mapping_ids(reopened) == ("", "")
+    reopened.db.close()
+
+
 def test_a_lapsed_closure_is_unconfirmed_for_a_while_then_gone(reports, clock):
     for i in range(CLOSED_AT):
         report(reports, f"r{i}", f"1.1.1.{i}")
