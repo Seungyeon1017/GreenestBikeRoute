@@ -40,14 +40,14 @@ from routing.rideable_ways import RIDEABLE_WAYS_PATH, add_rideable_way
 
 REPORTS_PATH = DATA_DIR / "reports.sqlite3"
 DEFAULT_S = 24 * 3600    # a closed report without an end date lives this long
-MAX_S = 30 * 24 * 3600   # and one with an end date at most this long
+MAX_S = 365 * 24 * 3600  # and one with an end date at most this long
 GRACE_S = 3 * 24 * 3600  # after the last report lapses, the closure stays "unconfirmed" this long
 CLOSED_AT = 3            # live independent reports that close a segment
 OPEN_AT = 2              # independent "open again" answers that lift a closure
 LOCAL_TZ = ZoneInfo("Europe/Berlin")  # end dates are Heilbronn days
 SNAP_M = 50          # a closure report further than this from every street is refused
 MAPPING_KINDS = ("rideable", "other")
-RETAIN_S = 368 * 24 * 3600  # closure reports are deleted this long after they came in
+RETAIN_S = MAX_S + GRACE_S  # no closure report is kept longer than this (368 days)
 PURGE_EVERY_S = 3600  # how often old personal data is cleaned up (see Reports._purge)
 
 SCHEMA = """
@@ -80,6 +80,14 @@ def _independent(reports):
 def _lapses(r):
     """When a closed report stops counting: its end date, else DEFAULT_S after it came in; at most MAX_S."""
     return min(r["until"] or r["created"] + DEFAULT_S, r["created"] + MAX_S)
+
+
+def _by_segment(rows):
+    """{(u, v): its rows, in the order given}."""
+    segments = {}
+    for r in rows:
+        segments.setdefault((r["u"], r["v"]), []).append(r)
+    return segments
 
 
 def _segment_state(reports, now):
@@ -137,14 +145,19 @@ class Reports:
         self._purge()
 
     def _purge(self):
-        """At most once per PURGE_EVERY_S: delete closure reports older than RETAIN_S, and
-        remove the reporter id and IP hash from mapping reports a maintainer has reviewed."""
+        """At most once per PURGE_EVERY_S: delete a segment's closure reports GRACE_S after its closure ended or was
+        lifted, any report older than RETAIN_S, and the reporter id and IP hash of reviewed mapping reports."""
         now = self.clock()
         if self._purged is not None and now - self._purged < PURGE_EVERY_S:
             return
         with self.lock, self.db:
             self._purged = now
             self.db.execute("DELETE FROM closure_reports WHERE created < ?", (now - RETAIN_S,))
+            rows = self.db.execute("SELECT * FROM closure_reports ORDER BY created, id").fetchall()
+            for (u, v), reports in _by_segment(rows).items():
+                state = _segment_state(reports, now)
+                if state is None or (state["status"] == "open" and now - reports[-1]["created"] >= GRACE_S):
+                    self.db.execute("DELETE FROM closure_reports WHERE u = ? AND v = ?", (u, v))
             self.db.execute("UPDATE mapping_reports SET reporter = '', client = '' "
                             "WHERE status != 'pending' AND (reporter != '' OR client != '')")
 
@@ -194,11 +207,8 @@ class Reports:
         with self.lock:
             rows = self.db.execute("SELECT * FROM closure_reports WHERE created >= ? ORDER BY created, id",
                                    (now - MAX_S - GRACE_S,)).fetchall()
-        segments = {}
-        for r in rows:
-            segments.setdefault((r["u"], r["v"]), []).append(r)
         states = {}
-        for key, reports in segments.items():
+        for key, reports in _by_segment(rows).items():
             state = _segment_state(reports, now)
             if state is not None and (include_open or state["status"] != "open"):
                 states[key] = state

@@ -728,7 +728,7 @@ class ClosureReport(BaseModel):
     note: Optional[str] = Field(None, max_length=500, description="What is closed, e.g. \"Baustelle, bis Freitag\"")
     until: Optional[date] = Field(None, description=(
         "The last day it is closed, if known (e.g. from the sign); the report then counts through that day "
-        "(Heilbronn time), at most 30 days. Without it, the report counts for 24 h"))
+        "(Heilbronn time), at most 365 days. Without it, the report counts for 24 h"))
 
     model_config = {"json_schema_extra": {"example": {"segment": "268245781-268245790", "reporter_id": "3f9c2a71",
                                                       "note": "Baustelle, Durchfahrt gesperrt", "until": "2026-11-15"}}}

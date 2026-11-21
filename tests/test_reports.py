@@ -76,13 +76,50 @@ def mapping_ids(reports):
     return tuple(reports.db.execute("SELECT reporter, client FROM mapping_reports").fetchone())
 
 
-def test_closure_reports_are_deleted_after_368_days(reports, clock):
-    assert RETAIN_S == 368 * 24 * 3600
+def test_a_report_is_deleted_3_days_after_it_ends(reports, clock):
     report(reports, "r1", "1.1.1.1")
-    clock.t += RETAIN_S - 1
+    clock.t += DEFAULT_S + GRACE_S - 1
     reports.closures()
     assert stored_closures(reports) == 1
     clock.t += 3602  # past the limit and the hourly check
+    reports.closures()
+    assert stored_closures(reports) == 0
+
+
+def test_a_dated_report_is_kept_until_3_days_after_its_end(reports, clock):
+    report(reports, "r1", "1.1.1.1", until=today(clock) + timedelta(days=200))
+    clock.t += 200 * 24 * 3600
+    reports.closures()
+    assert stored_closures(reports) == 1
+    clock.t += 24 * 3600 + GRACE_S + 3602
+    reports.closures()
+    assert stored_closures(reports) == 0
+
+
+def test_a_lapsed_report_stays_while_its_street_is_still_closed(reports, clock):
+    report(reports, "r1", "1.1.1.1", note="Baustelle")
+    clock.t += DEFAULT_S - 60
+    report(reports, "r2", "1.1.1.2", until=today(clock) + timedelta(days=10))
+    clock.t += DEFAULT_S + GRACE_S + 3602
+    assert reports.closure_states()[(A, B)]["note"] == "Baustelle"
+    assert stored_closures(reports) == 2
+
+
+def test_a_lifted_closure_is_deleted_3_days_later(reports, clock):
+    report(reports, "r1", "1.1.1.1")
+    report(reports, "o1", "2.2.2.1", still_closed=False)
+    clock.t += 3601  # the cleanup is due while the answer that lifts it comes in
+    assert report(reports, "o2", "2.2.2.2", still_closed=False)["status"] == "open"
+    assert stored_closures(reports) == 3
+    clock.t += GRACE_S + 3602
+    reports.closures()
+    assert stored_closures(reports) == 0
+
+
+def test_no_closure_report_is_kept_past_368_days(reports, clock):
+    assert RETAIN_S == 368 * 24 * 3600
+    report(reports, "r1", "1.1.1.1", until=today(clock) + timedelta(days=365))
+    clock.t += RETAIN_S + 3601
     reports.closures()
     assert stored_closures(reports) == 0
 
@@ -128,9 +165,12 @@ def test_a_report_lasts_until_the_day_on_the_sign(reports, clock):
     assert reports.closures() == {(A, B): "unconfirmed"}
 
 
-def test_an_end_date_counts_at_most_30_days(reports, clock):
-    report(reports, "r1", "1.1.1.1", until=today(clock) + timedelta(days=365))
-    clock.t += MAX_S + 1
+def test_an_end_date_counts_at_most_365_days(reports, clock):
+    assert MAX_S == 365 * 24 * 3600
+    report(reports, "r1", "1.1.1.1", until=today(clock) + timedelta(days=400))
+    clock.t += MAX_S - 60
+    assert reports.closures() == {(A, B): "reported"}
+    clock.t += 120
     assert reports.closures() == {(A, B): "unconfirmed"}
 
 

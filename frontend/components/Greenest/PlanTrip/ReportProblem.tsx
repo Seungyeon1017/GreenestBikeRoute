@@ -6,8 +6,8 @@ import type { FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { LngLat, ReportKind, ReportPick } from '@/types/greenest'
 
-/** The backend keeps a closure report through its `until` day, at most 30 days ahead. */
-const MAX_UNTIL_DAYS = 30
+/** The backend keeps a closure report through its `until` day, at most 365 days ahead. */
+const MAX_UNTIL_DAYS = 365
 
 /** How long the thank-you stays before the panel closes by itself. */
 const THANKS_MS = 6000

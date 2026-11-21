@@ -1080,7 +1080,7 @@
           {
             "heading": "Straßen- und Kartenmeldungen",
             "lines": [
-              "Meldungen speichern Ort, Art, optionale Notiz und Enddatum, Zeitpunkt, eine zufällige Browser-ID und einen gesalzenen Hash Ihrer IP-Adresse, um unabhängige Meldungen zu zählen und Missbrauch zu begrenzen. Sperrungsmeldungen werden nach 368 Tagen gelöscht. Kartenmeldungen verlieren nach der Prüfung Browser-ID und IP-Hash. Grundlage: Art. 6 Abs. 1 lit. f DSGVO."
+              "Meldungen speichern Ort, Art, optionale Notiz und Enddatum, Zeitpunkt, eine zufällige Browser-ID und einen gesalzenen Hash Ihrer IP-Adresse, um unabhängige Meldungen zu zählen und Missbrauch zu begrenzen. Sperrungsmeldungen werden 3 Tage nach Ende der Sperrung gelöscht, spätestens nach 368 Tagen. Kartenmeldungen verlieren nach der Prüfung Browser-ID und IP-Hash. Grundlage: Art. 6 Abs. 1 lit. f DSGVO."
             ]
           },
           {
